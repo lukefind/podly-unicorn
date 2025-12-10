@@ -82,6 +82,8 @@ Presets control how aggressively the LLM detects ads.
 | Aggressive | High | 0.6 | Catch more ads, may remove some content |
 | Maximum | Very High | 0.5 | Nuclear option, will remove legitimate content |
 
+**Note:** When you activate a preset, it automatically updates the Output Settings `min_confidence` to match. This ensures the confidence threshold is consistent between ad detection and audio processing.
+
 ### Preset Structure
 
 ```python
@@ -239,6 +241,19 @@ docker exec -it podly-pure-podcasts bash
 # Run Python in app context
 docker exec -it podly-pure-podcasts bash -c "cd /app && python -c '...'"
 ```
+
+## Audio Processing
+
+### Ad Removal
+
+When removing ads from audio, Podly uses ffmpeg with two approaches:
+
+1. **Complex filter** (default): Uses audio fades for smooth transitions between content segments
+2. **Simple fallback**: If the complex filter fails (can happen with many ad segments), falls back to a simpler concat approach without fades
+
+The fallback is automatic - if you see "Complex filter failed, trying simple approach" in logs, this is normal.
+
+---
 
 ## Environment Variables
 

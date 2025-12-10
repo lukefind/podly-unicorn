@@ -163,6 +163,9 @@ All prompts now include:
 - **Text contrast in modals** - Added inline styles to override global CSS overrides inside modals
 - **Collapse button visibility** - Added background and border to sidebar collapse button when minimized
 - **Episode action buttons** - Replaced confusing checkmark icon with clear "Skip"/"Enable" text labels
+- **Preset confidence sync** - Activating a preset now automatically updates Output Settings `min_confidence` to match
+- **ffmpeg audio processing** - Added fallback for when complex filter fails with many ad segments
+- **Toast notifications** - Styled with unicorn theme (gradient background, purple icons)
 
 ---
 

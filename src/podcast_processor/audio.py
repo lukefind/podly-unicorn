@@ -28,6 +28,22 @@ def clip_segments_with_fade(
     audio_duration_ms = get_audio_duration_ms(in_path)
     assert audio_duration_ms is not None
 
+    # Try the complex filter approach first, fall back to simple if it fails
+    try:
+        _clip_segments_complex(ad_segments_ms, fade_ms, in_path, out_path, audio_duration_ms)
+    except ffmpeg.Error as e:
+        print(f"Complex filter failed, trying simple approach: {e.stderr.decode() if e.stderr else str(e)}")
+        _clip_segments_simple(ad_segments_ms, in_path, out_path, audio_duration_ms)
+
+
+def _clip_segments_complex(
+    ad_segments_ms: List[Tuple[int, int]],
+    fade_ms: int,
+    in_path: str,
+    out_path: str,
+    audio_duration_ms: int,
+) -> None:
+    """Original complex approach with fades - can fail with many segments."""
     trimmed_list = []
 
     last_end = 0
@@ -58,6 +74,65 @@ def clip_segments_with_fade(
         )
 
     ffmpeg.concat(*trimmed_list, v=0, a=1).output(out_path).overwrite_output().run()
+
+
+def _clip_segments_simple(
+    ad_segments_ms: List[Tuple[int, int]],
+    in_path: str,
+    out_path: str,
+    audio_duration_ms: int,
+) -> None:
+    """Simpler approach without fades - more reliable for many segments."""
+    import tempfile
+    import os
+    
+    # Build list of segments to KEEP (inverse of ad segments)
+    keep_segments = []
+    last_end = 0
+    
+    for start_ms, end_ms in ad_segments_ms:
+        if start_ms > last_end:
+            keep_segments.append((last_end, start_ms))
+        last_end = end_ms
+    
+    if last_end < audio_duration_ms:
+        keep_segments.append((last_end, audio_duration_ms))
+    
+    if not keep_segments:
+        # No content to keep - this shouldn't happen but handle it
+        raise ValueError("No audio segments to keep after ad removal")
+    
+    # Create temp directory for intermediate files
+    with tempfile.TemporaryDirectory() as temp_dir:
+        segment_files = []
+        
+        # Extract each segment to keep
+        for i, (start_ms, end_ms) in enumerate(keep_segments):
+            segment_path = os.path.join(temp_dir, f"segment_{i}.mp3")
+            start_sec = start_ms / 1000.0
+            duration_sec = (end_ms - start_ms) / 1000.0
+            
+            (
+                ffmpeg.input(in_path)
+                .output(segment_path, ss=start_sec, t=duration_sec, acodec="libmp3lame", q=2)
+                .overwrite_output()
+                .run(quiet=True)
+            )
+            segment_files.append(segment_path)
+        
+        # Create concat file list
+        concat_list_path = os.path.join(temp_dir, "concat_list.txt")
+        with open(concat_list_path, "w") as f:
+            for seg_file in segment_files:
+                f.write(f"file '{seg_file}'\n")
+        
+        # Concatenate all segments
+        (
+            ffmpeg.input(concat_list_path, format="concat", safe=0)
+            .output(out_path, acodec="libmp3lame", q=2)
+            .overwrite_output()
+            .run(quiet=True)
+        )
 
 
 def trim_file(in_path: Path, out_path: Path, start_ms: int, end_ms: int) -> None:
