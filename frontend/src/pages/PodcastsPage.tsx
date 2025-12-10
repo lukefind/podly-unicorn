@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
@@ -34,6 +34,13 @@ export default function PodcastsPage() {
 
   const feedsArray = Array.isArray(feeds) ? feeds : [];
   const selectedFeed = feedsArray.find((f: Feed) => f.id === selectedFeedId);
+
+  // Auto-select first feed if none selected and feeds are loaded
+  useEffect(() => {
+    if (!selectedFeedId && feedsArray.length > 0 && !feedsLoading) {
+      setSearchParams({ feed: feedsArray[0].id.toString() });
+    }
+  }, [feedsArray, selectedFeedId, feedsLoading, setSearchParams]);
 
   const filteredFeeds = feedsArray.filter((feed: Feed) => {
     if (!searchTerm) return true;

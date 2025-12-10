@@ -226,8 +226,23 @@ def _configure_database(app: Flask) -> None:
             "timeout": 90,
             "check_same_thread": False,
         },
+        "pool_pre_ping": True,  # Check connection health before use
     }
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+    # Enable WAL mode for better concurrent access after app context is ready
+    @app.before_request
+    def _enable_wal_mode() -> None:
+        # Only run once per app startup
+        if not getattr(app, "_wal_mode_enabled", False):
+            try:
+                from app.extensions import db
+                db.session.execute(db.text("PRAGMA journal_mode=WAL"))
+                db.session.execute(db.text("PRAGMA busy_timeout=90000"))  # 90 seconds
+                db.session.commit()
+                app._wal_mode_enabled = True  # type: ignore[attr-defined]
+            except Exception:
+                pass  # Ignore if already set or in test mode
 
 
 def _configure_external_loggers() -> None:

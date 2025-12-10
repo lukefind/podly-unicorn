@@ -74,6 +74,7 @@ export default function JobsPage() {
   const [clearing, setClearing] = useState(false);
   const [cancellingJobs, setCancellingJobs] = useState<Set<string>>(new Set());
   const previousHasActiveWork = useRef<boolean>(false);
+  const [selectedJobError, setSelectedJobError] = useState<{ title: string; error: string; jobId: string } | null>(null);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -368,7 +369,17 @@ export default function JobsPage() {
               {job.error_message ? (
                 <div className="col-span-2">
                   <div className="text-gray-500">Message</div>
-                  <div className="text-red-700 truncate" title={job.error_message}>{job.error_message}</div>
+                  <button
+                    onClick={() => setSelectedJobError({ 
+                      title: job.post_title || 'Job Error', 
+                      error: job.error_message!, 
+                      jobId: job.job_id 
+                    })}
+                    className="text-red-700 truncate text-left hover:text-red-900 hover:underline w-full"
+                    title="Click to view full error"
+                  >
+                    {job.error_message}
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -387,6 +398,56 @@ export default function JobsPage() {
           </div>
         ))}
       </div>
+
+      {/* Error Details Modal */}
+      {selectedJobError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-red-50 to-pink-50">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-red-900">Error Details</h3>
+                <button
+                  onClick={() => setSelectedJobError(null)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-sm text-red-700 mt-1">{selectedJobError.title}</p>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              <div className="mb-4">
+                <div className="text-xs text-gray-500 mb-1">Job ID</div>
+                <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">{selectedJobError.jobId}</code>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-2">Error Message</div>
+                <pre className="text-sm text-red-800 bg-red-50 p-4 rounded-lg overflow-x-auto whitespace-pre-wrap font-mono">
+                  {selectedJobError.error}
+                </pre>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(selectedJobError.error);
+                }}
+                className="px-4 py-2 text-sm font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200"
+              >
+                Copy Error
+              </button>
+              <button
+                onClick={() => setSelectedJobError(null)}
+                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-pink-500 rounded-lg hover:from-purple-700 hover:to-pink-600"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
