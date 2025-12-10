@@ -1,9 +1,19 @@
 services:
   podly:
     container_name: podly-pure-podcasts
+    image: podly-unicorn
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - BASE_IMAGE=${BASE_IMAGE:-python:3.11-slim}
+        - CUDA_VERSION=${CUDA_VERSION:-12.4.1}
+        - USE_GPU=${USE_GPU:-false}
+        - USE_GPU_NVIDIA=${USE_GPU_NVIDIA:-false}
+        - USE_GPU_AMD=${USE_GPU_AMD:-false}
+        - LITE_BUILD=${LITE_BUILD:-false}
     ports:
       - "5001:5001"
-    image: ghcr.io/${REPO_OWNER:-jdrbc}/podly-pure-podcasts:${BRANCH:-main-latest}
     volumes:
       - ./src/instance:/app/src/instance
     env_file:
@@ -29,4 +39,4 @@ services:
 
 networks:
   default:
-    name: podly-pure-podcasts-network
+    name: podly-unicorn-network

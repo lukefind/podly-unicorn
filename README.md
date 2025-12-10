@@ -56,15 +56,12 @@ See our [Railway deployment guide](docs/how_to_run_railway.md) for details.
 ### Option 3: Run Locally with Docker
 
 ```bash
-# Clone from original Podly
-git clone https://github.com/jdrbc/podly_pure_podcasts.git
-cd podly_pure_podcasts
+git clone https://github.com/lukefind/podly-unicorn.git
+cd podly-unicorn
+cp .env.local.example .env.local
+# Edit .env.local with your API keys
 
-# Or clone Podly Unicorn fork
-# git clone https://github.com/YOUR_USERNAME/podly-unicorn.git
-# cd podly-unicorn
-./run_podly_docker.sh --build
-./run_podly_docker.sh -d
+docker compose up -d --build
 ```
 
 Open **http://localhost:5001** and configure your API keys in Settings.
