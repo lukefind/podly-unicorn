@@ -1,6 +1,9 @@
 import logging
+import time
 from pathlib import Path
 from typing import Optional
+
+from sqlalchemy.exc import OperationalError
 
 from app.extensions import db
 from app.models import Identification, ModelCall, Post, ProcessingJob, TranscriptSegment
@@ -8,6 +11,21 @@ from podcast_processor.podcast_downloader import get_and_make_download_path
 from podcast_processor.podcast_processor import get_post_processed_audio_path
 
 logger = logging.getLogger("global_logger")
+
+
+def _retry_on_locked(func, max_retries: int = 5, base_delay: float = 0.5):
+    """Retry a database operation if it fails due to database lock."""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)  # Exponential backoff
+                logger.warning(f"Database locked, retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                db.session.rollback()
+                time.sleep(delay)
+            else:
+                raise
 
 
 def remove_associated_files(post: Post) -> None:
@@ -93,28 +111,36 @@ def clear_post_processing_data(post: Post) -> None:
         ]
 
         if segment_ids:
-            # Delete identifications that reference these segments
-            db.session.query(Identification).filter(
-                Identification.transcript_segment_id.in_(segment_ids)
-            ).delete(synchronize_session=False)
+            # Delete identifications that reference these segments (with retry)
+            def delete_identifications():
+                db.session.query(Identification).filter(
+                    Identification.transcript_segment_id.in_(segment_ids)
+                ).delete(synchronize_session=False)
+            _retry_on_locked(delete_identifications)
             logger.info(f"Deleted identifications for post {post.id}")
 
-        # Delete transcript segments for this post
-        db.session.query(TranscriptSegment).filter_by(post_id=post.id).delete(
-            synchronize_session=False
-        )
+        # Delete transcript segments for this post (with retry)
+        def delete_segments():
+            db.session.query(TranscriptSegment).filter_by(post_id=post.id).delete(
+                synchronize_session=False
+            )
+        _retry_on_locked(delete_segments)
         logger.info(f"Deleted transcript segments for post {post.id}")
 
-        # Delete model calls for this post
-        db.session.query(ModelCall).filter_by(post_id=post.id).delete(
-            synchronize_session=False
-        )
+        # Delete model calls for this post (with retry)
+        def delete_model_calls():
+            db.session.query(ModelCall).filter_by(post_id=post.id).delete(
+                synchronize_session=False
+            )
+        _retry_on_locked(delete_model_calls)
         logger.info(f"Deleted model calls for post {post.id}")
 
-        # Delete processing jobs for this post
-        db.session.query(ProcessingJob).filter_by(post_guid=post.guid).delete(
-            synchronize_session=False
-        )
+        # Delete processing jobs for this post (with retry)
+        def delete_jobs():
+            db.session.query(ProcessingJob).filter_by(post_guid=post.guid).delete(
+                synchronize_session=False
+            )
+        _retry_on_locked(delete_jobs)
         logger.info(f"Deleted processing jobs for post {post.id}")
 
         # Reset post audio paths and duration
