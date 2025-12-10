@@ -585,21 +585,33 @@ def to_pydantic_config() -> PydanticConfig:
     if wtype == "local":
         whisper_obj = LocalWhisperConfig(model=w.get("model", "base.en"))
     elif wtype == "remote":
-        whisper_obj = RemoteWhisperConfig(
-            model=w.get("model", "whisper-1"),
-            api_key=w.get("api_key"),
-            base_url=w.get("base_url", "https://api.openai.com/v1"),
-            language=w.get("language", "en"),
-            timeout_sec=w.get("timeout_sec", 600),
-            chunksize_mb=w.get("chunksize_mb", 24),
-        )
+        remote_api_key = w.get("api_key")
+        if remote_api_key:
+            whisper_obj = RemoteWhisperConfig(
+                model=w.get("model", "whisper-1"),
+                api_key=remote_api_key,
+                base_url=w.get("base_url", "https://api.openai.com/v1"),
+                language=w.get("language", "en"),
+                timeout_sec=w.get("timeout_sec", 600),
+                chunksize_mb=w.get("chunksize_mb", 24),
+            )
+        else:
+            # Fall back to local whisper if remote API key is missing
+            logger.warning("Remote whisper configured but no API key set, falling back to local whisper")
+            whisper_obj = LocalWhisperConfig(model=DEFAULTS.WHISPER_LOCAL_MODEL)
     elif wtype == "groq":
-        whisper_obj = GroqWhisperConfig(
-            api_key=w.get("api_key"),
-            model=w.get("model", DEFAULTS.WHISPER_GROQ_MODEL),
-            language=w.get("language", "en"),
-            max_retries=w.get("max_retries", 3),
-        )
+        groq_api_key = w.get("api_key")
+        if groq_api_key:
+            whisper_obj = GroqWhisperConfig(
+                api_key=groq_api_key,
+                model=w.get("model", DEFAULTS.WHISPER_GROQ_MODEL),
+                language=w.get("language", "en"),
+                max_retries=w.get("max_retries", 3),
+            )
+        else:
+            # Fall back to local whisper if groq API key is missing
+            logger.warning("Groq whisper configured but no API key set, falling back to local whisper")
+            whisper_obj = LocalWhisperConfig(model=DEFAULTS.WHISPER_LOCAL_MODEL)
     elif wtype == "test":
         whisper_obj = TestWhisperConfig()
 

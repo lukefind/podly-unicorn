@@ -13,6 +13,7 @@ from app.models import User
 SESSION_USER_KEY = "user_id"
 
 # Paths that remain public even when auth is required.
+# Frontend routes are public so the SPA shell loads; the frontend handles auth redirects.
 _PUBLIC_PATHS: set[str] = {
     "/",
     "/health",
@@ -21,6 +22,11 @@ _PUBLIC_PATHS: set[str] = {
     "/favicon.ico",
     "/api/auth/login",
     "/api/auth/status",
+    # Frontend shell routes - serve SPA, let React handle auth
+    "/settings",
+    "/presets",
+    "/podcasts",
+    "/login",
 }
 
 _PUBLIC_PREFIXES: tuple[str, ...] = (
