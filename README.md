@@ -55,20 +55,123 @@ Podly Unicorn automatically removes advertisements from podcasts using AI. It cr
 
 See our [Railway deployment guide](docs/how_to_run_railway.md) for details.
 
-### Option 3: Run Locally with Docker
+### Option 3: Run Locally with Docker (Home Machine or Server)
+
+This is the recommended way to run Podly on your own hardware — whether that's a laptop, desktop, Raspberry Pi, or home server.
+
+#### Prerequisites
+
+- **Docker** and **Docker Compose** installed
+  - Mac/Windows: Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+  - Linux: `sudo apt install docker.io docker-compose-v2` (or equivalent for your distro)
+- **LLM API Key** — Get a free one from [Groq](https://console.groq.com/keys) (recommended) or use OpenAI/xAI
+
+#### Step 1: Clone the Repository
 
 ```bash
 git clone https://github.com/lukefind/podly-unicorn.git
 cd podly-unicorn
-cp .env.local.example .env.local
-# Edit .env.local with your API keys
+```
 
+#### Step 2: Create Your Config File
+
+```bash
+cp .env.local.example .env.local
+```
+
+Edit `.env.local` with your preferred text editor:
+
+```bash
+nano .env.local   # or vim, code, etc.
+```
+
+**Minimum required settings:**
+
+```bash
+# Get a free key at https://console.groq.com/keys
+LLM_API_KEY=gsk_your_groq_api_key_here
+LLM_MODEL=groq/llama-3.3-70b-versatile
+
+# Whisper transcription (Groq is fast and cheap)
+WHISPER_TYPE=groq
+GROQ_API_KEY=gsk_your_groq_api_key_here
+```
+
+**Optional: Enable authentication** (recommended for servers):
+
+```bash
+REQUIRE_AUTH=true
+PODLY_ADMIN_USERNAME=admin
+PODLY_ADMIN_PASSWORD=your-secure-password-here
+PODLY_SECRET_KEY=generate-a-64-character-random-string
+```
+
+> 💡 Generate a secret key: `openssl rand -hex 32`
+
+#### Step 3: Build and Start
+
+```bash
 docker compose up -d --build
 ```
 
-Open **http://localhost:5001** and configure your API keys in Settings.
+This will:
+- Build the Docker image (~2-5 minutes first time)
+- Start the container in the background
+- Run database migrations automatically
 
-📖 See our [detailed beginner's guide](docs/how_to_run_beginners.md) for step-by-step instructions.
+#### Step 4: Access the Web UI
+
+Open your browser to:
+- **Local machine:** http://localhost:5001
+- **Home server:** http://YOUR_SERVER_IP:5001
+
+If you enabled auth, log in with the username/password you set.
+
+#### Useful Commands
+
+```bash
+# View logs
+docker logs -f podly-pure-podcasts
+
+# Restart after config changes
+docker compose down && docker compose up -d
+
+# Rebuild after code updates (e.g., git pull)
+docker compose up -d --build
+
+# Stop Podly
+docker compose down
+```
+
+#### Updating to Latest Version
+
+```bash
+cd ~/podly-unicorn
+git pull origin main
+docker compose up -d --build
+```
+
+#### Data Persistence
+
+Your data is stored in Docker volumes and persists across restarts:
+- **Database:** `src/instance/sqlite3.db` (feeds, episodes, users)
+- **Processed audio:** `processing_output/` directory
+
+To back up your data:
+```bash
+docker cp podly-pure-podcasts:/app/src/instance/sqlite3.db ./backup.db
+```
+
+#### Exposing to the Internet (Optional)
+
+To access Podly from outside your home network:
+1. **Port forward** port 5001 on your router to your server's IP
+2. Or use a reverse proxy like **Caddy** or **nginx** with HTTPS
+3. Or use a tunnel service like **Cloudflare Tunnel** or **Tailscale**
+
+> ⚠️ **Always enable authentication** (`REQUIRE_AUTH=true`) if exposing to the internet!
+
+📖 See our [detailed beginner's guide](docs/how_to_run_beginners.md) for more help.
 
 ---
 
