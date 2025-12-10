@@ -79,8 +79,14 @@ Presets control how aggressively the LLM detects ads.
 |------|----------------|----------------|----------|
 | Conservative | Low | 0.8 | Preserve content, only obvious ads |
 | Balanced | Medium | 0.7 | **Default** - Good balance |
-| Aggressive | High | 0.6 | Catch more ads, may remove some content |
-| Maximum | Very High | 0.5 | Nuclear option, will remove legitimate content |
+| Aggressive | High | 0.55 | Catch more ads, may remove some content |
+
+### Prompt Design
+
+All presets emphasize flagging **complete ad blocks**, not just announcements. Key prompt elements:
+- "CRITICAL: Flag EVERY segment that is part of an ad"
+- Examples showing multiple consecutive segments being flagged
+- Clear distinction between ad content and legitimate discussion
 
 **Note:** When you activate a preset, it automatically updates the Output Settings `min_confidence` to match. This ensures the confidence threshold is consistent between ad detection and audio processing.
 
@@ -90,7 +96,7 @@ Presets control how aggressively the LLM detects ads.
 {
     "name": "Balanced",
     "description": "Recommended for most podcasts...",
-    "aggressiveness": "balanced",  # conservative|balanced|aggressive|maximum
+    "aggressiveness": "balanced",  # conservative|balanced|aggressive
     "system_prompt": "...",        # Instructions for the LLM
     "user_prompt_template": "...", # Template with {transcript} placeholder
     "min_confidence": 0.7,         # Threshold for ad classification
@@ -186,22 +192,34 @@ This saves compute resources and API costs.
 
 ## LLM Configuration
 
+### Supported Providers
+
+Podly uses [LiteLLM](https://docs.litellm.ai/) which supports 100+ providers:
+
+| Provider | Format | Example | Notes |
+|----------|--------|---------|-------|
+| **Groq** | `groq/<model>` | `groq/llama-3.3-70b-versatile` | Fast, cheap |
+| **xAI Grok** | `xai/<model>` | `xai/grok-3` | High quality, requires base URL |
+| **OpenAI** | `<model>` or `openai/<model>` | `gpt-4o` | Excellent quality |
+| **Anthropic** | `anthropic/<model>` | `anthropic/claude-3-sonnet` | High quality |
+| **Ollama** | `ollama/<model>` | `ollama/llama3` | Local, free |
+
 ### Model Name Format
 
-The `LLM_MODEL` setting uses LiteLLM's provider prefix format:
+- **With provider prefix** (e.g., `groq/...`, `xai/...`): LiteLLM routes automatically
+- **Without prefix**: Uses `OPENAI_BASE_URL` if set, otherwise OpenAI default
 
-| Provider | Format | Example |
-|----------|--------|---------|
-| OpenAI | `openai/<model>` or just `<model>` | `gpt-4o` |
-| Groq | `groq/<model>` | `groq/llama-3.3-70b-versatile` |
-| Anthropic | `anthropic/<model>` | `anthropic/claude-3-sonnet` |
-| Ollama | `ollama/<model>` | `ollama/llama3` |
-| Custom | Requires `OPENAI_BASE_URL` | `my-model` |
+### API Key Handling
 
-### When Base URL is Used
+The `api_key` and `api_base` are passed explicitly in LiteLLM completion calls. This ensures providers like xAI that require explicit authentication work correctly.
 
-- **With provider prefix** (e.g., `groq/...`): Base URL is **ignored**, LiteLLM routes to provider
-- **Without prefix**: Base URL is used as the API endpoint
+### xAI Grok Configuration
+
+```bash
+LLM_API_KEY=xai-your-api-key
+LLM_MODEL=xai/grok-3
+OPENAI_BASE_URL=https://api.x.ai/v1
+```
 
 ## Frontend Theme
 
@@ -262,11 +280,12 @@ See `.env.local.example` for all options. Key variables:
 | Variable | Description |
 |----------|-------------|
 | `LLM_API_KEY` | API key for LLM provider |
-| `LLM_MODEL` | Model name with optional provider prefix |
-| `OPENAI_BASE_URL` | Custom API endpoint (optional) |
+| `LLM_MODEL` | Model name with optional provider prefix (e.g., `xai/grok-3`) |
+| `OPENAI_BASE_URL` | Custom API endpoint (e.g., `https://api.x.ai/v1` for xAI) |
 | `WHISPER_TYPE` | `local`, `remote`, or `groq` |
+| `WHISPER_API_KEY` | API key for Whisper (can be same as GROQ_API_KEY) |
 | `GROQ_API_KEY` | Required if using Groq for Whisper |
 
 ---
 
-*Last updated: December 2024*
+*Last updated: December 2025*

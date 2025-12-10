@@ -74,33 +74,42 @@ Open **http://localhost:5001** and configure your API keys in Settings.
 
 ### LLM Setup (Required)
 
-Podly uses [LiteLLM](https://docs.litellm.ai/) which supports 100+ LLM providers. We recommend **Groq** for the best price/performance.
+Podly uses [LiteLLM](https://docs.litellm.ai/) which supports 100+ LLM providers.
 
-#### Recommended: Groq (Fast & Cheap)
+#### Recommended Providers
+
+| Provider | Model | Cost | Quality | Setup |
+|----------|-------|------|---------|-------|
+| **Groq** | `groq/llama-3.3-70b-versatile` | Very cheap | Good | Free API key at [console.groq.com](https://console.groq.com/keys) |
+| **xAI Grok** | `xai/grok-3` | ~$0.10/episode | Excellent | API key from [x.ai](https://x.ai) |
+| **OpenAI** | `gpt-4o` | ~$0.10/episode | Excellent | API key from [platform.openai.com](https://platform.openai.com) |
+
+#### Quick Setup (Groq)
 
 1. Get a free API key at [console.groq.com](https://console.groq.com/keys)
 2. In Podly Settings → Quick Setup, paste your Groq API key
 3. Done! Podly auto-configures the recommended models
 
-#### Manual Configuration
+#### Using xAI Grok (Recommended for Quality)
 
-Podly uses [LiteLLM](https://docs.litellm.ai/) for model routing:
+For best ad detection quality, use xAI's Grok-3:
+
+```bash
+# In .env.local
+LLM_API_KEY=xai-your-api-key
+LLM_MODEL=xai/grok-3
+OPENAI_BASE_URL=https://api.x.ai/v1
+```
+
+#### Model Name Format
 
 | Model Format | Base URL | How it works |
 |--------------|----------|--------------|
 | `groq/llama-3.3-70b-versatile` | *(ignored)* | LiteLLM routes to Groq automatically |
-| `llama-3.3-70b-versatile` | `https://api.groq.com/openai/v1` | Uses the Base URL you provide |
+| `xai/grok-3` | `https://api.x.ai/v1` | LiteLLM routes to xAI |
+| `gpt-4o` | *(default)* | Uses OpenAI directly |
 
-> 💡 **When do I need the prefix?** Models with a provider prefix (like `groq/`, `anthropic/`, `openai/`) are routed automatically — the Base URL is ignored. Models *without* a prefix use whatever Base URL you set.
-
-#### Other Providers
-
-| Provider | Model Format | Notes |
-|----------|--------------|-------|
-| OpenAI | `gpt-4o` or `openai/gpt-4o` | Set `OPENAI_API_KEY` |
-| Anthropic | `anthropic/claude-3.5-sonnet` | Set `ANTHROPIC_API_KEY` |
-| Google | `gemini/gemini-2.0-flash` | Set `GEMINI_API_KEY` |
-| Local (Ollama) | `ollama/llama3` | Set Base URL to `http://localhost:11434` |
+> 💡 **Provider prefixes** (like `groq/`, `xai/`, `anthropic/`) tell LiteLLM where to route. The Base URL is only used for models without a prefix.
 
 ### Whisper Setup (Transcription)
 
@@ -114,14 +123,15 @@ Podly uses [LiteLLM](https://docs.litellm.ai/) for model routing:
 
 ## 🎯 Ad Detection Presets
 
-Podly includes 4 preset aggressiveness levels:
+Podly includes 3 preset aggressiveness levels:
 
 | Preset | Confidence | Description |
 |--------|------------|-------------|
 | **Conservative** | 80% | Only obvious ads — sponsor reads, "brought to you by" |
 | **Balanced** | 70% | Default — typical ads while preserving content |
-| **Aggressive** | 60% | All promotional content including host-read ads |
-| **Maximum** | 50% | Nuclear option — flags anything that could be an ad |
+| **Aggressive** | 55% | All promotional content including host-read ads, self-promotion |
+
+All presets are designed to flag **complete ad blocks**, not just the announcement. When an ad is detected, all consecutive segments within that ad are flagged for removal.
 
 You can also create custom presets with your own prompts in the Presets page.
 

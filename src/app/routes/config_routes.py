@@ -495,6 +495,14 @@ def api_test_llm() -> flask.Response:
             "timeout": timeout,
         }
 
+        # Pass API key explicitly for providers that need it (xAI, etc.)
+        if api_key:
+            completion_kwargs["api_key"] = api_key
+
+        # Pass base URL if configured
+        if base_url:
+            completion_kwargs["api_base"] = base_url
+
         if model_uses_max_completion_tokens(model):
             completion_kwargs["max_completion_tokens"] = 1
         else:

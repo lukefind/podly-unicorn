@@ -559,6 +559,14 @@ class AdClassifier:
             "timeout": self.config.openai_timeout,
         }
 
+        # Pass API key explicitly for providers that need it (xAI, etc.)
+        if self.config.llm_api_key:
+            completion_args["api_key"] = self.config.llm_api_key
+
+        # Pass base URL if configured
+        if self.config.openai_base_url:
+            completion_args["api_base"] = self.config.openai_base_url
+
         # Use max_completion_tokens for newer OpenAI models (o1, gpt-5, gpt-4o variants)
         # OpenAI deprecated max_tokens for these models in favor of max_completion_tokens
         # Check if this is a model that requires max_completion_tokens

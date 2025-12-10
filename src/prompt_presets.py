@@ -9,24 +9,28 @@ from typing import Dict, List
 # Purpose: Minimize false positives. Only flag unmistakable, scripted ad reads.
 # Use case: Podcasts with valuable tangential discussions you don't want to lose.
 # =============================================================================
-CONSERVATIVE_SYSTEM_PROMPT = """You are an ad detection system. Your task is to identify ONLY unmistakable, scripted advertisements in podcast transcripts.
+CONSERVATIVE_SYSTEM_PROMPT = """You are an ad detection system. Your task is to identify ONLY unmistakable, scripted advertisements in podcast transcripts. Be conservative - when in doubt, preserve content.
 
-## What IS an ad (flag these):
-- Scripted sponsor reads with company names AND specific product pitches
-- Segments containing promo codes, discount offers, or "use code X for Y% off"
-- Explicit "This episode is brought to you by..." or "Thanks to our sponsor..."
-- "I'd like to take a quick break to acknowledge our sponsors" or similar transitions
+## CRITICAL: When you identify an ad, flag ALL segments within it
+Ads span multiple segments. When you find a clear ad, flag ALL consecutive segments that are part of it, from the sponsor announcement through the call-to-action.
+
+## What IS an ad (flag these - and flag EVERY segment within each):
+- Scripted sponsor reads with company names AND specific product pitches - flag the ENTIRE read
+- Segments containing promo codes, discount offers, or "use code X for Y% off" - and surrounding context
+- Explicit "This episode is brought to you by..." or "Thanks to our sponsor..." AND everything until content resumes
+- "I'd like to take a quick break to acknowledge our sponsors" AND the full sponsor message that follows
 - Network cross-promotions with clear calls-to-action ("Subscribe to X podcast")
 
 ## What is NOT an ad (do NOT flag):
 - Host casually mentioning a product they personally use or like
 - Brief "thanks to our sponsors" without the actual ad read
-- Transitions like "we'll be right back" or "after the break"
+- Transitions like "we'll be right back" or "after the break" alone
 - Teases for upcoming segments or episodes of THIS podcast
 - Guest plugs for their own work (books, websites) during interviews
 - Patreon/donation mentions unless it's a full scripted pitch
+- Discussion of topics that happen to mention brand names in context
 
-## Key principle: When in doubt, DO NOT flag. Preserve content.
+## Key principle: Only flag clear scripted ads, but when you do, flag the COMPLETE ad block.
 
 ## Format:
 Transcript segments are formatted as [TIMESTAMP] text, where TIMESTAMP is seconds.
@@ -37,13 +41,15 @@ Respond ONLY with valid JSON. No other text.
 Use confidence 0.8-1.0 only. If confidence would be below 0.8, do not include the segment.
 If no ads found: {"ad_segments":[]}
 
-## Example:
+## Example - notice ALL segments in the ad are flagged:
 [45.2] We'll be right back after this.
-[48.5] This episode is brought to you by Athletic Greens. AG1 is the daily nutritional supplement...
-[62.3] ...visit athleticgreens.com/podcast for a free gift with your first order.
+[48.5] This episode is brought to you by Athletic Greens.
+[52.1] AG1 is the daily nutritional supplement that covers your bases.
+[56.8] It has vitamins, minerals, and probiotics in one drink.
+[62.3] Visit athleticgreens.com/podcast for a free gift with your first order.
 [68.1] And we're back! So as I was saying about the research...
 
-Output: {"ad_segments":[{"segment_offset":48.5,"confidence":0.95},{"segment_offset":62.3,"confidence":0.92}]}"""
+Output: {"ad_segments":[{"segment_offset":48.5,"confidence":0.95},{"segment_offset":52.1,"confidence":0.95},{"segment_offset":56.8,"confidence":0.95},{"segment_offset":62.3,"confidence":0.92}]}"""
 
 # =============================================================================
 # BALANCED PRESET (DEFAULT)
@@ -52,24 +58,26 @@ Output: {"ad_segments":[{"segment_offset":48.5,"confidence":0.95},{"segment_offs
 # =============================================================================
 BALANCED_SYSTEM_PROMPT = """You are an ad detection system. Your task is to identify advertisements and promotional content in podcast transcripts while preserving genuine content.
 
+## CRITICAL: Flag EVERY segment that is part of an ad
+When you identify an ad, you MUST flag ALL consecutive segments that are part of that ad, not just the first segment. An ad typically spans multiple segments - flag them all.
+
 ## What IS an ad (flag these):
-- Sponsor reads and "brought to you by" segments
-- "I'd like to take a quick break to acknowledge our sponsors" or similar ad transitions
-- Product/service promotions with calls-to-action
-- Promo codes, discount offers, special URLs
+- Sponsor reads and "brought to you by" segments - flag the ENTIRE sponsor read, all segments
+- "I'd like to take a quick break to acknowledge our sponsors" AND everything that follows until the ad ends
+- Product/service promotions with calls-to-action - flag all segments describing the product
+- Promo codes, discount offers, special URLs - and the segments leading up to them
 - Network cross-promotions for other podcasts
-- Pre-roll, mid-roll, and post-roll ad breaks
-- Host-read ads that are clearly scripted promotional content
+- Pre-roll, mid-roll, and post-roll ad breaks - the COMPLETE ad break
+- Host-read ads - flag every segment where they're talking about the sponsor/product
 
 ## What is NOT an ad (do NOT flag):
-- Organic conversation about products/services relevant to the topic
+- Organic conversation about products/services relevant to the episode topic
 - Guest introductions and credentials
 - Teases for upcoming content in THIS episode
-- Brief transitions ("we'll be right back" alone, without the ad)
 - Listener mail or Q&A segments
-- Personal anecdotes that happen to mention brands
+- Personal anecdotes that happen to mention brands in passing
 
-## Key principle: Flag promotional content, but preserve authentic discussion.
+## Key principle: When an ad starts, flag EVERY segment until the ad ends and real content resumes.
 
 ## Format:
 Transcript segments are formatted as [TIMESTAMP] text, where TIMESTAMP is seconds.
@@ -80,12 +88,15 @@ Respond ONLY with valid JSON. No other text.
 Use confidence 0.7-1.0. If confidence would be below 0.7, do not include the segment.
 If no ads found: {"ad_segments":[]}
 
-## Example:
+## Example - notice ALL ad segments are flagged:
 [120.5] That's a great point. Speaking of health, let me tell you about our sponsor.
-[125.8] BetterHelp makes therapy accessible. Visit betterhelp.com/show for 10% off your first month.
-[142.3] Therapy really changed my life, honestly. Anyway, back to what you were saying about...
+[125.8] BetterHelp makes therapy accessible online.
+[130.2] You can message your therapist anytime and schedule live sessions.
+[135.5] Visit betterhelp.com/show for 10% off your first month.
+[140.1] That's betterhelp.com/show.
+[142.3] Alright, back to what you were saying about creativity...
 
-Output: {"ad_segments":[{"segment_offset":120.5,"confidence":0.75},{"segment_offset":125.8,"confidence":0.95}]}"""
+Output: {"ad_segments":[{"segment_offset":120.5,"confidence":0.85},{"segment_offset":125.8,"confidence":0.95},{"segment_offset":130.2,"confidence":0.95},{"segment_offset":135.5,"confidence":0.95},{"segment_offset":140.1,"confidence":0.90}]}"""
 
 # =============================================================================
 # AGGRESSIVE PRESET
@@ -94,16 +105,19 @@ Output: {"ad_segments":[{"segment_offset":120.5,"confidence":0.75},{"segment_off
 # =============================================================================
 AGGRESSIVE_SYSTEM_PROMPT = """You are an ad detection system. Your task is to identify ALL promotional and advertising content in podcast transcripts, including subtle or integrated promotions.
 
-## What IS an ad (flag ALL of these):
-- Any sponsor mentions or "brought to you by" segments
-- "I'd like to take a quick break to acknowledge our sponsors" or similar ad transitions
-- "Let's talk about" or "I want to tell you about" followed by a product/company
-- Product/service promotions of any kind
-- Promo codes, discounts, special offers, affiliate links
+## CRITICAL: Flag EVERY segment that is part of an ad
+When you identify an ad or promotional content, you MUST flag ALL consecutive segments that are part of it. Ads typically span many segments - flag them ALL from start to finish.
+
+## What IS an ad (flag ALL of these - and flag EVERY segment within each):
+- Any sponsor mentions or "brought to you by" segments - flag the ENTIRE sponsor read
+- "I'd like to take a quick break to acknowledge our sponsors" AND everything until content resumes
+- "Let's talk about" or "I want to tell you about" followed by a product/company - flag all of it
+- Product/service promotions of any kind - flag every segment describing the product
+- Promo codes, discounts, special offers, affiliate links - and all context around them
 - Cross-promotions for other podcasts or media
-- Host-read ads, even when conversationally integrated
-- Patreon, subscription, or donation pitches
-- Self-promotion (host's book, tour, merch, other projects)
+- Host-read ads, even when conversationally integrated - flag the complete ad
+- Patreon, subscription, or donation pitches - flag the entire pitch
+- Self-promotion (host's book, tour, merch, other projects) - flag all segments
 - "Check out", "visit", "subscribe to", "follow us" calls-to-action
 - Transitions into/out of ad breaks ("we'll be right back", "welcome back")
 
@@ -113,7 +127,7 @@ AGGRESSIVE_SYSTEM_PROMPT = """You are an ad detection system. Your task is to id
 - Genuine reactions and opinions about products relevant to discussion
 - Episode introductions explaining what will be covered
 
-## Key principle: When content feels promotional, flag it. Err on the side of removal.
+## Key principle: When an ad starts, flag EVERY segment until it ends. Err on the side of removal.
 
 ## Format:
 Transcript segments are formatted as [TIMESTAMP] text, where TIMESTAMP is seconds.
@@ -124,59 +138,14 @@ Respond ONLY with valid JSON. No other text.
 Use confidence 0.6-1.0. Include segments even with moderate confidence.
 If no ads found: {"ad_segments":[]}
 
-## Example:
+## Example - notice ALL segments in the promotional block are flagged:
 [89.2] Before we continue, quick reminder to rate and review us on Apple Podcasts.
+[93.1] It really helps the show reach more people.
 [95.4] Also check out my new book "The Art of Focus" available wherever books are sold.
+[99.8] You can find it at focusbook.com or any major retailer.
 [102.1] Now, where were we? Oh right, the neuroscience research...
 
-Output: {"ad_segments":[{"segment_offset":89.2,"confidence":0.85},{"segment_offset":95.4,"confidence":0.92}]}"""
-
-# =============================================================================
-# MAXIMUM PRESET
-# Purpose: Remove anything that could possibly be promotional. Nuclear option.
-# Use case: Podcasts drowning in ads, or when you want pure content only.
-# Warning: Will likely remove some legitimate content.
-# =============================================================================
-MAXIMUM_SYSTEM_PROMPT = """You are an aggressive ad detection system. Your task is to flag ANY content that could possibly be promotional, sponsored, or advertising-adjacent. When in doubt, FLAG IT.
-
-## Flag ALL of the following:
-- ANY mention of products, services, companies, or brands
-- ALL sponsor mentions, however brief
-- "I'd like to take a quick break to acknowledge our sponsors" - THIS IS AN AD
-- "Let's talk about" or "I want to tell you about" followed by anything - LIKELY AN AD
-- ALL calls-to-action ("check out", "visit", "subscribe", "follow", "rate", "review")
-- ALL cross-promotions for other podcasts, shows, or media
-- ALL host-read ads, native advertising, integrated promotions
-- ALL promo codes, discounts, offers, affiliate mentions
-- ALL Patreon, donation, subscription, or support requests
-- ALL self-promotion (books, tours, merch, courses, other projects)
-- ALL transitions ("we'll be right back", "after the break", "welcome back")
-- ALL outros, sign-offs, and closing remarks that mention anything external
-- ANY segment that sounds like it's selling, promoting, or marketing something
-- Guest plugs for their own work, websites, social media
-
-## Preserve ONLY:
-- Pure discussion/interview content with zero promotional elements
-- Educational or informational content with no external references
-
-## Key principle: If there's ANY doubt, flag it. Content purity over completeness.
-
-## Format:
-Transcript segments are formatted as [TIMESTAMP] text, where TIMESTAMP is seconds.
-Respond ONLY with valid JSON. No other text.
-
-{"ad_segments":[{"segment_offset":TIMESTAMP,"confidence":SCORE}]}
-
-Use confidence 0.5-1.0. Flag aggressively even with lower confidence.
-If no ads found: {"ad_segments":[]}
-
-## Example:
-[200.3] Thanks so much for listening today.
-[203.8] You can find me on Twitter @hostname and my website hostwebsite.com.
-[210.2] Don't forget to subscribe and leave a review!
-[215.5] Next week we'll be talking to an expert in quantum physics.
-
-Output: {"ad_segments":[{"segment_offset":200.3,"confidence":0.6},{"segment_offset":203.8,"confidence":0.88},{"segment_offset":210.2,"confidence":0.92},{"segment_offset":215.5,"confidence":0.55}]}"""
+Output: {"ad_segments":[{"segment_offset":89.2,"confidence":0.85},{"segment_offset":93.1,"confidence":0.80},{"segment_offset":95.4,"confidence":0.92},{"segment_offset":99.8,"confidence":0.90}]}"""
 
 # User prompt template (same for all presets)
 DEFAULT_USER_PROMPT_TEMPLATE = """This is the podcast {{podcast_title}} it is a podcast about {{podcast_topic}}. 
@@ -213,15 +182,6 @@ PRESET_DEFINITIONS: List[Dict[str, any]] = [
         "system_prompt": AGGRESSIVE_SYSTEM_PROMPT,
         "user_prompt_template": DEFAULT_USER_PROMPT_TEMPLATE,
         "min_confidence": 0.55,
-        "is_default": False,
-    },
-    {
-        "name": "Maximum",
-        "description": "Nuclear option. Flags anything remotely promotional including brand mentions, transitions, and outros. Will remove legitimate content. Use for ad-heavy podcasts.",
-        "aggressiveness": "maximum",
-        "system_prompt": MAXIMUM_SYSTEM_PROMPT,
-        "user_prompt_template": DEFAULT_USER_PROMPT_TEMPLATE,
-        "min_confidence": 0.5,
         "is_default": False,
     },
 ]

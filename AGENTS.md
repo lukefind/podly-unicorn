@@ -68,7 +68,14 @@ with app.app_context():
 
 ### User-Created Presets
 
-Users can create/edit presets via the UI. These are stored in the database and persist correctly. The init script only affects the 4 default presets.
+Users can create/edit presets via the UI. These are stored in the database and persist correctly. The init script only affects the 3 default presets (Conservative, Balanced, Aggressive).
+
+### Prompt Design Principles
+
+All presets emphasize flagging **ALL segments within an ad block**, not just the announcement. Key prompt elements:
+- "CRITICAL: Flag EVERY segment that is part of an ad"
+- Examples showing multiple consecutive segments being flagged
+- Clear distinction between ad content and legitimate discussion
 
 ---
 
@@ -89,12 +96,23 @@ Global CSS in `index.css` overrides gray colors with purple tints. Use inline `s
 
 ## LLM Configuration
 
-### Model Name Format (LiteLLM)
-- With provider prefix: `groq/llama-3.3-70b-versatile` → Base URL ignored
-- Without prefix: `gpt-4o` → Uses `OPENAI_BASE_URL` if set
+### Supported Providers
 
-### Key Setting
-`litellm.api_base` is set globally from `config.openai_base_url` in `podcast_processor.py`.
+Podly uses [LiteLLM](https://docs.litellm.ai/) which supports 100+ providers. Recommended options:
+
+| Provider | Model Format | Base URL | Notes |
+|----------|--------------|----------|-------|
+| **Groq** | `groq/llama-3.3-70b-versatile` | *(ignored)* | Fast, cheap, good for most use |
+| **xAI Grok** | `xai/grok-3` | `https://api.x.ai/v1` | High quality, good for ad detection |
+| **OpenAI** | `gpt-4o` | *(default)* | Excellent quality, higher cost |
+| **Anthropic** | `anthropic/claude-3-sonnet` | *(ignored)* | High quality alternative |
+
+### Model Name Format
+- **With provider prefix** (e.g., `groq/...`, `xai/...`): LiteLLM routes automatically, Base URL setting is ignored
+- **Without prefix** (e.g., `gpt-4o`): Uses `OPENAI_BASE_URL` if set
+
+### API Key and Base URL
+The `api_key` and `api_base` are passed explicitly in completion calls to support providers like xAI that require them.
 
 ---
 

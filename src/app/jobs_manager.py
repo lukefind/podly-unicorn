@@ -174,6 +174,7 @@ class JobsManager:
 
             response = {
                 "status": job.status,
+                "job_id": job.id,
                 "step": job.current_step,
                 "step_name": job.step_name or "Unknown",
                 "total_steps": job.total_steps,

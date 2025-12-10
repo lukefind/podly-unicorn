@@ -9,6 +9,7 @@ import DownloadButton from '../components/DownloadButton';
 import PlayButton from '../components/PlayButton';
 import ProcessingStatsButton from '../components/ProcessingStatsButton';
 import ReprocessButton from '../components/ReprocessButton';
+import EpisodeProcessingStatus from '../components/EpisodeProcessingStatus';
 
 export default function PodcastsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -464,6 +465,16 @@ export default function PodcastsPage() {
                         />
                       )}
                     </div>
+
+                    {/* Processing status indicator */}
+                    <EpisodeProcessingStatus
+                      episodeGuid={episode.guid}
+                      isWhitelisted={episode.whitelisted}
+                      hasProcessedAudio={episode.has_processed_audio}
+                      onProcessingComplete={() => {
+                        queryClient.invalidateQueries({ queryKey: ['episodes', selectedFeed?.id] });
+                      }}
+                    />
                   </div>
                 ))}
               </div>
