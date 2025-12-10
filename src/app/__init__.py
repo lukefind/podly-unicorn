@@ -53,8 +53,8 @@ def _set_sqlite_pragmas(dbapi_connection: Any, connection_record: Any) -> None:
     try:
         cursor.execute("PRAGMA journal_mode=WAL;")
         cursor.execute("PRAGMA synchronous=NORMAL;")
-        # Keep busy timeout low so our explicit retry logic can respond quickly.
-        cursor.execute("PRAGMA busy_timeout=2000;")
+        # Increase busy timeout to handle concurrent access better
+        cursor.execute("PRAGMA busy_timeout=30000;")  # 30 seconds
     finally:
         cursor.close()
 
