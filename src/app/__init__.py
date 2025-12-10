@@ -259,7 +259,15 @@ def _register_routes_and_middleware(app: Flask) -> None:
 
 
 def _run_app_startup(auth_settings: AuthSettings) -> None:
-    upgrade()
+    # Try Flask-Migrate upgrade first, fall back to db.create_all() if it fails
+    try:
+        upgrade()
+    except Exception as exc:
+        logger.warning(f"Flask-Migrate upgrade failed, falling back to db.create_all(): {exc}")
+        from app.extensions import db  # pylint: disable=import-outside-toplevel
+        db.create_all()
+        logger.info("Database tables created via db.create_all()")
+    
     bootstrap_admin_user(auth_settings)
     try:
         from app.config_store import (  # pylint: disable=import-outside-toplevel
