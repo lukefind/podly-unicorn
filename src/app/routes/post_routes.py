@@ -4,12 +4,12 @@ from pathlib import Path
 from typing import Dict
 
 import flask
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, g, jsonify, request, send_file
 from flask.typing import ResponseReturnValue
 
 from app.extensions import db
 from app.jobs_manager import get_jobs_manager
-from app.models import Identification, ModelCall, Post, TranscriptSegment
+from app.models import Identification, ModelCall, Post, TranscriptSegment, UserDownload
 from app.posts import clear_post_processing_data
 
 logger = logging.getLogger("global_logger")
@@ -31,6 +31,37 @@ def _increment_download_count(post: Post) -> None:
     except Exception as exc:  # pylint: disable=broad-except
         logger.error(
             "Failed to increment download count for post %s: %s", post.guid, exc
+        )
+        db.session.rollback()
+
+
+def _track_user_download(post: Post, is_processed: bool = True) -> None:
+    """Track a download for the current user if authenticated."""
+    try:
+        current_user = getattr(g, "current_user", None)
+        if not current_user:
+            return  # No user to track
+        
+        # Get file size if available
+        file_size = None
+        audio_path = post.processed_audio_path if is_processed else post.unprocessed_audio_path
+        if audio_path and Path(audio_path).exists():
+            file_size = Path(audio_path).stat().st_size
+        
+        download = UserDownload(
+            user_id=current_user.id,
+            post_id=post.id,
+            is_processed=is_processed,
+            file_size_bytes=file_size,
+        )
+        db.session.add(download)
+        db.session.commit()
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error(
+            "Failed to track download for user %s post %s: %s",
+            getattr(getattr(g, "current_user", None), "id", "?"),
+            post.guid,
+            exc,
         )
         db.session.rollback()
 
@@ -438,8 +469,12 @@ def api_process_post(p_guid: str) -> ResponseReturnValue:
         )
 
     try:
+        # Get current user ID if authenticated
+        current_user = getattr(g, "current_user", None)
+        user_id = current_user.id if current_user else None
+        
         result = get_jobs_manager().start_post_processing(
-            p_guid, priority="interactive"
+            p_guid, priority="interactive", triggered_by_user_id=user_id
         )
         status_code = 200 if result.get("status") in ("started", "completed") else 400
         return flask.jsonify(result), status_code
@@ -486,10 +521,14 @@ def api_reprocess_post(p_guid: str) -> ResponseReturnValue:
         )
 
     try:
+        # Get current user ID if authenticated
+        current_user = getattr(g, "current_user", None)
+        user_id = current_user.id if current_user else None
+        
         get_jobs_manager().cancel_post_jobs(p_guid)
         clear_post_processing_data(post)
         result = get_jobs_manager().start_post_processing(
-            p_guid, priority="interactive"
+            p_guid, priority="interactive", triggered_by_user_id=user_id
         )
         status_code = 200 if result.get("status") in ("started", "completed") else 400
         if result.get("status") == "started":
@@ -600,6 +639,7 @@ def api_download_post(p_guid: str) -> flask.Response:
         return flask.make_response(("Error serving file", 500))
 
     _increment_download_count(post)
+    _track_user_download(post, is_processed=True)
     return response
 
 
@@ -635,6 +675,7 @@ def api_download_original_post(p_guid: str) -> flask.Response:
         return flask.make_response(("Error serving file", 500))
 
     _increment_download_count(post)
+    _track_user_download(post, is_processed=False)
     return response
 
 

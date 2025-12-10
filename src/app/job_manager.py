@@ -18,11 +18,13 @@ class JobManager:
         status_manager: ProcessingStatusManager,
         logger_obj: logging.Logger,
         run_id: Optional[str],
+        triggered_by_user_id: Optional[int] = None,
     ) -> None:
         self.post_guid = post_guid
         self._status_manager = status_manager
         self._logger = logger_obj
         self._run_id = run_id
+        self._triggered_by_user_id = triggered_by_user_id
         self.job: Optional[ProcessingJob] = None
 
     @property
@@ -51,7 +53,12 @@ class JobManager:
                 self._status_manager.db_session.flush()
             return job
         job_id = self._status_manager.generate_job_id()
-        job = self._status_manager.create_job(self.post_guid, job_id, self._run_id)
+        job = self._status_manager.create_job(
+            self.post_guid,
+            job_id,
+            self._run_id,
+            triggered_by_user_id=self._triggered_by_user_id,
+        )
         self.job = job
         return job
 

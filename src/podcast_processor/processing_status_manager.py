@@ -24,7 +24,11 @@ class ProcessingStatusManager:
         return str(uuid.uuid4())
 
     def create_job(
-        self, post_guid: str, job_id: str, run_id: Optional[str] = None
+        self,
+        post_guid: str,
+        job_id: str,
+        run_id: Optional[str] = None,
+        triggered_by_user_id: Optional[int] = None,
     ) -> ProcessingJob:
         """Create a new pending job record for the provided post."""
         # Create new job
@@ -32,6 +36,7 @@ class ProcessingStatusManager:
             id=job_id,
             jobs_manager_run_id=run_id,
             post_guid=post_guid,
+            triggered_by_user_id=triggered_by_user_id,
             status="pending",
             current_step=0,
             total_steps=4,

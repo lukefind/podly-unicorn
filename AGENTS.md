@@ -86,11 +86,23 @@ Uses "Unicorn" pastel theme with Tailwind CSS. Key files:
 - `frontend/tailwind.config.js` - Custom colors
 - `frontend/src/index.css` - Global overrides
 
+### Logo
+Custom unicorn logo at `frontend/public/images/logos/unicorn-logo.png`. Used in:
+- Sidebar header (`Sidebar.tsx`)
+- Login page (`LoginPage.tsx`)
+
 ### Modals
 Use `createPortal` from `react-dom` to render modals to `document.body` to avoid z-index issues with parent containers.
 
 ### CSS Overrides
 Global CSS in `index.css` overrides gray colors with purple tints. Use inline `style={{}}` for elements that need original colors (e.g., inside modals).
+
+### User Statistics
+Admin users can view per-user statistics in Settings → User Statistics section:
+- Episodes processed per user
+- Downloads per user  
+- Ad time removed per user
+- Recent download history
 
 ---
 

@@ -150,6 +150,29 @@ class User(db.Model):  # type: ignore[name-defined, misc]
         return f"<User {self.username} role={self.role}>"
 
 
+class UserDownload(db.Model):  # type: ignore[name-defined, misc]
+    """Tracks episode downloads per user for usage statistics."""
+    __tablename__ = "user_download"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False, index=True)
+    downloaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    file_size_bytes = db.Column(db.Integer, nullable=True)  # Size of downloaded file
+    is_processed = db.Column(db.Boolean, default=True)  # Was it a processed (ad-free) version?
+
+    # Relationships
+    user = db.relationship("User", backref=db.backref("downloads", lazy="dynamic"))
+    post = db.relationship("Post", backref=db.backref("user_downloads", lazy="dynamic"))
+
+    __table_args__ = (
+        db.Index("ix_user_download_user_date", "user_id", "downloaded_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<UserDownload user={self.user_id} post={self.post_id} at={self.downloaded_at}>"
+
+
 class ModelCall(db.Model):  # type: ignore[name-defined, misc]
     __tablename__ = "model_call"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -256,6 +279,9 @@ class ProcessingJob(db.Model):  # type: ignore[name-defined, misc]
         db.String(36), db.ForeignKey("jobs_manager_run.id"), index=True
     )
     post_guid = db.Column(db.String(255), nullable=False, index=True)
+    triggered_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=True, index=True
+    )  # User who triggered this job (None if triggered by RSS request or system)
     status = db.Column(
         db.String(50), nullable=False
     )  # pending, running, completed, failed, cancelled, skipped
@@ -277,6 +303,9 @@ class ProcessingJob(db.Model):  # type: ignore[name-defined, misc]
         foreign_keys=[post_guid],
     )
     run = db.relationship("JobsManagerRun", back_populates="processing_jobs")
+    triggered_by_user = db.relationship(
+        "User", backref=db.backref("triggered_jobs", lazy="dynamic")
+    )
 
     def __repr__(self) -> str:
         return f"<ProcessingJob {self.id} Post:{self.post_guid} Status:{self.status} Step:{self.current_step}/{self.total_steps}>"

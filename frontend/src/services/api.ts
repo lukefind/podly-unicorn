@@ -396,7 +396,40 @@ export const authApi = {
     const response = await api.delete(`/api/auth/users/${username}`);
     return response.data;
   },
+
+  getUserStats: async (): Promise<UserStatsResponse> => {
+    const response = await api.get('/api/admin/user-stats');
+    return response.data;
+  },
 };
+
+export interface UserStats {
+  id: number;
+  username: string;
+  role: string;
+  created_at: string;
+  episodes_processed: number;
+  ad_time_removed_seconds: number;
+  ad_time_removed_formatted: string;
+  total_downloads: number;
+  processed_downloads: number;
+  last_activity: string | null;
+  recent_downloads: Array<{
+    post_id: number;
+    post_title: string;
+    downloaded_at: string;
+    is_processed: boolean;
+  }>;
+}
+
+export interface UserStatsResponse {
+  users: UserStats[];
+  global_stats: {
+    total_feeds: number;
+    total_episodes: number;
+    total_processed: number;
+  };
+}
 
 export const configApi = {
   getConfig: async (): Promise<ConfigResponse> => {

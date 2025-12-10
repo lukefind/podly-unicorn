@@ -20,7 +20,7 @@ from app.auth.service import (
     update_password,
 )
 from app.auth.state import failure_rate_limiter
-from app.models import User
+from app.models import Feed, Post, ProcessingJob, ProcessingStatistics, User, UserDownload
 
 logger = logging.getLogger("global_logger")
 
@@ -294,3 +294,124 @@ def _unauthorized_response() -> RouteResult:
         return jsonify({"error": "Authentication is disabled."}), 404
 
     return jsonify({"error": "Authentication required."}), 401
+
+
+@auth_bp.route("/api/admin/user-stats", methods=["GET"])
+def admin_user_stats() -> RouteResult:
+    """Get usage statistics for all users. Admin only."""
+    if not _auth_enabled():
+        return jsonify({"error": "Authentication is disabled."}), 404
+
+    user = _require_authenticated_user()
+    if user is None:
+        return _unauthorized_response()
+    if user.role != "admin":
+        return jsonify({"error": "Admin privileges required."}), 403
+
+    from sqlalchemy import func
+    from app.extensions import db
+
+    users = User.query.all()
+    user_stats = []
+
+    for u in users:
+        # Episodes processed (triggered by this user)
+        episodes_processed = (
+            ProcessingJob.query.filter_by(
+                triggered_by_user_id=u.id, status="completed"
+            ).count()
+        )
+
+        # Total ad time removed from jobs triggered by this user
+        ad_time_removed = 0.0
+        triggered_jobs = ProcessingJob.query.filter_by(
+            triggered_by_user_id=u.id, status="completed"
+        ).all()
+        for job in triggered_jobs:
+            post = Post.query.filter_by(guid=job.post_guid).first()
+            if post and post.statistics:
+                ad_time_removed += post.statistics.total_duration_removed_seconds
+
+        # Downloads by this user
+        downloads = UserDownload.query.filter_by(user_id=u.id).all()
+        total_downloads = len(downloads)
+        processed_downloads = len([d for d in downloads if d.is_processed])
+
+        # Last activity (most recent download or job)
+        last_download = (
+            UserDownload.query.filter_by(user_id=u.id)
+            .order_by(UserDownload.downloaded_at.desc())
+            .first()
+        )
+        last_job = (
+            ProcessingJob.query.filter_by(triggered_by_user_id=u.id)
+            .order_by(ProcessingJob.created_at.desc())
+            .first()
+        )
+        last_activity = None
+        if last_download and last_job:
+            last_activity = max(
+                last_download.downloaded_at, last_job.created_at
+            ).isoformat()
+        elif last_download:
+            last_activity = last_download.downloaded_at.isoformat()
+        elif last_job:
+            last_activity = last_job.created_at.isoformat()
+
+        # Recent downloads (last 10)
+        recent_downloads = (
+            UserDownload.query.filter_by(user_id=u.id)
+            .order_by(UserDownload.downloaded_at.desc())
+            .limit(10)
+            .all()
+        )
+
+        user_stats.append({
+            "id": u.id,
+            "username": u.username,
+            "role": u.role,
+            "created_at": u.created_at.isoformat(),
+            "episodes_processed": episodes_processed,
+            "ad_time_removed_seconds": round(ad_time_removed, 1),
+            "ad_time_removed_formatted": _format_duration(ad_time_removed),
+            "total_downloads": total_downloads,
+            "processed_downloads": processed_downloads,
+            "last_activity": last_activity,
+            "recent_downloads": [
+                {
+                    "post_id": d.post_id,
+                    "post_title": d.post.title if d.post else "Unknown",
+                    "downloaded_at": d.downloaded_at.isoformat(),
+                    "is_processed": d.is_processed,
+                }
+                for d in recent_downloads
+            ],
+        })
+
+    # Global stats
+    total_feeds = Feed.query.count()
+    total_episodes = Post.query.count()
+    total_processed = Post.query.filter(Post.processed_audio_path.isnot(None)).count()
+
+    return jsonify({
+        "users": user_stats,
+        "global_stats": {
+            "total_feeds": total_feeds,
+            "total_episodes": total_episodes,
+            "total_processed": total_processed,
+        },
+    })
+
+
+def _format_duration(seconds: float) -> str:
+    """Format seconds into a human-readable duration."""
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    elif seconds < 3600:
+        mins = int(seconds // 60)
+        secs = int(seconds % 60)
+        return f"{mins}m {secs}s" if secs else f"{mins}m"
+    else:
+        hours = int(seconds // 3600)
+        mins = int((seconds % 3600) // 60)
+        return f"{hours}h {mins}m" if mins else f"{hours}h"

@@ -14,6 +14,7 @@ import type {
   WhisperConfig,
 } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import AdminUserStats from '../components/AdminUserStats';
 
 const ENV_FIELD_LABELS: Record<string, string> = {
   'groq.api_key': 'Groq API Key',
@@ -469,7 +470,7 @@ export default function ConfigPage() {
     <div className="flex items-center justify-end">
       <button
         onClick={handleSave}
-        className="px-3 py-2 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
+        className="px-3 py-2 text-sm rounded bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:from-purple-700 hover:to-pink-600 disabled:opacity-60"
         disabled={saveMutation.isPending}
       >
         {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
@@ -879,7 +880,7 @@ export default function ConfigPage() {
       </Section>
 
       {showSecurityControls && (
-                  <Section title="Account Security">
+                  <Section title="Account Security" badge="Saves instantly">
             <form className="grid gap-3 max-w-md" onSubmit={handlePasswordSubmit}>
               <Field label="Current password">
                 <input
@@ -911,23 +912,23 @@ export default function ConfigPage() {
                   required
                 />
               </Field>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-2 pt-2">
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
+                  className="w-fit px-6 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm font-medium hover:from-purple-700 hover:to-pink-600 disabled:opacity-60 shadow-sm"
                   disabled={passwordSubmitting}
                 >
                   {passwordSubmitting ? 'Updating…' : 'Update password'}
                 </button>
-                <p className="text-xs text-gray-500">
-                  After updating, rotate <code className="font-mono">PODLY_ADMIN_PASSWORD</code> to match.
+                <p className="text-xs text-purple-500">
+                  After updating, rotate <code className="font-mono bg-purple-50 px-1 rounded">PODLY_ADMIN_PASSWORD</code> to match.
                 </p>
               </div>
             </form>
           </Section>
       )}
       {showSecurityControls && user?.role === 'admin' && (
-        <Section title="User Management">
+        <Section title="User Management" badge="Saves instantly">
           <div className="space-y-4">
             <form className="grid gap-3 md:grid-cols-2" onSubmit={handleCreateUser}>
               <div className="md:col-span-2">
@@ -975,7 +976,7 @@ export default function ConfigPage() {
               <div className="md:col-span-2 flex items-center justify-start">
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded bg-green-600 text-white text-sm font-medium hover:bg-green-700"
+                  className="px-4 py-2 rounded bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm font-medium hover:from-purple-700 hover:to-pink-600"
                 >
                   Add user
                 </button>
@@ -1072,7 +1073,7 @@ export default function ConfigPage() {
                             <div className="md:col-span-1 flex items-end gap-2">
                               <button
                                 type="submit"
-                                className="px-4 py-2 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+                                className="px-4 py-2 rounded bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm hover:from-purple-700 hover:to-pink-600"
                               >
                                 Update
                               </button>
@@ -1090,10 +1091,21 @@ export default function ConfigPage() {
         </Section>
       )}
 
+      {/* User Statistics - Admin only */}
+      {showSecurityControls && user?.role === 'admin' && (
+        <Section title="User Statistics" badge="Live data">
+          <AdminUserStats />
+        </Section>
+      )}
+
       {/* Advanced Settings - Always visible */}
       <div className="space-y-6">
-        <div className="border-t border-gray-200 pt-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Advanced Settings</h2>
+        <div className="border-t border-purple-200 pt-6">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Advanced Settings</h2>
+            <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-medium">Requires Save</span>
+          </div>
+          <p className="text-sm text-purple-600 mb-4">Changes below require clicking "Save Changes" to apply.</p>
         </div>
         <Section title="LLM Configuration">
             <Field label="API Key" envMeta={getEnvHint('llm.llm_api_key')}>
@@ -1230,7 +1242,7 @@ export default function ConfigPage() {
                     }
                   );
                 }}
-                className="mt-2 px-3 py-2 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700"
+                className="mt-2 px-3 py-2 text-sm rounded bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:from-purple-700 hover:to-pink-600"
               >
                 Test LLM
               </button>
@@ -1372,7 +1384,7 @@ export default function ConfigPage() {
                     }
                   );
                 }}
-                className="mt-2 px-3 py-2 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700"
+                className="mt-2 px-3 py-2 text-sm rounded bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:from-purple-700 hover:to-pink-600"
               >
                 Test Whisper
               </button>
@@ -1546,7 +1558,7 @@ function EnvOverrideWarningModal({
           <button
             type="button"
             onClick={onConfirm}
-            className="rounded bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+            className="rounded bg-gradient-to-r from-purple-600 to-pink-500 px-3 py-2 text-sm font-semibold text-white hover:from-purple-700 hover:to-pink-600"
           >
             Save anyway
           </button>
@@ -1556,13 +1568,24 @@ function EnvOverrideWarningModal({
   );
 }
 
-function Section({ title, children, icon }: { title: string; children: ReactNode; icon?: ReactNode }) {
+function Section({ title, children, icon, badge }: { title: string; children: ReactNode; icon?: ReactNode; badge?: string }) {
+  const badgeColor = badge === 'Saves instantly' 
+    ? 'bg-green-100 text-green-700' 
+    : badge === 'Live data'
+    ? 'bg-cyan-100 text-cyan-700'
+    : 'bg-purple-100 text-purple-700';
+  
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm unicorn-card">
       <div className="px-4 py-3 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50">
         <h3 className="text-sm font-semibold text-purple-900 flex items-center gap-2">
           {icon}
           {title}
+          {badge && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeColor}`}>
+              {badge}
+            </span>
+          )}
         </h3>
       </div>
       <div className="p-4 space-y-3">{children}</div>

@@ -84,9 +84,11 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-purple-800/50">
         <Link to="/" className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-pink-400 via-purple-400 to-cyan-400 flex items-center justify-center shadow-lg">
-            <span className="text-lg">🦄</span>
-          </div>
+          <img 
+            src="/images/logos/unicorn-logo.png" 
+            alt="Podly Unicorn" 
+            className="h-10 w-10 object-contain"
+          />
           {!collapsed && (
             <span className="text-lg font-bold rainbow-text">
               Podly Unicorn
