@@ -1,12 +1,30 @@
 """Routes for managing prompt presets and viewing processing statistics."""
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, make_response, request
 from sqlalchemy import func
 
 from app.extensions import db
-from app.models import Post, ProcessingStatistics, PromptPreset
+from app.models import Post, ProcessingStatistics, PromptPreset, User
 
 preset_bp = Blueprint("preset", __name__, url_prefix="/api/presets")
+
+
+def _require_admin():
+    """Check if the current user is an admin. Returns error response if not."""
+    settings = current_app.config.get("AUTH_SETTINGS")
+    # When REQUIRE_AUTH=false we intentionally allow these routes.
+    if not settings or not settings.require_auth:
+        return None
+
+    current = getattr(g, "current_user", None)
+    if current is None:
+        return make_response(jsonify({"error": "Authentication required."}), 401)
+
+    user = User.query.get(current.id)
+    if user is None or user.role != "admin":
+        return make_response(jsonify({"error": "Admin privileges required."}), 403)
+
+    return None
 
 
 @preset_bp.route("", methods=["GET"])
@@ -64,6 +82,10 @@ def get_preset(preset_id: int):
 @preset_bp.route("/<int:preset_id>/activate", methods=["POST"])
 def activate_preset(preset_id: int):
     """Activate a specific preset (deactivates all others) and update output settings."""
+    error_response = _require_admin()
+    if error_response:
+        return error_response
+    
     from app.models import OutputSettings
     
     preset = PromptPreset.query.get_or_404(preset_id)
@@ -98,6 +120,10 @@ def activate_preset(preset_id: int):
 @preset_bp.route("", methods=["POST"])
 def create_preset():
     """Create a new custom prompt preset."""
+    error_response = _require_admin()
+    if error_response:
+        return error_response
+    
     data = request.get_json()
     
     # Validate required fields
@@ -149,6 +175,10 @@ def create_preset():
 @preset_bp.route("/<int:preset_id>", methods=["PUT"])
 def update_preset(preset_id: int):
     """Update an existing preset."""
+    error_response = _require_admin()
+    if error_response:
+        return error_response
+    
     preset = PromptPreset.query.get_or_404(preset_id)
     data = request.get_json()
     
@@ -190,6 +220,10 @@ def update_preset(preset_id: int):
 @preset_bp.route("/<int:preset_id>", methods=["DELETE"])
 def delete_preset(preset_id: int):
     """Delete a custom preset (cannot delete default presets)."""
+    error_response = _require_admin()
+    if error_response:
+        return error_response
+    
     preset = PromptPreset.query.get_or_404(preset_id)
     
     if preset.is_default:

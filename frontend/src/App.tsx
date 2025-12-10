@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AudioPlayerProvider } from './contexts/AudioPlayerContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import Sidebar from './components/layout/Sidebar';
 import DashboardPage from './pages/DashboardPage';
 import PodcastsPage from './pages/PodcastsPage';
@@ -62,7 +63,7 @@ function AppShell() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/podcasts" element={<PodcastsPage />} />
             <Route path="/jobs" element={<JobsPage />} />
-            <Route path="/presets" element={<PresetsPage />} />
+            {showSettingsRoute && <Route path="/presets" element={<PresetsPage />} />}
             {showSettingsRoute && <Route path="/settings" element={<ConfigPage />} />}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
@@ -103,13 +104,15 @@ function AppShell() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AudioPlayerProvider>
-          <Router>
-            <AppShell />
-          </Router>
-        </AudioPlayerProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AudioPlayerProvider>
+            <Router>
+              <AppShell />
+            </Router>
+          </AudioPlayerProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

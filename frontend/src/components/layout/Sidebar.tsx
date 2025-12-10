@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface NavItem {
   path: string;
@@ -44,6 +45,7 @@ const navItems: NavItem[] = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
       </svg>
     ),
+    adminOnly: true,
   },
   {
     path: '/settings',
@@ -66,6 +68,7 @@ interface SidebarProps {
 export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const location = useLocation();
   const { requireAuth, user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -79,8 +82,13 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     return true;
   });
 
+  // Softer sidebar colors - less intense purple
+  const sidebarClasses = theme === 'dark'
+    ? 'bg-gradient-to-b from-slate-900 via-purple-950/80 to-slate-950'
+    : 'bg-gradient-to-b from-purple-800/90 via-purple-900/95 to-slate-900';
+
   return (
-    <aside className={`bg-gradient-to-b from-purple-900 via-purple-950 to-slate-900 text-white flex flex-col transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'} shadow-xl`}>
+    <aside className={`${sidebarClasses} text-white flex flex-col transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'} shadow-xl`}>
       {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-purple-800/50">
         <Link to="/" className="flex items-center gap-3">
@@ -126,9 +134,33 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         ))}
       </nav>
 
+      {/* Theme toggle */}
+      <div className="px-4 py-2 border-t border-purple-800/30">
+        <button
+          onClick={toggleTheme}
+          className={`w-full flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg hover:bg-purple-800/30 text-purple-200 hover:text-white transition-colors`}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          )}
+          {!collapsed && (
+            <span className="text-sm font-medium">
+              {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* User section */}
       {requireAuth && user && (
-        <div className="p-4 border-t border-purple-800/50">
+        <div className="p-4 border-t border-purple-800/30">
           <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 via-purple-400 to-cyan-400 flex items-center justify-center text-sm font-bold shadow-lg">
               {user.username.charAt(0).toUpperCase()}
@@ -142,7 +174,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             {!collapsed && (
               <button
                 onClick={logout}
-                className="p-1.5 rounded-lg hover:bg-purple-800/50 text-purple-300 hover:text-white transition-colors"
+                className="p-1.5 rounded-lg hover:bg-purple-800/30 text-purple-300 hover:text-white transition-colors"
                 title="Logout"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

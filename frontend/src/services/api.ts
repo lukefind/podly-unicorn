@@ -53,6 +53,16 @@ export const feedsApi = {
     await api.delete(`/feed/${feedId}`);
   },
 
+  getFeedShareLink: async (feedId: number): Promise<{
+    url: string;
+    feed_token: string;
+    feed_secret: string;
+    feed_id: number;
+  }> => {
+    const response = await api.post(`/api/feeds/${feedId}/share-link`);
+    return response.data;
+  },
+
   refreshFeed: async (
     feedId: number
   ): Promise<{ status: string; message?: string }> => {
@@ -179,6 +189,12 @@ export const feedsApi = {
       release_date: string | null;
       whitelisted: boolean;
       has_processed_audio: boolean;
+      processed_with_preset: {
+        id: number;
+        name: string;
+        aggressiveness: string;
+        min_confidence: number;
+      } | null;
     };
     processing_stats: {
       total_segments: number;

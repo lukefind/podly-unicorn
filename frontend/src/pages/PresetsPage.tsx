@@ -125,11 +125,11 @@ export default function PresetsPage() {
 
   const getAggressivenessColor = (level: string) => {
     switch (level) {
-      case 'conservative': return { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', ring: 'ring-green-500' };
-      case 'balanced': return { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', ring: 'ring-yellow-500' };
-      case 'aggressive': return { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', ring: 'ring-orange-500' };
-      case 'maximum': return { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', ring: 'ring-red-500' };
-      default: return { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300', ring: 'ring-gray-500' };
+      case 'conservative': return { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', border: 'border-green-300 dark:border-green-700', ring: 'ring-green-500' };
+      case 'balanced': return { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-300 dark:border-yellow-700', ring: 'ring-yellow-500' };
+      case 'aggressive': return { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-400', border: 'border-orange-300 dark:border-orange-700', ring: 'ring-orange-500' };
+      case 'maximum': return { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400', border: 'border-red-300 dark:border-red-700', ring: 'ring-red-500' };
+      default: return { bg: 'bg-gray-100 dark:bg-gray-800/30', text: 'text-gray-700 dark:text-gray-400', border: 'border-gray-300 dark:border-gray-700', ring: 'ring-gray-500' };
     }
   };
 
@@ -201,7 +201,7 @@ export default function PresetsPage() {
                 className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
                   selectedPreset?.id === preset.id
                     ? `${getAggressivenessColor(preset.aggressiveness).border} ${getAggressivenessColor(preset.aggressiveness).bg}`
-                    : 'border-gray-200 bg-white hover:border-gray-300'
+                    : 'border-purple-200/50 dark:border-purple-700/30 bg-white/80 dark:bg-purple-950/50 hover:border-purple-300 dark:hover:border-purple-600/50'
                 }`}
               >
                 <div className="flex items-start justify-between">
@@ -233,8 +233,8 @@ export default function PresetsPage() {
         {/* Preset Detail / Editor */}
         <div className="lg:col-span-2">
           {(selectedPreset || isCreating) ? (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-gray-100">
+            <div className="bg-white/80 dark:bg-purple-950/50 rounded-xl border border-purple-200/50 dark:border-purple-700/30 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-purple-100/50 dark:border-purple-800/30">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-gray-900">
                     {isCreating ? 'Create New Preset' : isEditing ? 'Edit Preset' : 'Preset Details'}

@@ -70,6 +70,19 @@ with app.app_context():
 
 Users can create/edit presets via the UI. These are stored in the database and persist correctly. The init script only affects the 3 default presets (Conservative, Balanced, Aggressive).
 
+### Preset Access Control
+
+**Presets page is admin-only.** Regular users cannot change presets, which prevents one user's preset change from affecting another user's downloads.
+
+### Preset Tracking
+
+When an episode is processed, the active preset ID is stored on the `Post` record (`processed_with_preset_id`). This allows:
+- Viewing which preset was used in the episode stats modal (Overview tab)
+- Understanding why ad detection behaved a certain way
+- Episodes processed before this feature show "Processed before preset tracking was added"
+
+**Important behavior:** If User A processes an episode with "Conservative" preset, and User B later downloads it, User B gets the Conservative-processed version. The preset is locked at processing time, not download time.
+
 ### Prompt Design Principles
 
 All presets emphasize flagging **ALL segments within an ad block**, not just the announcement. Key prompt elements:
@@ -151,3 +164,34 @@ docker exec -it podly-pure-podcasts bash    # Shell access
 The running app locks the database. To run scripts:
 1. Stop the app, OR
 2. Use a minimal Flask app that doesn't start the scheduler (see preset update script above)
+
+---
+
+## Security
+
+### Authentication
+- **Session-based auth** with HttpOnly, SameSite=Lax cookies
+- **bcrypt** password hashing (12 rounds)
+- **Rate limiting** with exponential backoff on failed auth attempts (max 5 min)
+- **Feed tokens** for RSS access - SHA-256 hashed, timing-safe comparison
+
+### Authorization
+- **Admin-only routes**: Settings, Presets, User Management
+- Backend enforces admin checks via `_require_admin()` helper
+- Frontend hides admin UI but backend is the source of truth
+
+### Environment Variables
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| `PODLY_SECRET_KEY` | Session encryption key | Recommended for production |
+| `REQUIRE_AUTH` | Enable authentication | Yes for multi-user |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Initial admin credentials | Yes if auth enabled |
+| `CORS_ORIGINS` | Allowed CORS origins | Production only |
+
+### Production Recommendations
+1. Set `PODLY_SECRET_KEY` to a stable secret (sessions persist across restarts)
+2. Use HTTPS (reverse proxy like nginx/Caddy)
+3. Set `CORS_ORIGINS` to your domain only
+
+### RSS Feed Authentication
+When auth is enabled, RSS feeds require tokens. The "Subscribe to Podly RSS" button automatically generates a tokenized URL that podcast apps can use without login.

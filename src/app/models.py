@@ -80,6 +80,9 @@ class Post(db.Model):  # type: ignore[name-defined, misc]
     whitelisted = db.Column(db.Boolean, default=False, nullable=False)
     image_url = db.Column(db.Text)  # Episode thumbnail URL
     download_count = db.Column(db.Integer, nullable=True, default=0)
+    processed_with_preset_id = db.Column(
+        db.Integer, db.ForeignKey("prompt_preset.id"), nullable=True
+    )  # Which preset was used to process this episode
 
     segments = db.relationship(
         "TranscriptSegment",

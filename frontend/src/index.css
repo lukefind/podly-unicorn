@@ -2,13 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Pastel Unicorn Theme */
+/* Pastel Unicorn Theme - Light Mode */
 :root {
   --unicorn-pink: #f9b3d1;
   --unicorn-purple: #d8b4fe;
   --unicorn-blue: #7dd3fc;
   --unicorn-mint: #5eead4;
   --unicorn-lavender: #c4b5fd;
+  
+  /* Light theme colors */
+  --bg-primary: #ffffff;
+  --bg-secondary: rgba(255, 255, 255, 0.7);
+  --bg-card: rgba(255, 255, 255, 0.8);
+  --text-primary: #44337a;
+  --text-secondary: #6b46c1;
+  --text-muted: #9f7aea;
+  --border-color: rgba(196, 181, 253, 0.4);
+  --sidebar-from: #4c1d95;
+  --sidebar-to: #1e1b4b;
+}
+
+/* Dark Unicorn Theme */
+.dark {
+  --unicorn-pink: #be185d;
+  --unicorn-purple: #7c3aed;
+  --unicorn-blue: #0284c7;
+  --unicorn-mint: #0d9488;
+  --unicorn-lavender: #8b5cf6;
+  
+  /* Dark theme colors */
+  --bg-primary: #0f0a19;
+  --bg-secondary: rgba(15, 10, 25, 0.9);
+  --bg-card: rgba(30, 20, 50, 0.8);
+  --text-primary: #f3e8ff;
+  --text-secondary: #d8b4fe;
+  --text-muted: #a78bfa;
+  --border-color: rgba(139, 92, 246, 0.3);
+  --sidebar-from: #1e1b4b;
+  --sidebar-to: #0f0a19;
 }
 
 body {
@@ -23,14 +54,50 @@ body {
   );
   background-attachment: fixed;
   min-height: 100vh;
+  transition: background 0.3s ease;
 }
 
-/* Override white backgrounds with pastel tints */
-.bg-white {
+.dark body,
+body:has(.dark) {
+  background: linear-gradient(135deg, 
+    #0f0a19 0%,      /* deep purple-black */
+    #1a1033 15%,     /* dark purple */
+    #0c1929 30%,     /* dark blue */
+    #0a1f1f 50%,     /* dark teal */
+    #0c1929 70%,     /* dark blue */
+    #1a1033 85%,     /* dark purple */
+    #0f0a19 100%     /* deep purple-black */
+  );
+}
+
+/* Apply dark background when html has dark class */
+html.dark {
+  background: linear-gradient(135deg, 
+    #0f0a19 0%,
+    #1a1033 15%,
+    #0c1929 30%,
+    #0a1f1f 50%,
+    #0c1929 70%,
+    #1a1033 85%,
+    #0f0a19 100%
+  );
+  background-attachment: fixed;
+}
+
+/* Override white backgrounds with pastel tints - Light mode */
+.bg-white:not(.dark *):not([class*="dark:"]) {
   background-color: rgba(255, 255, 255, 0.7) !important;
 }
 
-/* Make gray text more purple-tinted */
+/* Dark mode - comprehensive background fixes */
+html.dark .bg-white,
+html.dark .bg-white\/80,
+html.dark .bg-white\/70,
+html.dark .bg-white\/60 {
+  background-color: rgba(25, 15, 45, 0.85) !important;
+}
+
+/* Make gray text more purple-tinted - Light mode */
 .text-gray-400 {
   color: #b794f4 !important;
 }
@@ -51,12 +118,33 @@ body {
   color: #44337a !important;
 }
 
+/* Dark mode text overrides */
+html.dark .text-gray-400 {
+  color: #a78bfa !important;
+}
+
+html.dark .text-gray-500 {
+  color: #c4b5fd !important;
+}
+
+html.dark .text-gray-600 {
+  color: #d8b4fe !important;
+}
+
+html.dark .text-gray-700 {
+  color: #e9d5ff !important;
+}
+
+html.dark .text-gray-900 {
+  color: #f3e8ff !important;
+}
+
 /* Fix opacity for better visibility */
 .opacity-60 {
   opacity: 0.75 !important;
 }
 
-/* Override gray borders with purple tints */
+/* Override gray borders with purple tints - Light mode */
 .border-gray-100 {
   border-color: rgba(196, 181, 253, 0.3) !important;
 }
@@ -69,7 +157,14 @@ body {
   border-color: rgba(196, 181, 253, 0.5) !important;
 }
 
-/* Override gray backgrounds with pastel tints */
+/* Dark mode border overrides */
+html.dark .border-gray-100,
+html.dark .border-gray-200,
+html.dark .border-gray-300 {
+  border-color: rgba(139, 92, 246, 0.3) !important;
+}
+
+/* Override gray backgrounds with pastel tints - Light mode */
 .bg-gray-50 {
   background: linear-gradient(135deg, rgba(253, 238, 243, 0.5), rgba(243, 232, 255, 0.5)) !important;
 }
@@ -80,6 +175,94 @@ body {
 
 .bg-gray-200 {
   background-color: rgba(196, 181, 253, 0.3) !important;
+}
+
+/* Dark mode background overrides */
+html.dark .bg-gray-50 {
+  background: rgba(30, 20, 50, 0.6) !important;
+}
+
+html.dark .bg-gray-100 {
+  background: rgba(30, 20, 50, 0.7) !important;
+}
+
+html.dark .bg-gray-200 {
+  background-color: rgba(139, 92, 246, 0.2) !important;
+}
+
+/* Dark mode input fields */
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: rgba(30, 20, 50, 0.8) !important;
+  border-color: rgba(139, 92, 246, 0.4) !important;
+  color: #f3e8ff !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: rgba(167, 139, 250, 0.6) !important;
+}
+
+html.dark input:focus,
+html.dark textarea:focus,
+html.dark select:focus {
+  border-color: rgba(167, 139, 250, 0.7) !important;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2) !important;
+}
+
+/* Dark mode for white/light backgrounds */
+html.dark .bg-white\/80,
+html.dark .bg-white\/70 {
+  background-color: rgba(30, 20, 50, 0.7) !important;
+}
+
+/* Dark mode section headers */
+html.dark .bg-gradient-to-r.from-pink-50\/50,
+html.dark .from-pink-50\/50 {
+  background: linear-gradient(to right, rgba(190, 24, 93, 0.15), rgba(124, 58, 237, 0.15), rgba(6, 182, 212, 0.15)) !important;
+}
+
+/* Dark mode purple backgrounds */
+html.dark .bg-purple-50,
+html.dark .bg-purple-100 {
+  background-color: rgba(124, 58, 237, 0.2) !important;
+}
+
+html.dark .bg-pink-50 {
+  background-color: rgba(190, 24, 93, 0.2) !important;
+}
+
+html.dark .bg-cyan-50 {
+  background-color: rgba(6, 182, 212, 0.2) !important;
+}
+
+/* Dark mode text colors for specific elements */
+html.dark .text-purple-900 {
+  color: #e9d5ff !important;
+}
+
+html.dark .text-purple-800 {
+  color: #d8b4fe !important;
+}
+
+html.dark .text-purple-700 {
+  color: #c4b5fd !important;
+}
+
+html.dark .text-purple-600 {
+  color: #a78bfa !important;
+}
+
+html.dark .text-purple-500 {
+  color: #8b5cf6 !important;
+}
+
+/* Dark mode borders */
+html.dark .border-purple-200\/50,
+html.dark .border-purple-100\/50,
+html.dark .border-purple-200 {
+  border-color: rgba(139, 92, 246, 0.3) !important;
 }
 
 /* Sparkle animation for special elements */
@@ -117,12 +300,30 @@ body {
 .unicorn-card {
   transition: all 0.3s ease;
   border: 1px solid rgba(196, 181, 253, 0.3);
+  background-color: rgba(255, 255, 255, 0.8);
 }
 
 .unicorn-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(196, 181, 253, 0.25), 0 4px 10px rgba(249, 179, 209, 0.15);
   border-color: rgba(196, 181, 253, 0.5);
+}
+
+/* Dark mode card styles */
+html.dark .unicorn-card {
+  background-color: rgba(30, 20, 50, 0.7);
+  border-color: rgba(139, 92, 246, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+html.dark .unicorn-card:hover {
+  box-shadow: 0 8px 25px rgba(139, 92, 246, 0.3), 0 4px 10px rgba(190, 24, 93, 0.2);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+/* Dark mode glow */
+html.dark .unicorn-glow {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.4), 0 0 40px rgba(190, 24, 93, 0.3);
 }
 
 /* Modal reset - ensure proper contrast inside modals */
@@ -149,4 +350,224 @@ body {
 .modal-content .border-gray-200,
 .modal-content .border-gray-300 {
   border-color: inherit !important;
+}
+
+/* Dark mode modal styles */
+html.dark .modal-content .bg-white {
+  background-color: rgba(30, 20, 50, 0.95) !important;
+}
+
+html.dark .modal-content .bg-gray-50 {
+  background: rgba(30, 20, 50, 0.8) !important;
+}
+
+html.dark .modal-content .bg-gray-100 {
+  background: rgba(30, 20, 50, 0.7) !important;
+}
+
+/* Dark mode - fix green/red status colors to be more visible */
+html.dark .text-green-600,
+html.dark .text-green-700 {
+  color: #4ade80 !important;
+}
+
+html.dark .text-red-600,
+html.dark .text-red-700 {
+  color: #f87171 !important;
+}
+
+html.dark .bg-green-100 {
+  background-color: rgba(34, 197, 94, 0.2) !important;
+}
+
+html.dark .bg-red-100 {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+html.dark .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+html.dark .text-amber-700 {
+  color: #fbbf24 !important;
+}
+
+/* Yellow colors for dark mode */
+html.dark .bg-yellow-100 {
+  background-color: rgba(234, 179, 8, 0.2) !important;
+}
+
+html.dark .text-yellow-700 {
+  color: #facc15 !important;
+}
+
+html.dark .border-yellow-300 {
+  border-color: rgba(234, 179, 8, 0.5) !important;
+}
+
+/* Orange colors for dark mode */
+html.dark .bg-orange-100 {
+  background-color: rgba(249, 115, 22, 0.2) !important;
+}
+
+html.dark .text-orange-700 {
+  color: #fb923c !important;
+}
+
+html.dark .border-orange-300 {
+  border-color: rgba(249, 115, 22, 0.5) !important;
+}
+
+/* Dark mode badges */
+html.dark .bg-green-100.text-green-700 {
+  background-color: rgba(34, 197, 94, 0.25) !important;
+  color: #86efac !important;
+}
+
+html.dark .bg-cyan-100.text-cyan-700 {
+  background-color: rgba(6, 182, 212, 0.25) !important;
+  color: #67e8f9 !important;
+}
+
+/* ============================================
+   COMPREHENSIVE DARK MODE OVERRIDES
+   ============================================ */
+
+/* All card-like elements */
+html.dark [class*="rounded"][class*="border"][class*="bg-white"],
+html.dark [class*="rounded-lg"][class*="bg-white"],
+html.dark [class*="rounded-xl"][class*="bg-white"] {
+  background-color: rgba(25, 15, 45, 0.8) !important;
+  border-color: rgba(139, 92, 246, 0.25) !important;
+}
+
+/* Backdrop blur elements */
+html.dark [class*="backdrop-blur"] {
+  background-color: rgba(25, 15, 45, 0.75) !important;
+}
+
+/* Blue elements converted to purple for theme consistency */
+html.dark .bg-blue-50 {
+  background-color: rgba(124, 58, 237, 0.15) !important;
+}
+
+html.dark .bg-blue-100 {
+  background-color: rgba(124, 58, 237, 0.2) !important;
+}
+
+html.dark .border-blue-500 {
+  border-color: #8b5cf6 !important;
+}
+
+html.dark .text-blue-600,
+html.dark .text-blue-700 {
+  color: #a78bfa !important;
+}
+
+/* Fix specific component backgrounds */
+html.dark .bg-gradient-to-r.from-pink-50,
+html.dark .bg-gradient-to-r.from-purple-50,
+html.dark [class*="from-pink-50"],
+html.dark [class*="from-purple-50"],
+html.dark [class*="via-purple-50"],
+html.dark [class*="to-cyan-50"] {
+  background: rgba(25, 15, 45, 0.6) !important;
+}
+
+/* Episode cards and list items */
+html.dark .space-y-2 > div[class*="bg-white"],
+html.dark .space-y-3 > div[class*="bg-white"],
+html.dark .space-y-4 > div[class*="bg-white"] {
+  background-color: rgba(25, 15, 45, 0.7) !important;
+}
+
+/* Buttons - keep gradients but adjust for dark */
+html.dark button[class*="bg-gradient-to-r"] {
+  opacity: 0.95;
+}
+
+/* Tables and data displays */
+html.dark table,
+html.dark thead,
+html.dark tbody {
+  background-color: transparent !important;
+}
+
+html.dark th {
+  background-color: rgba(25, 15, 45, 0.5) !important;
+  color: #e9d5ff !important;
+}
+
+html.dark td {
+  background-color: rgba(25, 15, 45, 0.3) !important;
+  border-color: rgba(139, 92, 246, 0.2) !important;
+}
+
+/* Dropdown menus */
+html.dark [role="menu"],
+html.dark [role="listbox"] {
+  background-color: rgba(25, 15, 45, 0.95) !important;
+  border-color: rgba(139, 92, 246, 0.3) !important;
+}
+
+/* Tooltips */
+html.dark [role="tooltip"] {
+  background-color: rgba(25, 15, 45, 0.95) !important;
+  color: #f3e8ff !important;
+}
+
+/* Code blocks */
+html.dark code,
+html.dark pre {
+  background-color: rgba(25, 15, 45, 0.8) !important;
+  color: #e9d5ff !important;
+}
+
+html.dark .font-mono {
+  color: #c4b5fd !important;
+}
+
+/* Scrollbars for dark mode */
+html.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: rgba(25, 15, 45, 0.5);
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.4);
+  border-radius: 4px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.6);
+}
+
+/* Fix any remaining white text on light backgrounds */
+html.dark .text-white {
+  color: #ffffff !important;
+}
+
+/* Ensure proper contrast for all text */
+html.dark p,
+html.dark span,
+html.dark label,
+html.dark h1,
+html.dark h2,
+html.dark h3,
+html.dark h4,
+html.dark h5,
+html.dark h6 {
+  color: inherit;
+}
+
+/* Override any inline white backgrounds */
+html.dark [style*="background-color: white"],
+html.dark [style*="background-color: #fff"],
+html.dark [style*="background: white"],
+html.dark [style*="background: #fff"] {
+  background-color: rgba(25, 15, 45, 0.85) !important;
 }

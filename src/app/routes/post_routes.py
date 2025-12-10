@@ -340,6 +340,19 @@ def api_post_stats(p_guid: str) -> flask.Response:
             }
         )
 
+    # Get preset info if available
+    preset_info = None
+    if post.processed_with_preset_id:
+        from app.models import PromptPreset
+        preset = PromptPreset.query.get(post.processed_with_preset_id)
+        if preset:
+            preset_info = {
+                "id": preset.id,
+                "name": preset.name,
+                "aggressiveness": preset.aggressiveness,
+                "min_confidence": preset.min_confidence,
+            }
+
     stats_data = {
         "post": {
             "guid": post.guid,
@@ -351,6 +364,7 @@ def api_post_stats(p_guid: str) -> flask.Response:
             "whitelisted": post.whitelisted,
             "has_processed_audio": post.processed_audio_path is not None,
             "download_count": post.download_count,
+            "processed_with_preset": preset_info,
         },
         "processing_stats": {
             "total_segments": len(transcript_segments),
