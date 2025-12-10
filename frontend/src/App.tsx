@@ -71,7 +71,31 @@ function AppShell() {
         <AudioPlayer />
       </div>
 
-      <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
+      <Toaster 
+        position="top-center" 
+        toastOptions={{ 
+          duration: 3000,
+          style: {
+            background: 'linear-gradient(135deg, #fdf2f8 0%, #f3e8ff 50%, #ecfeff 100%)',
+            color: '#581c87',
+            border: '1px solid rgba(196, 181, 253, 0.5)',
+            borderRadius: '1rem',
+            boxShadow: '0 10px 25px rgba(196, 181, 253, 0.3)',
+          },
+          success: {
+            iconTheme: {
+              primary: '#a855f7',
+              secondary: '#fdf2f8',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ec4899',
+              secondary: '#fdf2f8',
+            },
+          },
+        }} 
+      />
     </div>
   );
 }
