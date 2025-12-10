@@ -9,6 +9,8 @@ import type {
   WhisperConfig,
   PodcastSearchResult,
   ConfigResponse,
+  PromptPreset,
+  ProcessingStatsSummary,
 } from '../types';
 
 const API_BASE_URL = '';
@@ -343,6 +345,11 @@ export const feedsApi = {
   getEpisodeOriginalDownloadUrl: (guid: string): string => {
     return feedsApi.getPostOriginalDownloadUrl(guid);
   },
+
+  getJobs: async (): Promise<Job[]> => {
+    const response = await api.get('/api/jobs');
+    return response.data.jobs || [];
+  },
 };
 
 export const authApi = {
@@ -439,5 +446,46 @@ export const jobsApi = {
   getJobManagerStatus: async (): Promise<JobManagerStatus> => {
     const response = await api.get('/api/job-manager/status');
     return response.data;
+  },
+  clearHistory: async (): Promise<{ status: string; deleted_count: number; message: string }> => {
+    const response = await api.post('/api/jobs/clear-history');
+    return response.data;
   }
+};
+
+export const presetsApi = {
+  getPresets: async (): Promise<PromptPreset[]> => {
+    const response = await api.get('/api/presets');
+    return response.data.presets;
+  },
+
+  getPreset: async (id: number): Promise<PromptPreset> => {
+    const response = await api.get(`/api/presets/${id}`);
+    return response.data.preset;
+  },
+
+  activatePreset: async (id: number): Promise<{ message: string; preset: PromptPreset }> => {
+    const response = await api.post(`/api/presets/${id}/activate`);
+    return response.data;
+  },
+
+  createPreset: async (data: Partial<PromptPreset>): Promise<{ message: string; preset: PromptPreset }> => {
+    const response = await api.post('/api/presets', data);
+    return response.data;
+  },
+
+  updatePreset: async (id: number, data: Partial<PromptPreset>): Promise<{ message: string; preset: PromptPreset }> => {
+    const response = await api.put(`/api/presets/${id}`, data);
+    return response.data;
+  },
+
+  deletePreset: async (id: number): Promise<{ message: string }> => {
+    const response = await api.delete(`/api/presets/${id}`);
+    return response.data;
+  },
+
+  getStatsSummary: async (): Promise<ProcessingStatsSummary> => {
+    const response = await api.get('/api/statistics/summary');
+    return response.data;
+  },
 };

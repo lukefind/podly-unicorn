@@ -1,30 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { jobsApi } from '../services/api';
 import type { Job, JobManagerRun, JobManagerStatus } from '../types';
 
 function getStatusColor(status: string) {
   switch (status) {
     case 'running':
-      return 'bg-green-100 text-green-800';
+      return 'bg-gradient-to-r from-cyan-100 to-cyan-200 text-cyan-800';
     case 'pending':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-gradient-to-r from-pink-100 to-pink-200 text-pink-800';
     case 'failed':
-      return 'bg-red-100 text-red-800';
+      return 'bg-gradient-to-r from-red-100 to-red-200 text-red-800';
     case 'completed':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-gradient-to-r from-purple-100 to-purple-200 text-purple-800';
     case 'skipped':
-      return 'bg-purple-100 text-purple-800';
+      return 'bg-gradient-to-r from-lavender-100 to-lavender-200 text-purple-700';
     case 'cancelled':
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700';
   }
 }
 
 function StatusBadge({ status }: { status: string }) {
   const color = getStatusColor(status);
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
       {status}
     </span>
   );
@@ -33,9 +34,9 @@ function StatusBadge({ status }: { status: string }) {
 function ProgressBar({ value }: { value: number }) {
   const clamped = Math.max(0, Math.min(100, Math.round(value)));
   return (
-    <div className="w-full bg-gray-200 rounded h-2">
+    <div className="w-full bg-purple-100 rounded-full h-2">
       <div
-        className="bg-indigo-600 h-2 rounded"
+        className="bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 h-2 rounded-full transition-all"
         style={{ width: `${clamped}%` }}
       />
     </div>
@@ -69,7 +70,8 @@ export default function JobsPage() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'active' | 'all'>('active');
+  const [mode, setMode] = useState<'active' | 'all'>('all');  // Default to 'all' to show history
+  const [clearing, setClearing] = useState(false);
   const [cancellingJobs, setCancellingJobs] = useState<Set<string>>(new Set());
   const previousHasActiveWork = useRef<boolean>(false);
 
@@ -140,10 +142,27 @@ export default function JobsPage() {
     [refresh]
   );
 
+  const clearHistory = useCallback(async () => {
+    if (!window.confirm('Clear all completed, failed, and cancelled jobs from history?')) {
+      return;
+    }
+    setClearing(true);
+    try {
+      await jobsApi.clearHistory();
+      await refresh();
+    } catch (e) {
+      console.error('Failed to clear history:', e);
+      setError('Failed to clear history');
+    } finally {
+      setClearing(false);
+    }
+  }, [refresh]);
+
+  // Load all jobs by default to show history
   useEffect(() => {
     void loadStatus();
-    void loadActive();
-  }, [loadActive, loadStatus]);
+    void loadAll();  // Load all jobs on fresh load to show history
+  }, [loadAll, loadStatus]);
 
   useEffect(() => {
     const queued = managerStatus?.run?.queued_jobs ?? 0;
@@ -175,11 +194,11 @@ export default function JobsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="rounded-xl border border-purple-200/50 bg-white/80 backdrop-blur-sm p-4 shadow-sm unicorn-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Jobs Manager</h2>
-            <p className="text-xs text-gray-600">
+            <h2 className="text-base font-semibold text-purple-900">Jobs Manager 💫</h2>
+            <p className="text-xs text-purple-600">
               {run
                 ? hasActiveWork
                   ? `Processing · Last update ${formatDateTime(run.updated_at)}`
@@ -239,26 +258,45 @@ export default function JobsPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => { void refresh(); }}
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 px-3 py-1.5 text-sm font-medium text-white hover:shadow-lg hover:shadow-purple-500/30 transition-all"
             disabled={loading}
           >
+            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
-          {mode === 'active' ? (
-            <button
-              onClick={async () => { setMode('all'); await loadStatus(); await loadAll(); }}
-              className="inline-flex items-center rounded-md bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
-              disabled={loading}
-            >
-              Load all jobs
-            </button>
-          ) : (
+          <div className="flex rounded-xl border border-purple-200 overflow-hidden">
             <button
               onClick={async () => { setMode('active'); await loadStatus(); await loadActive(); }}
-              className="inline-flex items-center rounded-md bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                mode === 'active' 
+                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
+                  : 'bg-white/80 text-purple-700 hover:bg-purple-50'
+              }`}
               disabled={loading}
             >
-              Show active only
+              Active
+            </button>
+            <button
+              onClick={async () => { setMode('all'); await loadStatus(); await loadAll(); }}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                mode === 'all' 
+                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
+                  : 'bg-white/80 text-purple-700 hover:bg-purple-50'
+              }`}
+              disabled={loading}
+            >
+              All History
+            </button>
+          </div>
+          {mode === 'all' && jobs.some(j => ['completed', 'failed', 'cancelled', 'skipped'].includes(j.status)) && (
+            <button
+              onClick={() => { void clearHistory(); }}
+              className="px-3 py-1.5 text-sm font-medium text-pink-600 border border-pink-200 rounded-xl hover:bg-pink-50 transition-colors disabled:opacity-50"
+              disabled={clearing}
+            >
+              {clearing ? 'Clearing...' : 'Clear History'}
             </button>
           )}
         </div>
@@ -274,26 +312,35 @@ export default function JobsPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {jobs.map((job) => (
-          <div key={job.job_id} className="bg-white border rounded shadow-sm p-4 space-y-3">
+          <div key={job.job_id} className="bg-white/80 backdrop-blur-sm border border-purple-200/50 rounded-xl shadow-sm p-4 space-y-3 unicorn-card">
             <div className="flex items-center justify-between">
-              <div className="text-sm font-medium text-gray-900 truncate">
-                {job.post_title || 'Untitled episode'}
-              </div>
+              {job.feed_id ? (
+                <Link 
+                  to={`/podcasts?feed=${job.feed_id}`}
+                  className="text-sm font-medium text-purple-900 truncate hover:text-pink-600 transition-colors"
+                >
+                  {job.post_title || 'Untitled episode'}
+                </Link>
+              ) : (
+                <div className="text-sm font-medium text-purple-900 truncate">
+                  {job.post_title || 'Untitled episode'}
+                </div>
+              )}
               <StatusBadge status={job.status} />
             </div>
-            <div className="text-xs text-gray-600 truncate">{job.feed_title || 'Unknown feed'}</div>
+            <div className="text-xs text-purple-500 truncate">{job.feed_title || 'Unknown feed'}</div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-gray-700">
+              <div className="flex items-center justify-between text-xs text-purple-700">
                 <span>Priority</span>
                 <span className="font-medium">{job.priority}</span>
               </div>
-              <div className="flex items-center justify-between text-xs text-gray-700">
+              <div className="flex items-center justify-between text-xs text-purple-700">
                 <span>Step</span>
                 <span className="font-medium">{job.step}/{job.total_steps} {job.step_name ? `· ${job.step_name}` : ''}</span>
               </div>
               <div className="space-y-1">
-                <div className="flex items-center justify-between text-xs text-gray-700">
+                <div className="flex items-center justify-between text-xs text-purple-700">
                   <span>Progress</span>
                   <span className="font-medium">{Math.round(job.progress_percentage)}%</span>
                 </div>

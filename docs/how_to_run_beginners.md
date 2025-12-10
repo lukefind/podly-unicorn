@@ -86,17 +86,29 @@ docker compose version
 
 You should see version information for both commands.
 
-### 2. Get an OpenAI API Key
+### 2. Get an LLM API Key
 
-1. Go to [OpenAI's API platform](https://platform.openai.com/)
-2. Sign up for an account or log in if you already have one
-3. Navigate to the [API Keys section](https://platform.openai.com/api-keys)
-4. Click "Create new secret key"
-5. Give it a name (e.g., "Podly")
-6. **Important**: Copy the key immediately and save it somewhere safe - you won't be able to see it again!
-7. Your API key will look something like: `sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+Podly works with many LLM providers. We recommend **Groq** for the best price/performance:
 
-> **Note**: OpenAI API usage requires payment. Make sure to set up billing and usage limits in your OpenAI account to avoid unexpected charges.
+#### Recommended: Groq (Fast & Cheap)
+
+1. Go to [console.groq.com](https://console.groq.com/keys)
+2. Sign up for a free account
+3. Click "Create API Key"
+4. Copy the key (starts with `gsk_`) and save it somewhere safe
+
+> **Tip**: Set a billing limit at [Settings → Billing → Limits](https://console.groq.com/settings/billing) to control costs (~$2-5/month is typical).
+
+#### Alternative: OpenAI
+
+1. Go to [platform.openai.com](https://platform.openai.com/)
+2. Navigate to [API Keys](https://platform.openai.com/api-keys)
+3. Click "Create new secret key"
+4. Copy the key (starts with `sk-`) and save it
+
+#### Other Providers
+
+Podly uses [LiteLLM](https://docs.litellm.ai/) and supports 100+ providers including Anthropic, Google Gemini, local Ollama, and more. See the main README for configuration details.
 
 ## Setup Podly
 
@@ -191,11 +203,12 @@ export PODLY_SECRET_KEY='replace-with-a-strong-64-char-secret'
 - On macOS/Linux, make sure the script is executable: `chmod +x run_podly_docker.sh`
 - On Windows, try running Command Prompt as Administrator
 
-### OpenAI API errors
+### LLM API errors
 
-- Double-check your API key in the Config page at `/config`
-- Make sure you have billing set up in your OpenAI account
+- Double-check your API key in the Settings page
+- Make sure you have billing set up with your provider (Groq, OpenAI, etc.)
 - Check your usage limits haven't been exceeded
+- If using Groq, ensure your key starts with `gsk_`
 
 ### Port 5001 already in use
 

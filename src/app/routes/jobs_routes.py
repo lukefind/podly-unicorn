@@ -50,6 +50,33 @@ def api_job_manager_status() -> ResponseReturnValue:
     return flask.jsonify({"run": serialize_run(run) if run else None})
 
 
+@jobs_bp.route("/api/jobs/clear-history", methods=["POST"])
+def api_clear_job_history() -> ResponseReturnValue:
+    """Clear completed, failed, cancelled, and skipped jobs from history."""
+    from app.models import ProcessingJob
+    
+    try:
+        # Delete jobs that are not active (pending/running)
+        deleted = ProcessingJob.query.filter(
+            ProcessingJob.status.in_(["completed", "failed", "cancelled", "skipped"])
+        ).delete(synchronize_session=False)
+        
+        db.session.commit()
+        
+        return flask.jsonify({
+            "status": "success",
+            "deleted_count": deleted,
+            "message": f"Cleared {deleted} jobs from history"
+        })
+    except Exception as e:
+        logger.error(f"Failed to clear job history: {e}")
+        db.session.rollback()
+        return flask.jsonify({
+            "status": "error",
+            "message": f"Failed to clear history: {str(e)}"
+        }), 500
+
+
 @jobs_bp.route("/api/jobs/<string:job_id>/cancel", methods=["POST"])
 def api_cancel_job(job_id: str) -> ResponseReturnValue:
     try:

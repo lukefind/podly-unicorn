@@ -6,6 +6,7 @@ from .feed_routes import feed_bp
 from .jobs_routes import jobs_bp
 from .main_routes import main_bp
 from .post_routes import post_bp
+from .preset_routes import preset_bp, stats_bp
 
 
 def register_routes(app: Flask) -> None:
@@ -16,3 +17,5 @@ def register_routes(app: Flask) -> None:
     app.register_blueprint(config_bp)
     app.register_blueprint(jobs_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(preset_bp)
+    app.register_blueprint(stats_bp)

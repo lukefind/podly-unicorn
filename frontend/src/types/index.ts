@@ -27,6 +27,7 @@ export interface Job {
   job_id: string;
   post_guid: string;
   post_title: string | null;
+  feed_id: number | null;
   feed_title: string | null;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'skipped' | string;
   priority: number;
@@ -159,4 +160,28 @@ export interface AuthUser {
 export interface ManagedUser extends AuthUser {
   created_at: string;
   updated_at: string;
+}
+
+// ----- Preset Types -----
+
+export interface PromptPreset {
+  id: number;
+  name: string;
+  description: string | null;
+  aggressiveness: 'conservative' | 'balanced' | 'aggressive' | 'maximum';
+  min_confidence: number;
+  is_active: boolean;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+  system_prompt?: string;
+  user_prompt_template?: string;
+}
+
+export interface ProcessingStatsSummary {
+  total_episodes_processed: number;
+  total_ad_segments_removed: number;
+  total_time_saved_seconds: number;
+  total_time_saved_formatted: string;
+  average_percentage_removed: number;
 }

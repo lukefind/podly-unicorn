@@ -65,10 +65,10 @@ export default function PlayButton({ episode, className = '' }: PlayButtonProps)
     <button
       onClick={handleClick}
       disabled={isDisabled}
-      className={`p-2 rounded-full transition-colors ${
+      className={`p-2 rounded-xl transition-all ${
         isDisabled 
-          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-          : 'bg-blue-600 text-white hover:bg-blue-700'
+          ? 'bg-purple-100 text-purple-300 cursor-not-allowed' 
+          : 'bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 text-white hover:shadow-lg hover:shadow-purple-500/30'
       } ${className}`}
       title={title}
     >

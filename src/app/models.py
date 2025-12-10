@@ -428,3 +428,58 @@ class AppSettings(db.Model):  # type: ignore[name-defined, misc]
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+class PromptPreset(db.Model):  # type: ignore[name-defined, misc]
+    """Stores customizable prompt presets with different aggressiveness levels."""
+    __tablename__ = "prompt_preset"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.Text, nullable=True)
+    aggressiveness = db.Column(
+        db.String(20), nullable=False, default="balanced"
+    )  # conservative, balanced, aggressive
+    system_prompt = db.Column(db.Text, nullable=False)
+    user_prompt_template = db.Column(db.Text, nullable=False)
+    min_confidence = db.Column(db.Float, nullable=False, default=0.7)
+    is_active = db.Column(db.Boolean, nullable=False, default=False)
+    is_default = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def __repr__(self) -> str:
+        return f"<PromptPreset {self.name} aggressiveness={self.aggressiveness} active={self.is_active}>"
+
+
+class ProcessingStatistics(db.Model):  # type: ignore[name-defined, misc]
+    """Tracks statistics about ad removal for each processed episode."""
+    __tablename__ = "processing_statistics"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False, unique=True)
+    total_ad_segments_removed = db.Column(db.Integer, nullable=False, default=0)
+    total_duration_removed_seconds = db.Column(db.Float, nullable=False, default=0.0)
+    original_duration_seconds = db.Column(db.Float, nullable=False)
+    processed_duration_seconds = db.Column(db.Float, nullable=False)
+    percentage_removed = db.Column(db.Float, nullable=False, default=0.0)
+    prompt_preset_id = db.Column(
+        db.Integer, db.ForeignKey("prompt_preset.id"), nullable=True
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    post = db.relationship("Post", backref=db.backref("statistics", uselist=False))
+    prompt_preset = db.relationship("PromptPreset", backref="statistics")
+
+    def __repr__(self) -> str:
+        return (
+            f"<ProcessingStatistics post_id={self.post_id} "
+            f"segments={self.total_ad_segments_removed} "
+            f"removed={self.total_duration_removed_seconds:.1f}s "
+            f"({self.percentage_removed:.1f}%)>"
+        )

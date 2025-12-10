@@ -231,6 +231,14 @@ def api_post_stats(p_guid: str) -> flask.Response:
     content_segments = sum(1 for i in identifications if i.label == "content")
     ad_segments = sum(1 for i in identifications if i.label == "ad")
 
+    # Calculate estimated ad time by summing duration of ad-labeled segments
+    ad_segment_ids = {i.transcript_segment_id for i in identifications if i.label == "ad"}
+    estimated_ad_time_seconds = sum(
+        (seg.end_time - seg.start_time)
+        for seg in transcript_segments
+        if seg.id in ad_segment_ids
+    )
+
     model_call_details = []
     for call in model_calls:
         model_call_details.append(
@@ -319,6 +327,7 @@ def api_post_stats(p_guid: str) -> flask.Response:
             "total_identifications": len(identifications),
             "content_segments": content_segments,
             "ad_segments_count": ad_segments,
+            "estimated_ad_time_seconds": round(estimated_ad_time_seconds, 1),
             "model_call_statuses": model_call_statuses,
             "model_types": model_types,
         },

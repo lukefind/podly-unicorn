@@ -1,3 +1,152 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Pastel Unicorn Theme */
+:root {
+  --unicorn-pink: #f9b3d1;
+  --unicorn-purple: #d8b4fe;
+  --unicorn-blue: #7dd3fc;
+  --unicorn-mint: #5eead4;
+  --unicorn-lavender: #c4b5fd;
+}
+
+body {
+  background: linear-gradient(135deg, 
+    #e0f2fe 0%,      /* sky blue */
+    #ddd6fe 15%,     /* soft lavender */
+    #bae6fd 30%,     /* light blue */
+    #ccfbf1 50%,     /* mint */
+    #bae6fd 70%,     /* light blue */
+    #ddd6fe 85%,     /* soft lavender */
+    #e0f2fe 100%     /* sky blue */
+  );
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* Override white backgrounds with pastel tints */
+.bg-white {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Make gray text more purple-tinted */
+.text-gray-400 {
+  color: #b794f4 !important;
+}
+
+.text-gray-500 {
+  color: #9f7aea !important;
+}
+
+.text-gray-600 {
+  color: #805ad5 !important;
+}
+
+.text-gray-700 {
+  color: #6b46c1 !important;
+}
+
+.text-gray-900 {
+  color: #44337a !important;
+}
+
+/* Fix opacity for better visibility */
+.opacity-60 {
+  opacity: 0.75 !important;
+}
+
+/* Override gray borders with purple tints */
+.border-gray-100 {
+  border-color: rgba(196, 181, 253, 0.3) !important;
+}
+
+.border-gray-200 {
+  border-color: rgba(196, 181, 253, 0.4) !important;
+}
+
+.border-gray-300 {
+  border-color: rgba(196, 181, 253, 0.5) !important;
+}
+
+/* Override gray backgrounds with pastel tints */
+.bg-gray-50 {
+  background: linear-gradient(135deg, rgba(253, 238, 243, 0.5), rgba(243, 232, 255, 0.5)) !important;
+}
+
+.bg-gray-100 {
+  background: linear-gradient(135deg, rgba(253, 238, 243, 0.6), rgba(243, 232, 255, 0.6)) !important;
+}
+
+.bg-gray-200 {
+  background-color: rgba(196, 181, 253, 0.3) !important;
+}
+
+/* Sparkle animation for special elements */
+@keyframes sparkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.sparkle {
+  animation: sparkle 2s ease-in-out infinite;
+}
+
+/* Rainbow shimmer for headers */
+@keyframes rainbow-shimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.rainbow-text {
+  background: linear-gradient(90deg, #f687b3, #c084fc, #38bdf8, #2dd4bf, #f687b3);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rainbow-shimmer 4s ease infinite;
+}
+
+/* Soft glow effect */
+.unicorn-glow {
+  box-shadow: 0 0 20px rgba(196, 181, 253, 0.3), 0 0 40px rgba(249, 179, 209, 0.2);
+}
+
+/* Card hover effect */
+.unicorn-card {
+  transition: all 0.3s ease;
+  border: 1px solid rgba(196, 181, 253, 0.3);
+}
+
+.unicorn-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(196, 181, 253, 0.25), 0 4px 10px rgba(249, 179, 209, 0.15);
+  border-color: rgba(196, 181, 253, 0.5);
+}
+
+/* Modal reset - ensure proper contrast inside modals */
+.modal-content .text-gray-500,
+.modal-content .text-gray-600,
+.modal-content .text-gray-700,
+.modal-content .text-gray-900 {
+  color: inherit !important;
+}
+
+.modal-content .bg-white {
+  background-color: #ffffff !important;
+}
+
+.modal-content .bg-gray-50 {
+  background: #f9fafb !important;
+}
+
+.modal-content .bg-gray-100 {
+  background: #f3f4f6 !important;
+}
+
+.modal-content .border-gray-100,
+.modal-content .border-gray-200,
+.modal-content .border-gray-300 {
+  border-color: inherit !important;
+}

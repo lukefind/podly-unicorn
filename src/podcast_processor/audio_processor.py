@@ -2,7 +2,14 @@ import logging
 from typing import Any, List, Optional, Tuple
 
 from app.extensions import db
-from app.models import Identification, ModelCall, Post, TranscriptSegment
+from app.models import (
+    Identification,
+    ModelCall,
+    Post,
+    ProcessingStatistics,
+    PromptPreset,
+    TranscriptSegment,
+)
 from podcast_processor.audio import clip_segments_with_fade, get_audio_duration_ms
 from shared.config import Config
 
@@ -183,7 +190,8 @@ class AudioProcessor:
             )
 
         # Store duration in seconds
-        post.duration = duration_ms / 1000.0
+        original_duration_seconds = duration_ms / 1000.0
+        post.duration = original_duration_seconds
 
         merged_ad_segments = self.merge_ad_segments(
             duration_ms=duration_ms,
@@ -204,8 +212,86 @@ class AudioProcessor:
         )
 
         post.processed_audio_path = output_path
+        
+        # Calculate and store processing statistics
+        self._store_processing_statistics(
+            post=post,
+            original_duration_seconds=original_duration_seconds,
+            merged_ad_segments_ms=merged_ad_segments,
+        )
+        
         self.db_session.commit()
 
         self.logger.info(
             f"Audio processing complete for post {post.id}, saved to {output_path}"
         )
+
+    def _store_processing_statistics(
+        self,
+        post: Post,
+        original_duration_seconds: float,
+        merged_ad_segments_ms: List[Tuple[int, int]],
+    ) -> None:
+        """
+        Calculate and store processing statistics for the episode.
+
+        Args:
+            post: The Post object being processed
+            original_duration_seconds: Original duration before ad removal
+            merged_ad_segments_ms: List of merged ad segments in milliseconds
+        """
+        # Calculate total duration removed
+        total_duration_removed_ms = sum(
+            end - start for start, end in merged_ad_segments_ms
+        )
+        total_duration_removed_seconds = total_duration_removed_ms / 1000.0
+
+        # Calculate processed duration
+        processed_duration_seconds = (
+            original_duration_seconds - total_duration_removed_seconds
+        )
+
+        # Calculate percentage removed
+        percentage_removed = (
+            (total_duration_removed_seconds / original_duration_seconds * 100)
+            if original_duration_seconds > 0
+            else 0.0
+        )
+
+        # Get active prompt preset (if any)
+        active_preset = PromptPreset.query.filter_by(is_active=True).first()
+        prompt_preset_id = active_preset.id if active_preset else None
+
+        # Check if statistics already exist for this post
+        existing_stats = ProcessingStatistics.query.filter_by(post_id=post.id).first()
+
+        if existing_stats:
+            # Update existing statistics
+            existing_stats.total_ad_segments_removed = len(merged_ad_segments_ms)
+            existing_stats.total_duration_removed_seconds = total_duration_removed_seconds
+            existing_stats.original_duration_seconds = original_duration_seconds
+            existing_stats.processed_duration_seconds = processed_duration_seconds
+            existing_stats.percentage_removed = percentage_removed
+            existing_stats.prompt_preset_id = prompt_preset_id
+            self.logger.info(
+                f"Updated statistics for post {post.id}: "
+                f"{len(merged_ad_segments_ms)} segments, "
+                f"{total_duration_removed_seconds:.1f}s removed ({percentage_removed:.1f}%)"
+            )
+        else:
+            # Create new statistics
+            stats = ProcessingStatistics(
+                post_id=post.id,
+                total_ad_segments_removed=len(merged_ad_segments_ms),
+                total_duration_removed_seconds=total_duration_removed_seconds,
+                original_duration_seconds=original_duration_seconds,
+                processed_duration_seconds=processed_duration_seconds,
+                percentage_removed=percentage_removed,
+                prompt_preset_id=prompt_preset_id,
+            )
+            self.db_session.add(stats)
+            self.logger.info(
+                f"Created statistics for post {post.id}: "
+                f"{len(merged_ad_segments_ms)} segments, "
+                f"{total_duration_removed_seconds:.1f}s removed ({percentage_removed:.1f}%)"
+            )

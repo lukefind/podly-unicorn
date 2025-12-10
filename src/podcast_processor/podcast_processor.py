@@ -321,16 +321,47 @@ class PodcastProcessor:
         self.status_manager.update_job_status(
             job, "running", 3, "Identifying ads", 75.0
         )
-        user_prompt_template = self.get_user_prompt_template(
-            DEFAULT_USER_PROMPT_TEMPLATE_PATH
-        )
-        system_prompt = self.get_system_prompt(DEFAULT_SYSTEM_PROMPT_PATH)
+        
+        # Try to use active prompt preset, fallback to default files
+        system_prompt, user_prompt_template = self._get_prompts_from_preset_or_default()
+        
         self.ad_classifier.classify(
             transcript_segments=transcript_segments,
             system_prompt=system_prompt,
             user_prompt_template=user_prompt_template,
             post=post,
         )
+
+    def _get_prompts_from_preset_or_default(self) -> tuple[str, Template]:
+        """
+        Get prompts from active preset or fall back to default files.
+        
+        Returns:
+            Tuple of (system_prompt, user_prompt_template)
+        """
+        from app.models import PromptPreset
+        
+        # Try to get active preset
+        active_preset = PromptPreset.query.filter_by(is_active=True).first()
+        
+        if active_preset:
+            self.logger.info(
+                f"Using active prompt preset: {active_preset.name} "
+                f"(aggressiveness: {active_preset.aggressiveness})"
+            )
+            from jinja2 import Template
+            return (
+                active_preset.system_prompt,
+                Template(active_preset.user_prompt_template),
+            )
+        
+        # Fallback to default files
+        self.logger.info("No active preset found, using default prompt files")
+        user_prompt_template = self.get_user_prompt_template(
+            DEFAULT_USER_PROMPT_TEMPLATE_PATH
+        )
+        system_prompt = self.get_system_prompt(DEFAULT_SYSTEM_PROMPT_PATH)
+        return system_prompt, user_prompt_template
 
     def _handle_download_step(self, post: Post, job: ProcessingJob) -> None:
         """
