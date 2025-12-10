@@ -382,11 +382,16 @@ export default function ConfigPage() {
       }
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string; message?: string } }; message?: string };
-      setLlmStatus('error');
-      setWhisperStatus('error');
       const msg = e?.response?.data?.error || e?.response?.data?.message || e?.message || 'Connection test failed';
-      setLlmError(msg);
-      setWhisperError(msg);
+      // Only set error status if we haven't already set a success status
+      if (llmStatus !== 'ok') {
+        setLlmStatus('error');
+        setLlmError(msg);
+      }
+      if (whisperStatus !== 'ok') {
+        setWhisperStatus('error');
+        setWhisperError(msg);
+      }
     }
   };
 
@@ -650,22 +655,22 @@ export default function ConfigPage() {
       <Section title="Connection Status">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className={`flex items-center justify-between rounded-lg p-4 ${
-            llmStatus === 'ok' ? 'bg-green-50 border border-green-200' :
-            llmStatus === 'error' ? 'bg-red-50 border border-red-200' :
-            'bg-gray-50 border border-gray-200'
+            llmStatus === 'ok' ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700' :
+            llmStatus === 'error' ? 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700' :
+            'bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700'
           }`}>
             <div className="flex items-center gap-3">
               <div className={`w-3 h-3 rounded-full ${
                 llmStatus === 'ok' ? 'bg-green-500' :
                 llmStatus === 'error' ? 'bg-red-500' :
-                'bg-gray-400 animate-pulse'
+                'bg-purple-400 animate-pulse'
               }`} />
               <div>
-                <div className="text-sm font-medium text-gray-900">LLM Connection</div>
+                <div className="text-sm font-medium text-gray-900 dark:text-purple-100">LLM Connection</div>
                 <div className={`text-xs ${
-                  llmStatus === 'ok' ? 'text-green-700' :
-                  llmStatus === 'error' ? 'text-red-700' :
-                  'text-gray-600'
+                  llmStatus === 'ok' ? 'text-green-700 dark:text-green-300' :
+                  llmStatus === 'error' ? 'text-red-700 dark:text-red-300' :
+                  'text-gray-600 dark:text-purple-300'
                 }`}>
                   {llmStatus === 'loading' && 'Testing connection...'}
                   {llmStatus === 'ok' && (llmMessage || 'Connected')}
@@ -675,29 +680,29 @@ export default function ConfigPage() {
             </div>
             <button
               type="button"
-              className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-purple-200 bg-white dark:bg-purple-800 border border-gray-300 dark:border-purple-600 rounded-lg hover:bg-gray-50 dark:hover:bg-purple-700 transition-colors"
               onClick={() => void probeConnections()}
             >
               Test
             </button>
           </div>
           <div className={`flex items-center justify-between rounded-lg p-4 ${
-            whisperStatus === 'ok' ? 'bg-green-50 border border-green-200' :
-            whisperStatus === 'error' ? 'bg-red-50 border border-red-200' :
-            'bg-gray-50 border border-gray-200'
+            whisperStatus === 'ok' ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700' :
+            whisperStatus === 'error' ? 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700' :
+            'bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700'
           }`}>
             <div className="flex items-center gap-3">
               <div className={`w-3 h-3 rounded-full ${
                 whisperStatus === 'ok' ? 'bg-green-500' :
                 whisperStatus === 'error' ? 'bg-red-500' :
-                'bg-gray-400 animate-pulse'
+                'bg-purple-400 animate-pulse'
               }`} />
               <div>
-                <div className="text-sm font-medium text-gray-900">Whisper Connection</div>
+                <div className="text-sm font-medium text-gray-900 dark:text-purple-100">Whisper Connection</div>
                 <div className={`text-xs ${
-                  whisperStatus === 'ok' ? 'text-green-700' :
-                  whisperStatus === 'error' ? 'text-red-700' :
-                  'text-gray-600'
+                  whisperStatus === 'ok' ? 'text-green-700 dark:text-green-300' :
+                  whisperStatus === 'error' ? 'text-red-700 dark:text-red-300' :
+                  'text-gray-600 dark:text-purple-300'
                 }`}>
                   {whisperStatus === 'loading' && 'Testing connection...'}
                   {whisperStatus === 'ok' && (whisperMessage || 'Connected')}
@@ -707,7 +712,7 @@ export default function ConfigPage() {
             </div>
             <button
               type="button"
-              className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-purple-200 bg-white dark:bg-purple-800 border border-gray-300 dark:border-purple-600 rounded-lg hover:bg-gray-50 dark:hover:bg-purple-700 transition-colors"
               onClick={() => void probeConnections()}
             >
               Test
@@ -717,22 +722,36 @@ export default function ConfigPage() {
       </Section>
 
       <Section title="Quick Setup">
-        <div className="text-sm text-gray-700 mb-2 flex items-center gap-2">
-          <span>Enter your Groq API key to use the recommended setup.</span>
+        <div className="text-sm text-gray-700 dark:text-purple-200 mb-2 flex items-center gap-2">
+          <span>Enter your Groq API key for a fast, cheaper setup. For better ad detection accuracy, use xAI Grok instead (see Advanced Settings).</span>
           <button
             type="button"
-            className="text-indigo-600 hover:underline"
+            className="text-indigo-600 dark:text-indigo-400 hover:underline"
             onClick={() => setShowGroqHelp((v) => !v)}
           >
             {showGroqHelp ? 'Hide help' : '(need help getting a key?)'}
           </button>
           <button
             type="button"
-            className="text-indigo-600 hover:underline"
+            className="text-indigo-600 dark:text-indigo-400 hover:underline"
             onClick={() => setShowGroqPricing((v) => !v)}
           >
             {showGroqPricing ? 'Hide pricing' : '(pricing guide)'}
           </button>
+        </div>
+        
+        {/* Groq vs Grok warning */}
+        <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg">
+          <div className="flex items-start gap-2">
+            <span className="text-amber-500 text-lg">⚠️</span>
+            <div className="text-sm text-amber-800 dark:text-amber-200">
+              <strong>Groq ≠ Grok!</strong> These are different companies:
+              <ul className="mt-1 ml-4 list-disc text-xs">
+                <li><strong>Groq</strong> (groq.com) - Fast inference platform. Key starts with <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">gsk_</code></li>
+                <li><strong>Grok</strong> (xAI) - Different LLM provider. Key starts with <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">xai-</code></li>
+              </ul>
+            </div>
+          </div>
         </div>
         {showGroqHelp && (
           <div className="text-sm text-gray-700 mb-2 bg-indigo-50 border border-indigo-200 rounded p-3 space-y-2">
@@ -880,7 +899,7 @@ export default function ConfigPage() {
       </Section>
 
       {showSecurityControls && (
-                  <Section title="Account Security" badge="Saves instantly">
+                  <Section title="Account Security">
             <form className="grid gap-3 max-w-md" onSubmit={handlePasswordSubmit}>
               <Field label="Current password">
                 <input
@@ -928,7 +947,7 @@ export default function ConfigPage() {
           </Section>
       )}
       {showSecurityControls && user?.role === 'admin' && (
-        <Section title="User Management" badge="Saves instantly">
+        <Section title="User Management">
           <div className="space-y-4">
             <form className="grid gap-3 md:grid-cols-2" onSubmit={handleCreateUser}>
               <div className="md:col-span-2">
@@ -1093,7 +1112,7 @@ export default function ConfigPage() {
 
       {/* User Statistics - Admin only */}
       {showSecurityControls && user?.role === 'admin' && (
-        <Section title="User Statistics" badge="Live data">
+        <Section title="User Statistics">
           <AdminUserStats />
         </Section>
       )}
@@ -1103,9 +1122,8 @@ export default function ConfigPage() {
         <div className="border-t border-purple-200 pt-6">
           <div className="flex items-center gap-3 mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Advanced Settings</h2>
-            <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-medium">Requires Save</span>
+            <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-medium">Changes below require clicking "Save Changes" to apply</span>
           </div>
-          <p className="text-sm text-purple-600 mb-4">Changes below require clicking "Save Changes" to apply.</p>
         </div>
         <Section title="LLM Configuration">
             <Field label="API Key" envMeta={getEnvHint('llm.llm_api_key')}>
@@ -1132,7 +1150,7 @@ export default function ConfigPage() {
                 </div>
                 <EnvVarHint meta={getEnvHint('llm.openai_base_url')} />
               </div>
-              <div className="flex-1 space-y-2">
+              <div className="flex-1">
                 <input
                   className="input"
                   type="text"
@@ -1141,7 +1159,7 @@ export default function ConfigPage() {
                   onChange={(e) => setField(['llm', 'openai_base_url'], e.target.value)}
                 />
                 {showBaseUrlInfo && (
-                  <div className="text-xs bg-blue-50 border border-blue-200 rounded p-3 space-y-2">
+                  <div className="mt-2 text-xs bg-blue-50 border border-blue-200 rounded p-3 space-y-2">
                     <p className="font-medium text-blue-800">How model routing works:</p>
                     <div className="text-blue-700 space-y-1">
                       <p>• Models with a prefix like <code className="bg-white px-1 rounded">groq/</code> or <code className="bg-white px-1 rounded">anthropic/</code> are routed automatically by LiteLLM — the Base URL is ignored.</p>
@@ -1568,24 +1586,13 @@ function EnvOverrideWarningModal({
   );
 }
 
-function Section({ title, children, icon, badge }: { title: string; children: ReactNode; icon?: ReactNode; badge?: string }) {
-  const badgeColor = badge === 'Saves instantly' 
-    ? 'bg-green-100 text-green-700' 
-    : badge === 'Live data'
-    ? 'bg-cyan-100 text-cyan-700'
-    : 'bg-purple-100 text-purple-700';
-  
+function Section({ title, children, icon }: { title: string; children: ReactNode; icon?: ReactNode }) {
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm unicorn-card">
       <div className="px-4 py-3 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50">
         <h3 className="text-sm font-semibold text-purple-900 flex items-center gap-2">
           {icon}
           {title}
-          {badge && (
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeColor}`}>
-              {badge}
-            </span>
-          )}
         </h3>
       </div>
       <div className="p-4 space-y-3">{children}</div>

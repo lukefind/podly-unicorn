@@ -121,16 +121,41 @@ Admin users can view per-user statistics in Settings → User Statistics section
 
 ## LLM Configuration
 
+### ⚠️ Groq vs Grok - Don't Get Confused!
+
+These are **completely different companies/products**:
+
+| Name | Company | What it is | Used for |
+|------|---------|------------|----------|
+| **Groq** | Groq Inc (groq.com) | Fast inference platform | Whisper transcription + LLM |
+| **Grok** | xAI (x.ai) | Chatbot/LLM model | LLM only (ad detection) |
+
+- **Groq API key** starts with `gsk_...`
+- **Grok (xAI) API key** starts with `xai-...`
+
 ### Supported Providers
 
 Podly uses [LiteLLM](https://docs.litellm.ai/) which supports 100+ providers. Recommended options:
 
 | Provider | Model Format | Base URL | Notes |
 |----------|--------------|----------|-------|
-| **Groq** | `groq/llama-3.3-70b-versatile` | *(ignored)* | Fast, cheap, good for most use |
-| **xAI Grok** | `xai/grok-3` | `https://api.x.ai/v1` | High quality, good for ad detection |
+| **Groq** | `groq/llama-3.3-70b-versatile` | *(ignored)* | Fast, free tier, handles both LLM + Whisper |
+| **xAI Grok** | `xai/grok-3` | `https://api.x.ai/v1` | High quality, ~$0.10/episode |
 | **OpenAI** | `gpt-4o` | *(default)* | Excellent quality, higher cost |
 | **Anthropic** | `anthropic/claude-3-sonnet` | *(ignored)* | High quality alternative |
+
+### Recommended Setup
+
+**Simplest**: Just set `GROQ_API_KEY` - it handles both transcription and ad detection.
+
+**Best quality**: Use Groq for Whisper (fast, free) + xAI Grok for LLM (better ad detection):
+```bash
+GROQ_API_KEY=gsk_...        # For Whisper transcription
+LLM_API_KEY=xai-...         # For ad detection
+LLM_MODEL=xai/grok-3
+OPENAI_BASE_URL=https://api.x.ai/v1
+WHISPER_TYPE=groq
+```
 
 ### Model Name Format
 - **With provider prefix** (e.g., `groq/...`, `xai/...`): LiteLLM routes automatically, Base URL setting is ignored

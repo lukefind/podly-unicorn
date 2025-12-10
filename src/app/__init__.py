@@ -128,17 +128,25 @@ def _clear_scheduler_jobstore() -> None:
 def _validate_env_key_conflicts() -> None:
     """Validate that environment API key variables are not conflicting.
 
-    Rules:
-    - If both LLM_API_KEY and GROQ_API_KEY are set and differ -> error
+    This validation is now relaxed to allow valid use cases like:
+    - LLM_API_KEY for xAI/OpenAI (ad detection)
+    - GROQ_API_KEY for Groq Whisper (transcription)
+    
+    We only warn, not error, since these can be intentionally different.
     """
     llm_key = os.environ.get("LLM_API_KEY")
     groq_key = os.environ.get("GROQ_API_KEY")
 
-    conflicts: list[str] = []
+    # Having both keys set with different values is now allowed
+    # This supports using xAI/OpenAI for LLM and Groq for Whisper
     if llm_key and groq_key and llm_key != groq_key:
-        conflicts.append(
-            "LLM_API_KEY and GROQ_API_KEY are both set but have different values"
+        logger.info(
+            "Both LLM_API_KEY and GROQ_API_KEY are set with different values. "
+            "Using LLM_API_KEY for ad detection and GROQ_API_KEY for Whisper transcription."
         )
+
+    # No conflicts to report - this is now just informational
+    conflicts: list[str] = []
 
     if conflicts:
         details = "; ".join(conflicts)
