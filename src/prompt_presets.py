@@ -212,7 +212,7 @@ PRESET_DEFINITIONS: List[Dict[str, any]] = [
         "aggressiveness": "aggressive",
         "system_prompt": AGGRESSIVE_SYSTEM_PROMPT,
         "user_prompt_template": DEFAULT_USER_PROMPT_TEMPLATE,
-        "min_confidence": 0.6,
+        "min_confidence": 0.55,
         "is_default": False,
     },
     {

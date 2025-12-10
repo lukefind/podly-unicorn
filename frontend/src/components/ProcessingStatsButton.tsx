@@ -19,6 +19,7 @@ export default function ProcessingStatsButton({
   const [showModal, setShowModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'model-calls' | 'transcript' | 'identifications' | 'settings'>('overview');
   const [expandedModelCalls, setExpandedModelCalls] = useState<Set<number>>(new Set());
+  const [pendingPresetId, setPendingPresetId] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -44,10 +45,12 @@ export default function ProcessingStatsButton({
     mutationFn: (presetId: number) => presetsApi.activatePreset(presetId),
     onSuccess: (data: { message: string }) => {
       toast.success(data.message);
+      setPendingPresetId(null);
       queryClient.invalidateQueries({ queryKey: ['presets'] });
     },
     onError: () => {
       toast.error('Failed to activate preset');
+      setPendingPresetId(null);
     },
   });
 
@@ -62,6 +65,19 @@ export default function ProcessingStatsButton({
       return `${hours}h ${minutes}m ${secs}s`;
     }
     return `${minutes}m ${secs}s`;
+  };
+
+  const formatTimeHMS = (seconds: number) => {
+    if (seconds == null || isNaN(seconds)) return '0:00';
+    const s = Math.floor(seconds);
+    const hours = Math.floor(s / 3600);
+    const minutes = Math.floor((s % 3600) / 60);
+    const secs = s % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
   const formatTimestamp = (timestamp: string | null) => {
@@ -87,7 +103,7 @@ export default function ProcessingStatsButton({
     <>
       <button
         onClick={() => setShowModal(true)}
-        className={`px-3 py-1.5 text-xs rounded-xl font-medium transition-all border bg-white/80 text-purple-700 border-purple-200 hover:bg-purple-50 hover:border-purple-300 flex items-center gap-1 ${className}`}
+        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border bg-white border-purple-200 text-purple-600 hover:bg-purple-50 flex items-center gap-1.5 ${className}`}
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -256,11 +272,13 @@ export default function ProcessingStatsButton({
                             {Object.entries(stats.processing_stats?.model_call_statuses || {}).map(([status, count]) => (
                               <div key={status} className="flex justify-between items-center">
                                 <span className="text-sm text-gray-600 capitalize">{status}</span>
-                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                  status === 'success' ? 'bg-green-100 text-green-700' :
-                                  status === 'failed' ? 'bg-red-100 text-red-700' :
-                                  'bg-gray-100 text-gray-700'
-                                }`}>
+                                <span
+                                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                    status === 'success' ? 'bg-green-100 text-green-700' :
+                                    status === 'failed' ? 'bg-red-100 text-red-700' :
+                                    'bg-gray-100 text-gray-700'
+                                  }`}
+                                >
                                   {count}
                                 </span>
                               </div>
@@ -393,14 +411,14 @@ export default function ProcessingStatsButton({
                                   segment.primary_label === 'ad' ? 'bg-red-50' : ''
                                 }`}>
                                   <td className="px-4 py-3 text-sm text-gray-900">{segment.sequence_num}</td>
-                                  <td className="px-4 py-3 text-sm text-gray-600">
-                                    {segment.start_time}s - {segment.end_time}s
+                                  <td className="px-4 py-3 text-sm text-gray-700">
+                                    {formatTimeHMS(segment.start_time)} - {formatTimeHMS(segment.end_time)}
                                   </td>
                                   <td className="px-4 py-3">
                                     <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                                       segment.primary_label === 'ad'
-                                        ? 'bg-red-100 text-red-800'
-                                        : 'bg-green-100 text-green-800'
+                                        ? 'bg-rose-100 text-rose-900'
+                                        : 'bg-emerald-100 text-emerald-900'
                                     }`}>
                                       {segment.primary_label === 'ad' ? 'Ad' : 'Content'}
                                     </span>
@@ -439,19 +457,22 @@ export default function ProcessingStatsButton({
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                               {(stats.identifications || []).map((identification) => (
-                                <tr key={identification.id} className={`hover:bg-gray-50 ${
-                                  identification.label === 'ad' ? 'bg-red-50' : ''
-                                }`}>
+                                <tr
+                                  key={identification.id}
+                                  className={`hover:bg-gray-50 ${
+                                    identification.label === 'ad' ? 'bg-rose-50' : ''
+                                  }`}
+                                >
                                   <td className="px-4 py-3 text-sm text-gray-900">{identification.id}</td>
                                   <td className="px-4 py-3 text-sm text-gray-600">{identification.transcript_segment_id}</td>
-                                  <td className="px-4 py-3 text-sm text-gray-600">
-                                    {identification.segment_start_time}s - {identification.segment_end_time}s
+                                  <td className="px-4 py-3 text-sm text-gray-700">
+                                    {formatTimeHMS(identification.segment_start_time)} - {formatTimeHMS(identification.segment_end_time)}
                                   </td>
                                   <td className="px-4 py-3">
                                     <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                                       identification.label === 'ad'
-                                        ? 'bg-red-100 text-red-800'
-                                        : 'bg-green-100 text-green-800'
+                                        ? 'bg-rose-100 text-rose-900'
+                                        : 'bg-emerald-100 text-emerald-900'
                                     }`}>
                                       {identification.label}
                                     </span>
@@ -516,44 +537,49 @@ export default function ProcessingStatsButton({
                           </div>
                         ) : (
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {(presets || []).map((preset: PromptPreset) => (
-                              <div
-                                key={preset.id}
-                                className={`relative border-2 rounded-lg p-4 cursor-pointer transition-all ${
-                                  preset.is_active
-                                    ? 'border-blue-500 bg-blue-50'
-                                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                }`}
-                                onClick={() => {
-                                  if (!preset.is_active) {
-                                    activatePresetMutation.mutate(preset.id);
-                                  }
-                                }}
-                              >
-                                {preset.is_active && (
-                                  <div className="absolute top-2 right-2">
-                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-500 text-white">
-                                      Active
+                            {(presets || []).map((preset: PromptPreset) => {
+                              const isActive = preset.is_active || pendingPresetId === preset.id;
+
+                              return (
+                                <div
+                                  key={preset.id}
+                                  className={`relative border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                                    isActive
+                                      ? 'border-purple-500 bg-purple-50'
+                                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                  }`}
+                                  onClick={() => {
+                                    if (!isActive && !activatePresetMutation.isPending) {
+                                      setPendingPresetId(preset.id);
+                                      activatePresetMutation.mutate(preset.id);
+                                    }
+                                  }}
+                                >
+                                  {isActive && (
+                                    <div className="absolute top-2 right-2">
+                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-500 text-white">
+                                        Active
+                                      </span>
+                                    </div>
+                                  )}
+                                  <h4 className="font-semibold text-gray-900 text-left">{preset.name}</h4>
+                                  <p className="text-sm text-gray-600 mt-1 text-left">{preset.description}</p>
+                                  <div className="mt-3 flex items-center gap-2">
+                                    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                                      preset.aggressiveness === 'conservative' ? 'bg-green-100 text-green-800' :
+                                      preset.aggressiveness === 'balanced' ? 'bg-yellow-100 text-yellow-800' :
+                                      preset.aggressiveness === 'aggressive' ? 'bg-orange-100 text-orange-800' :
+                                      'bg-red-100 text-red-800'
+                                    }`}>
+                                      {preset.aggressiveness}
+                                    </span>
+                                    <span className="text-xs text-gray-500">
+                                      Min confidence: {(preset.min_confidence * 100).toFixed(0)}%
                                     </span>
                                   </div>
-                                )}
-                                <h4 className="font-semibold text-gray-900 text-left">{preset.name}</h4>
-                                <p className="text-sm text-gray-600 mt-1 text-left">{preset.description}</p>
-                                <div className="mt-3 flex items-center gap-2">
-                                  <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                                    preset.aggressiveness === 'conservative' ? 'bg-green-100 text-green-800' :
-                                    preset.aggressiveness === 'balanced' ? 'bg-yellow-100 text-yellow-800' :
-                                    preset.aggressiveness === 'aggressive' ? 'bg-orange-100 text-orange-800' :
-                                    'bg-red-100 text-red-800'
-                                  }`}>
-                                    {preset.aggressiveness}
-                                  </span>
-                                  <span className="text-xs text-gray-500">
-                                    Min confidence: {(preset.min_confidence * 100).toFixed(0)}%
-                                  </span>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>

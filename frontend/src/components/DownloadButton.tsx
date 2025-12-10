@@ -221,7 +221,7 @@ export default function DownloadButton({
         <div className="flex gap-2">
           <button
             onClick={handleDownloadClick}
-            className="px-3 py-1.5 text-xs rounded-xl font-medium transition-all bg-gradient-to-r from-cyan-500 to-teal-500 text-white hover:shadow-lg hover:shadow-teal-500/30 flex items-center gap-1"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all border bg-white border-teal-200 text-teal-600 hover:bg-teal-50 flex items-center gap-1.5"
             title="Download processed episode"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -254,10 +254,10 @@ export default function DownloadButton({
       <button
         onClick={handleDownloadClick}
         disabled={isProcessing}
-        className={`px-3 py-1.5 text-xs rounded-xl font-medium transition-all border flex items-center gap-1 ${
+        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5 ${
           isProcessing
-            ? 'bg-purple-400 text-white cursor-wait border-purple-400'
-            : 'bg-white/80 text-purple-700 border-purple-200 hover:bg-purple-50 hover:border-purple-300'
+            ? 'bg-purple-500 text-white cursor-wait border-purple-500'
+            : 'bg-white border-purple-200 text-purple-600 hover:bg-purple-50'
         }`}
         title={
           isProcessing

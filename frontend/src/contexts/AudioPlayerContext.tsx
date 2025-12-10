@@ -17,11 +17,14 @@ interface AudioPlayerContextType extends AudioPlayerState {
   togglePlayPause: () => void;
   seekTo: (time: number) => void;
   setVolume: (volume: number) => void;
+  /** Stop playback and hide the player */
+  closePlayer: () => void;
   audioRef: React.RefObject<HTMLAudioElement | null>;
 }
 
 type AudioPlayerAction =
   | { type: 'SET_EPISODE'; payload: Episode }
+  | { type: 'CLEAR_EPISODE' }
   | { type: 'SET_PLAYING'; payload: boolean }
   | { type: 'SET_CURRENT_TIME'; payload: number }
   | { type: 'SET_DURATION'; payload: number }
@@ -43,6 +46,8 @@ function audioPlayerReducer(state: AudioPlayerState, action: AudioPlayerAction):
   switch (action.type) {
     case 'SET_EPISODE':
       return { ...state, currentEpisode: action.payload, currentTime: 0, error: null };
+    case 'CLEAR_EPISODE':
+      return { ...state, currentEpisode: null, isPlaying: false, currentTime: 0, duration: 0 };
     case 'SET_PLAYING':
       return { ...state, isPlaying: action.payload };
     case 'SET_CURRENT_TIME':
@@ -91,10 +96,30 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       
       audioRef.current.src = audioUrl;
       audioRef.current.load();
+      
+      // Auto-play after loading
+      audioRef.current.play().catch((error) => {
+        console.error('Auto-play failed:', error);
+        dispatch({ type: 'SET_LOADING', payload: false });
+        // Don't set error - user can manually click play
+      });
     } else {
       console.log('audioRef.current is null');
     }
   };
+
+  const closePlayer = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      try {
+        audio.pause();
+      } catch {
+        // ignore
+      }
+      audio.currentTime = 0;
+    }
+    dispatch({ type: 'CLEAR_EPISODE' });
+  }, []);
 
   const togglePlayPause = useCallback(() => {
     if (!audioRef.current || !state.currentEpisode) return;
@@ -262,6 +287,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     togglePlayPause,
     seekTo,
     setVolume,
+    closePlayer,
     audioRef,
   };
 

@@ -43,7 +43,8 @@ export default function AudioPlayer() {
     error,
     togglePlayPause,
     seekTo,
-    setVolume
+    setVolume,
+    closePlayer,
   } = useAudioPlayer();
 
   const [isDragging, setIsDragging] = useState(false);
@@ -152,7 +153,7 @@ export default function AudioPlayer() {
   const shouldShowError = error && error !== dismissedError;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+    <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm border-t border-purple-100 shadow-[0_-4px_20px_rgba(147,51,234,0.25)] z-50">
       <div className="max-w-7xl mx-auto px-4 py-3">
         {shouldShowError && (
           <div className="mb-2 p-2 bg-red-100 border border-red-300 rounded text-red-700 text-sm flex items-center justify-between">
@@ -243,12 +244,12 @@ export default function AudioPlayer() {
             </div>
           </div>
 
-          {/* Volume Control */}
-          <div className="flex items-center space-x-2 relative">
+          {/* Volume Control + Close */}
+          <div className="flex items-center space-x-3 relative">
             <button
               onClick={toggleMute}
               onMouseEnter={() => setShowVolumeSlider(true)}
-              className="p-1 text-gray-600 hover:text-gray-900 transition-colors"
+              className="p-1 text-purple-600 hover:text-purple-900 transition-colors"
             >
               {volume === 0 ? (
                 <SpeakerXMarkIcon className="w-5 h-5" />
@@ -260,22 +261,29 @@ export default function AudioPlayer() {
             {showVolumeSlider && (
               <div
                 ref={volumeSliderRef}
-                className="absolute bottom-full right-0 mb-2 p-2 bg-white border border-gray-200 rounded shadow-lg audio-player-volume-slider"
-                onMouseEnter={() => setShowVolumeSlider(true)}
+                className="absolute bottom-full right-0 mb-2 p-2 bg-white border border-purple-100 rounded shadow-lg audio-player-volume-slider"
               >
                 <div
                   className="w-20 h-1 bg-gray-200 rounded-full cursor-pointer relative group"
                   onClick={handleVolumeChange}
                 >
                   <div
-                    className="h-full bg-gray-900 rounded-full relative"
+                    className="h-full bg-purple-600 rounded-full relative"
                     style={{ width: `${volume * 100}%` }}
                   >
-                    <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-gray-900 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-purple-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>
               </div>
             )}
+            {/* Close Player */}
+            <button
+              onClick={closePlayer}
+              className="p-1.5 rounded-full border border-purple-100 bg-white/70 text-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 transition-colors"
+              aria-label="Close player"
+            >
+              <XMarkIcon className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>

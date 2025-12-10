@@ -368,76 +368,101 @@ export default function PodcastsPage() {
                 {episodes.map((episode: Episode) => (
                   <div
                     key={episode.id}
-                    className={`p-4 rounded-xl border transition-all unicorn-card ${
+                    className={`p-4 rounded-xl border transition-all ${
                       episode.whitelisted
-                        ? 'bg-white/80 backdrop-blur-sm border-purple-200/50'
-                        : 'bg-purple-50/50 border-purple-100/50 opacity-75'
+                        ? 'bg-white border-purple-200/60 shadow-sm'
+                        : 'bg-purple-50/30 border-purple-100/40 opacity-60'
                     }`}
                   >
-                    <div className="flex items-start gap-4">
+                    {/* Top row: Title + Status badge */}
+                    <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-purple-900 line-clamp-1">{episode.title}</h3>
-                          {episode.has_processed_audio && (
-                            <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-teal-100 to-cyan-100 text-teal-700 rounded-full">
-                              ✓ Processed
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 mt-1 text-sm text-purple-500">
-                          <span>{formatDate(episode.release_date)}</span>
-                          {episode.duration && <span>{formatDuration(episode.duration)}</span>}
-                        </div>
+                        <h3 className="font-medium text-purple-900 line-clamp-2 leading-snug">{episode.title}</h3>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => whitelistMutation.mutate({ guid: episode.guid, whitelisted: !episode.whitelisted })}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 ${
-                            episode.whitelisted
-                              ? 'bg-gradient-to-r from-pink-100 to-red-100 text-red-600 hover:from-pink-200 hover:to-red-200'
-                              : 'bg-gradient-to-r from-teal-100 to-cyan-100 text-teal-700 hover:from-teal-200 hover:to-cyan-200'
-                          }`}
-                          title={episode.whitelisted ? 'Skip this episode (won\'t process)' : 'Enable processing for this episode'}
-                        >
-                          {episode.whitelisted ? (
-                            <>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                              </svg>
-                              Skip
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                              </svg>
-                              Enable
-                            </>
-                          )}
-                        </button>
-                        {episode.has_processed_audio && (
+                      {/* Status indicator */}
+                      <div className="flex-shrink-0">
+                        {episode.has_processed_audio ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-lg">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            Ready
+                          </span>
+                        ) : episode.whitelisted ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-amber-100 text-amber-700 rounded-lg">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                            </svg>
+                            Pending
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-500 rounded-lg">
+                            Skipped
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Middle row: Metadata */}
+                    <div className="flex items-center gap-2 text-sm text-purple-400 mb-3">
+                      <span>{formatDate(episode.release_date)}</span>
+                      <span className="text-purple-200">•</span>
+                      {episode.duration && <span>{formatDuration(episode.duration)}</span>}
+                    </div>
+
+                    {/* Bottom row: Actions - uniform button style */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Toggle Enable/Skip */}
+                      <button
+                        onClick={() => whitelistMutation.mutate({ guid: episode.guid, whitelisted: !episode.whitelisted })}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                          episode.whitelisted
+                            ? 'bg-white border-red-200 text-red-600 hover:bg-red-50'
+                            : 'bg-white border-emerald-200 text-emerald-600 hover:bg-emerald-50'
+                        }`}
+                      >
+                        {episode.whitelisted ? (
                           <>
-                            <PlayButton episode={episode} />
-                            <DownloadButton 
-                              episodeGuid={episode.guid}
-                              isWhitelisted={episode.whitelisted}
-                              hasProcessedAudio={episode.has_processed_audio}
-                              feedId={selectedFeed?.id}
-                            />
-                            <ProcessingStatsButton 
-                              episodeGuid={episode.guid}
-                              hasProcessedAudio={episode.has_processed_audio}
-                            />
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Skip
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Enable
                           </>
                         )}
-                        {episode.whitelisted && !episode.has_processed_audio && (
-                          <ReprocessButton 
+                      </button>
+
+                      {/* Processed episode actions */}
+                      {episode.has_processed_audio && (
+                        <>
+                          <PlayButton episode={episode} />
+                          <DownloadButton 
                             episodeGuid={episode.guid}
                             isWhitelisted={episode.whitelisted}
+                            hasProcessedAudio={episode.has_processed_audio}
                             feedId={selectedFeed?.id}
                           />
-                        )}
-                      </div>
+                          <ProcessingStatsButton 
+                            episodeGuid={episode.guid}
+                            hasProcessedAudio={episode.has_processed_audio}
+                          />
+                        </>
+                      )}
+
+                      {/* Process button for enabled but not yet processed */}
+                      {episode.whitelisted && !episode.has_processed_audio && (
+                        <ReprocessButton 
+                          episodeGuid={episode.guid}
+                          isWhitelisted={episode.whitelisted}
+                          feedId={selectedFeed?.id}
+                        />
+                      )}
                     </div>
                   </div>
                 ))}

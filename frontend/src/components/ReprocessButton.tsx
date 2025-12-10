@@ -72,10 +72,10 @@ export default function ReprocessButton({
       <button
         onClick={handleReprocessClick}
         disabled={isReprocessing}
-        className={`px-3 py-1.5 text-xs rounded-xl font-medium transition-all border flex items-center gap-1 ${
+        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5 ${
           isReprocessing
-            ? 'bg-orange-400 text-white cursor-wait border-orange-400'
-            : 'bg-white/80 text-orange-600 border-orange-200 hover:bg-orange-50 hover:border-orange-300'
+            ? 'bg-orange-500 text-white cursor-wait border-orange-500'
+            : 'bg-white border-orange-200 text-orange-600 hover:bg-orange-50'
         }`}
         title={
           isReprocessing

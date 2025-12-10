@@ -65,20 +65,23 @@ export default function PlayButton({ episode, className = '' }: PlayButtonProps)
     <button
       onClick={handleClick}
       disabled={isDisabled}
-      className={`p-2 rounded-xl transition-all ${
+      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
         isDisabled 
-          ? 'bg-purple-100 text-purple-300 cursor-not-allowed' 
-          : 'bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 text-white hover:shadow-lg hover:shadow-purple-500/30'
+          ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed' 
+          : isCurrentEpisode && isPlaying
+            ? 'bg-purple-600 border-purple-600 text-white hover:bg-purple-700'
+            : 'bg-white border-purple-200 text-purple-600 hover:bg-purple-50'
       } ${className}`}
       title={title}
     >
       {isLoading && isCurrentEpisode ? (
-        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
       ) : isCurrentEpisode && isPlaying ? (
-        <PauseIcon className="w-4 h-4" />
+        <PauseIcon className="w-3.5 h-3.5" />
       ) : (
-        <PlayIcon className="w-4 h-4" />
+        <PlayIcon className="w-3.5 h-3.5" />
       )}
+      {isCurrentEpisode && isPlaying ? 'Pause' : 'Play'}
     </button>
   );
 } 
