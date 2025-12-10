@@ -63,7 +63,9 @@ def get_preset(preset_id: int):
 
 @preset_bp.route("/<int:preset_id>/activate", methods=["POST"])
 def activate_preset(preset_id: int):
-    """Activate a specific preset (deactivates all others)."""
+    """Activate a specific preset (deactivates all others) and update output settings."""
+    from app.models import OutputSettings
+    
     preset = PromptPreset.query.get_or_404(preset_id)
     
     # Deactivate all presets
@@ -71,6 +73,12 @@ def activate_preset(preset_id: int):
     
     # Activate the selected preset
     preset.is_active = True
+    
+    # Also update the output settings min_confidence to match the preset
+    output_settings = OutputSettings.query.first()
+    if output_settings:
+        output_settings.min_confidence = preset.min_confidence
+    
     db.session.commit()
     
     return jsonify(
@@ -81,6 +89,7 @@ def activate_preset(preset_id: int):
                 "name": preset.name,
                 "aggressiveness": preset.aggressiveness,
                 "is_active": preset.is_active,
+                "min_confidence": preset.min_confidence,
             },
         }
     )

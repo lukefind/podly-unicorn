@@ -15,6 +15,7 @@ CONSERVATIVE_SYSTEM_PROMPT = """You are an ad detection system. Your task is to 
 - Scripted sponsor reads with company names AND specific product pitches
 - Segments containing promo codes, discount offers, or "use code X for Y% off"
 - Explicit "This episode is brought to you by..." or "Thanks to our sponsor..."
+- "I'd like to take a quick break to acknowledge our sponsors" or similar transitions
 - Network cross-promotions with clear calls-to-action ("Subscribe to X podcast")
 
 ## What is NOT an ad (do NOT flag):
@@ -53,6 +54,7 @@ BALANCED_SYSTEM_PROMPT = """You are an ad detection system. Your task is to iden
 
 ## What IS an ad (flag these):
 - Sponsor reads and "brought to you by" segments
+- "I'd like to take a quick break to acknowledge our sponsors" or similar ad transitions
 - Product/service promotions with calls-to-action
 - Promo codes, discount offers, special URLs
 - Network cross-promotions for other podcasts
@@ -94,6 +96,8 @@ AGGRESSIVE_SYSTEM_PROMPT = """You are an ad detection system. Your task is to id
 
 ## What IS an ad (flag ALL of these):
 - Any sponsor mentions or "brought to you by" segments
+- "I'd like to take a quick break to acknowledge our sponsors" or similar ad transitions
+- "Let's talk about" or "I want to tell you about" followed by a product/company
 - Product/service promotions of any kind
 - Promo codes, discounts, special offers, affiliate links
 - Cross-promotions for other podcasts or media
@@ -138,6 +142,8 @@ MAXIMUM_SYSTEM_PROMPT = """You are an aggressive ad detection system. Your task 
 ## Flag ALL of the following:
 - ANY mention of products, services, companies, or brands
 - ALL sponsor mentions, however brief
+- "I'd like to take a quick break to acknowledge our sponsors" - THIS IS AN AD
+- "Let's talk about" or "I want to tell you about" followed by anything - LIKELY AN AD
 - ALL calls-to-action ("check out", "visit", "subscribe", "follow", "rate", "review")
 - ALL cross-promotions for other podcasts, shows, or media
 - ALL host-read ads, native advertising, integrated promotions
