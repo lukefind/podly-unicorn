@@ -1,5 +1,6 @@
 <div align="center">
-  <img src="frontend/public/images/social-card1200x630.png" alt="Podly Unicorn" width="600" />
+  <img src="frontend/public/images/logos/unicorn-logo.png" alt="Podly Unicorn" width="200" />
+  <h1>Podly Unicorn</h1>
   
   <p>
     <a href="https://github.com/lukefind/podly-unicorn"><img src="https://img.shields.io/badge/GitHub-podly--unicorn-purple?logo=github" alt="GitHub"></a>
@@ -24,7 +25,7 @@ Podly Unicorn automatically removes advertisements from podcasts using AI. Add y
 - 🔒 **Self-Hosted** — Your data stays on your server
 
 <div align="center">
-  <img src="docs/images/screenshot.png" alt="Podly Unicorn Dashboard" width="700" />
+  <img src="frontend/public/images/dashboard.png" alt="Podly Unicorn Dashboard" width="700" />
   <p><em>Dashboard showing podcast statistics and ad removal progress</em></p>
 </div>
 
