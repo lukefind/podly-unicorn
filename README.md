@@ -1,48 +1,41 @@
 <div align="center">
   <h1>🦄 Podly Unicorn</h1>
-  <h3>✨ Ad-block for podcasts with a magical pastel theme ✨</h3>
+  <h3>AI-powered podcast ad removal with a beautiful pastel theme</h3>
   
   <p>
-    <a href="https://discord.gg/FRB98GtF6N"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
-    <a href="https://github.com/jdrbc/podly_pure_podcasts"><img src="https://img.shields.io/badge/Fork%20of-Podly%20Pure%20Podcasts-ff69b4" alt="Fork"></a>
     <a href="https://github.com/jdrbc/podly_pure_podcasts/blob/main/LICENCE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-  </p>
-  
-  <p>
-    <strong>This is a fork of <a href="https://github.com/jdrbc/podly_pure_podcasts">Podly Pure Podcasts</a></strong> with UI/UX improvements and a beautiful pastel unicorn theme.
+    <a href="https://discord.gg/FRB98GtF6N"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   </p>
 </div>
 
 ---
 
-## ✨ What is Podly Unicorn?
+## What is Podly Unicorn?
 
-Podly Unicorn automatically removes advertisements from podcasts using AI. It creates clean RSS feeds you can subscribe to in any podcast app.
-
-**This fork adds:**
-- 🦄 Beautiful pastel unicorn theme (pink, purple, blue, mint gradients)
-- 🎨 Improved UI/UX with glass-morphism cards and rainbow effects
-- 📋 Better job history management with clear history button
-- ⚙️ Streamlined settings page layout
-- 👥 Multi-user support with per-user feed subscriptions and usage statistics
-- 🔒 Private subscriptions - subscribe to feeds without others seeing
-- 🔐 Themed login page with custom unicorn branding
-- 📖 Updated documentation
-
-> 💜 **Original project:** [github.com/jdrbc/podly_pure_podcasts](https://github.com/jdrbc/podly_pure_podcasts) — All credit to the original Podly team!
+Podly Unicorn automatically removes advertisements from podcasts using AI. Subscribe to your favorite shows through Podly's RSS feeds and enjoy ad-free listening in any podcast app.
 
 <img width="100%" src="docs/images/screenshot.png" alt="Podly Dashboard" />
 
+### ✨ Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 🤖 **AI-Powered Detection** | Uses LLMs (Groq, OpenAI, xAI) to identify and remove ads with high accuracy |
+| 📡 **Custom RSS Feeds** | Subscribe in Apple Podcasts, Overcast, Pocket Casts, or any podcast app |
+| 🎛️ **Adjustable Presets** | Conservative, Balanced, or Aggressive ad removal to suit your preferences |
+| 📊 **Detailed Statistics** | See exactly how much ad time was removed from each episode |
+| 👥 **Multi-User Support** | Per-user subscriptions with private/public options |
+| 🦄 **Beautiful UI** | Pastel unicorn theme with glassmorphism and responsive mobile design |
+| 🔒 **Self-Hosted** | Your data stays on your server with optional authentication |
+
 ### How It Works
 
-1. **Subscribe** — Add your favorite podcast's RSS feed
-2. **Enable** — Mark episodes as enabled (eligible for processing) or disabled (skipped)
-3. **Process** — Episodes are processed **on-demand** when:
-   - Your podcast app requests the episode from the Podly RSS feed
-   - You manually click "Process" in the web UI
-4. **Listen** — Get a clean RSS feed URL to use in your podcast app
+1. **Add** — Paste any podcast RSS feed URL
+2. **Enable** — New episodes are automatically enabled for processing
+3. **Process** — Episodes process on-demand when you click "Process" or when your podcast app requests them
+4. **Listen** — Subscribe to the Podly RSS feed in your podcast app
 
-> 💡 **On-Demand Processing**: Enabled episodes are NOT processed automatically. They're processed when requested, saving compute resources and API costs. Disabled episodes are skipped entirely.
+> 💡 **Note:** The first download attempt may fail while processing. Wait 1-2 minutes and try again.
 
 ---
 
@@ -339,11 +332,16 @@ MIT License — see [LICENCE](LICENCE) for details.
 
 ---
 
+## 🙏 Credits
+
+Podly Unicorn is a fork of [**Podly Pure Podcasts**](https://github.com/jdrbc/podly_pure_podcasts) by [@jdrbc](https://github.com/jdrbc). Thanks to the original team for creating the core podcast processing engine!
+
+---
+
 <div align="center">
-  <p>Made with 🦄 by the Podly community</p>
+  <p>Made with 🦄</p>
   <p>
     <a href="https://discord.gg/FRB98GtF6N">Discord</a> •
-    <a href="https://github.com/jdrbc/podly_pure_podcasts">Original Podly</a> •
-    <a href="https://podly.up.railway.app/">Try It</a>
+    <a href="https://github.com/lukefind/podly-unicorn/issues">Issues</a>
   </p>
 </div>

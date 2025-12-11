@@ -73,9 +73,11 @@ const navItems: NavItem[] = [
 interface SidebarProps {
   collapsed?: boolean;
   onToggle?: () => void;
+  onNavigate?: () => void;
+  isMobile?: boolean;
 }
 
-export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
+export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMobile = false }: SidebarProps) {
   const location = useLocation();
   const { requireAuth, user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -92,13 +94,13 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     return true;
   });
 
-  // Softer sidebar colors - less intense purple
+  // Solid sidebar colors - no transparency for better readability
   const sidebarClasses = theme === 'dark'
-    ? 'bg-gradient-to-b from-slate-900 via-purple-950/80 to-slate-950'
-    : 'bg-gradient-to-b from-purple-800/90 via-purple-900/95 to-slate-900';
+    ? 'bg-gradient-to-b from-slate-900 via-purple-950 to-slate-950'
+    : 'bg-gradient-to-b from-purple-800 via-purple-900 to-slate-900';
 
   return (
-    <aside className={`${sidebarClasses} text-white flex flex-col transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'} shadow-xl`}>
+    <aside className={`${sidebarClasses} text-white flex flex-col transition-all duration-300 ${isMobile ? 'w-64' : (collapsed ? 'w-16' : 'w-64')} shadow-xl h-full`}>
       {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-purple-800/50">
         <Link to="/" className="flex items-center gap-3">
@@ -107,13 +109,13 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             alt="Podly Unicorn" 
             className="h-10 w-10 object-contain"
           />
-          {!collapsed && (
+          {(!collapsed || isMobile) && (
             <span className="text-lg font-bold rainbow-text">
               Podly Unicorn
             </span>
           )}
         </Link>
-        {onToggle && (
+        {onToggle && !isMobile && (
           <button
             onClick={onToggle}
             className="ml-auto p-2 rounded-lg bg-purple-700/50 hover:bg-purple-600/70 transition-colors border border-purple-500/30"
@@ -125,21 +127,22 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 py-4 px-2 space-y-1">
+      {/* Navigation - scrollable */}
+      <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
         {filteredNavItems.map((item) => (
           <Link
             key={item.path}
             to={item.path}
+            onClick={onNavigate}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
               isActive(item.path)
                 ? 'bg-gradient-to-r from-pink-500/80 via-purple-500/80 to-cyan-500/80 text-white shadow-lg shadow-purple-500/30'
                 : 'text-purple-200 hover:text-white hover:bg-purple-800/40'
             }`}
-            title={collapsed ? item.label : undefined}
+            title={collapsed && !isMobile ? item.label : undefined}
           >
             {item.icon}
-            {!collapsed && <span className="font-medium">{item.label}</span>}
+            {(!collapsed || isMobile) && <span className="font-medium">{item.label}</span>}
           </Link>
         ))}
       </nav>
@@ -148,7 +151,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       <div className="px-4 py-2 border-t border-purple-800/30">
         <button
           onClick={toggleTheme}
-          className={`w-full flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg hover:bg-purple-800/30 text-purple-200 hover:text-white transition-colors`}
+          className={`w-full flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg hover:bg-purple-800/30 text-purple-200 hover:text-white transition-colors`}
           title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         >
           {theme === 'dark' ? (
@@ -160,7 +163,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
             </svg>
           )}
-          {!collapsed && (
+          {(!collapsed || isMobile) && (
             <span className="text-sm font-medium">
               {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
             </span>
@@ -171,17 +174,17 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       {/* User section */}
       {requireAuth && user && (
         <div className="p-4 border-t border-purple-800/30">
-          <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+          <div className={`flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'}`}>
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 via-purple-400 to-cyan-400 flex items-center justify-center text-sm font-bold shadow-lg">
               {user.username.charAt(0).toUpperCase()}
             </div>
-            {!collapsed && (
+            {(!collapsed || isMobile) && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{user.username}</p>
                 <p className="text-xs text-purple-300 capitalize">{user.role}</p>
               </div>
             )}
-            {!collapsed && (
+            {(!collapsed || isMobile) && (
               <button
                 onClick={logout}
                 className="p-1.5 rounded-lg hover:bg-purple-800/30 text-purple-300 hover:text-white transition-colors"

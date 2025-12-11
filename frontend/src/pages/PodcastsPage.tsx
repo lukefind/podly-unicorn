@@ -41,9 +41,10 @@ export default function PodcastsPage() {
   const feedsArray = Array.isArray(feeds) ? feeds : [];
   const selectedFeed = feedsArray.find((f: Feed) => f.id === selectedFeedId);
 
-  // Auto-select first feed if none selected and feeds are loaded
+  // Auto-select first feed if none selected and feeds are loaded (desktop only)
   useEffect(() => {
-    if (!selectedFeedId && feedsArray.length > 0 && !feedsLoading) {
+    const isDesktop = window.innerWidth >= 1024; // lg breakpoint
+    if (!selectedFeedId && feedsArray.length > 0 && !feedsLoading && isDesktop) {
       setSearchParams({ feed: feedsArray[0].id.toString() });
     }
   }, [feedsArray, selectedFeedId, feedsLoading, setSearchParams]);
@@ -139,9 +140,9 @@ export default function PodcastsPage() {
   }
 
   return (
-    <div className="h-full flex gap-6">
-      {/* Left Panel - Feed List */}
-      <div className={`w-80 flex-shrink-0 flex flex-col ${selectedFeed ? 'hidden lg:flex' : 'flex'}`}>
+    <div className="h-full flex flex-col lg:flex-row gap-4 lg:gap-6">
+      {/* Left Panel - Feed List - hidden on mobile when feed selected */}
+      <div className={`lg:w-80 flex-shrink-0 flex-col ${selectedFeed ? 'hidden lg:flex' : 'flex w-full'}`}>
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900">Podcasts</h1>
           <button
@@ -265,9 +266,9 @@ export default function PodcastsPage() {
         </div>
       </div>
 
-      {/* Right Panel - Feed Detail */}
+      {/* Right Panel - Feed Detail - full width on mobile */}
       {selectedFeed ? (
-        <div className="flex-1 flex flex-col bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden">
+        <div className="flex-1 w-full flex flex-col bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden">
           {/* Feed Header */}
           <div className="p-6 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50">
             <div className="flex items-start gap-4">
@@ -283,17 +284,17 @@ export default function PodcastsPage() {
                 <img
                   src={selectedFeed.image_url}
                   alt={selectedFeed.title}
-                  className="w-20 h-20 rounded-xl object-cover shadow-md"
+                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shadow-md flex-shrink-0"
                 />
               )}
-              <div className="flex-1">
-                <h2 className="text-xl font-bold text-purple-900">{selectedFeed.title}</h2>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg sm:text-xl font-bold text-purple-900 truncate">{selectedFeed.title}</h2>
                 {selectedFeed.author && (
-                  <p className="text-purple-600 mt-1">by {selectedFeed.author}</p>
+                  <p className="text-purple-600 mt-1 text-sm sm:text-base truncate">by {selectedFeed.author}</p>
                 )}
-                <p className="text-sm text-purple-500 mt-1">{selectedFeed.posts_count} episodes</p>
+                <p className="text-xs sm:text-sm text-purple-500 mt-1">{selectedFeed.posts_count} episodes</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                 <button
                   onClick={() => refreshFeedMutation.mutate(selectedFeed.id)}
                   disabled={refreshFeedMutation.isPending}
@@ -321,7 +322,7 @@ export default function PodcastsPage() {
             </div>
 
             {/* Subscribe Button & Actions */}
-            <div className="flex flex-wrap items-center gap-3 mt-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-4">
               <button
                 onClick={async () => {
                   try {
@@ -336,22 +337,22 @@ export default function PodcastsPage() {
                     toast.success('RSS URL copied to clipboard!');
                   }
                 }}
-                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2"
+                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-1.5 sm:gap-2"
               >
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1Z"/>
                 </svg>
-                Subscribe to Podly RSS
+                <span className="hidden xs:inline">Subscribe to</span> Podly RSS
               </button>
               <button
                 onClick={() => refreshFeedMutation.mutate(selectedFeed.id)}
                 disabled={refreshFeedMutation.isPending}
-                className="px-4 py-2 text-sm font-medium text-purple-700 bg-white/80 border border-purple-200 rounded-xl hover:bg-purple-50 transition-colors flex items-center gap-2"
+                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-purple-700 bg-white/80 border border-purple-200 rounded-xl hover:bg-purple-50 transition-colors flex items-center gap-1.5 sm:gap-2"
               >
                 <svg className={`w-4 h-4 ${refreshFeedMutation.isPending ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                Refresh Feed
+                Refresh
               </button>
               <a
                 href={selectedFeed.rss_url}
@@ -553,6 +554,11 @@ export default function PodcastsPage() {
                             hasProcessedAudio={episode.has_processed_audio}
                             feedId={selectedFeed?.id}
                           />
+                          <ReprocessButton 
+                            episodeGuid={episode.guid}
+                            isWhitelisted={episode.whitelisted}
+                            feedId={selectedFeed?.id}
+                          />
                           <ProcessingStatsButton 
                             episodeGuid={episode.guid}
                             hasProcessedAudio={episode.has_processed_audio}
@@ -564,15 +570,6 @@ export default function PodcastsPage() {
                       {episode.whitelisted && !episode.has_processed_audio && (
                         <ProcessButton 
                           episodeGuid={episode.guid}
-                          feedId={selectedFeed?.id}
-                        />
-                      )}
-
-                      {/* Reprocess button for already processed episodes */}
-                      {episode.has_processed_audio && (
-                        <ReprocessButton 
-                          episodeGuid={episode.guid}
-                          isWhitelisted={episode.whitelisted}
                           feedId={selectedFeed?.id}
                         />
                       )}
@@ -715,9 +712,12 @@ export default function PodcastsPage() {
                 </div>
               </div>
 
-              <div className="mt-4 p-4 bg-purple-50 rounded-xl border border-purple-100">
+              <div className="mt-4 p-4 bg-purple-50 rounded-xl border border-purple-100 space-y-2">
                 <p className="text-sm text-purple-800">
-                  <strong>💡 Tip:</strong> Processing happens on-demand, not automatically. This saves resources and API costs. Enable episodes you want, then either click "Process" or let your podcast app trigger it when you subscribe to the Podly RSS feed.
+                  <strong>💡 Tip:</strong> New episodes are automatically enabled. Processing happens on-demand when you click "Process" or when your podcast app tries to download an episode.
+                </p>
+                <p className="text-sm text-purple-700">
+                  <strong>Note:</strong> The first download attempt in your podcast app may fail while processing. Wait 1-2 minutes and try again - the episode should be ready.
                 </p>
               </div>
             </div>

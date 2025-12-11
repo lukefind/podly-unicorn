@@ -85,12 +85,12 @@ export default function ProcessingStatsButton({
       {/* Modal - rendered via portal to document.body */}
       {showModal && createPortal(
         <div 
-          className="fixed inset-0 bg-purple-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 bg-purple-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4"
           style={{ zIndex: 9999 }}
           onClick={() => setShowModal(false)}
         >
           <div 
-            className="modal-content rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl border"
+            className="modal-content rounded-xl sm:rounded-2xl max-w-6xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden shadow-2xl border"
             style={{ 
               backgroundColor: isDark ? '#1a0f2e' : '#ffffff',
               borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(196, 181, 253, 0.5)'
@@ -99,14 +99,14 @@ export default function ProcessingStatsButton({
           >
             {/* Header */}
             <div 
-              className="flex items-center justify-between p-6 border-b"
+              className="flex items-center justify-between p-4 sm:p-6 border-b"
               style={{ 
                 backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : undefined,
                 borderColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(243, 232, 255, 1)',
                 background: isDark ? 'linear-gradient(to right, rgba(30, 10, 40, 0.9), rgba(20, 10, 50, 0.9), rgba(10, 20, 40, 0.9))' : 'linear-gradient(to right, #fdf2f8, #faf5ff, #ecfeff)'
               }}
             >
-              <h2 className="text-xl font-bold text-left" style={{ color: isDark ? '#e9d5ff' : '#581c87' }}>Processing Statistics & Debug</h2>
+              <h2 className="text-base sm:text-xl font-bold text-left" style={{ color: isDark ? '#e9d5ff' : '#581c87' }}>Processing Stats</h2>
               <button
                 onClick={() => setShowModal(false)}
                 className="p-2 rounded-lg transition-colors"
@@ -120,13 +120,13 @@ export default function ProcessingStatsButton({
 
             {/* Tabs */}
             <div 
-              className="border-b"
+              className="border-b overflow-x-auto"
               style={{ 
                 backgroundColor: isDark ? 'rgba(25, 15, 45, 0.9)' : '#faf5ff',
                 borderColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(243, 232, 255, 1)'
               }}
             >
-              <nav className="flex space-x-8 px-6">
+              <nav className="flex space-x-2 sm:space-x-8 px-3 sm:px-6 min-w-max">
                 {[
                   { id: 'overview', label: 'Overview' },
                   { id: 'model-calls', label: 'Model Calls' },
@@ -136,14 +136,15 @@ export default function ProcessingStatsButton({
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as 'overview' | 'model-calls' | 'transcript' | 'identifications')}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                    className={`py-3 sm:py-4 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
                       activeTab === tab.id
                         ? 'border-purple-500'
                         : 'border-transparent hover:border-purple-300'
                     }`}
                     style={{ color: activeTab === tab.id ? (isDark ? '#c4b5fd' : '#6b21a8') : (isDark ? '#a78bfa' : '#6b7280') }}
                   >
-                    {tab.label}
+                    <span className="hidden sm:inline">{tab.label}</span>
+                    <span className="sm:hidden">{tab.id === 'model-calls' ? 'Calls' : tab.id === 'identifications' ? 'IDs' : tab.label}</span>
                     {stats && tab.id === 'model-calls' && stats.model_calls && ` (${stats.model_calls.length})`}
                     {stats && tab.id === 'transcript' && stats.transcript_segments && ` (${stats.transcript_segments.length})`}
                     {stats && tab.id === 'identifications' && stats.identifications && ` (${stats.identifications.length})`}
@@ -154,7 +155,7 @@ export default function ProcessingStatsButton({
 
             {/* Content */}
             <div 
-              className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]" 
+              className="p-3 sm:p-6 overflow-y-auto max-h-[calc(95vh-140px)] sm:max-h-[calc(90vh-200px)]" 
               style={{ backgroundColor: isDark ? '#1a0f2e' : '#ffffff' }}
             >
               {isLoading ? (
@@ -180,28 +181,28 @@ export default function ProcessingStatsButton({
                       </div>
 
                       {/* Duration Comparison - Hero Section */}
-                      <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl p-6 text-white">
-                        <h3 className="text-sm font-medium opacity-90 mb-4">Duration Comparison</h3>
-                        <div className="grid grid-cols-3 gap-4">
+                      <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl p-4 sm:p-6 text-white">
+                        <h3 className="text-xs sm:text-sm font-medium opacity-90 mb-3 sm:mb-4">Duration Comparison</h3>
+                        <div className="grid grid-cols-3 gap-2 sm:gap-4">
                           <div className="text-center">
-                            <div className="text-3xl font-bold">
+                            <div className="text-lg sm:text-3xl font-bold">
                               {stats.post?.duration ? formatDuration(stats.post.duration) : '--'}
                             </div>
-                            <div className="text-sm opacity-80 mt-1">Original</div>
+                            <div className="text-xs sm:text-sm opacity-80 mt-1">Original</div>
                           </div>
                           <div className="text-center flex flex-col items-center justify-center">
-                            <div className="text-2xl">→</div>
-                            <div className="text-lg font-semibold text-green-200">
+                            <div className="text-lg sm:text-2xl">→</div>
+                            <div className="text-sm sm:text-lg font-semibold text-green-200">
                               -{stats.processing_stats?.estimated_ad_time_seconds ? formatDuration(stats.processing_stats.estimated_ad_time_seconds) : '0m 0s'}
                             </div>
                           </div>
                           <div className="text-center">
-                            <div className="text-3xl font-bold">
+                            <div className="text-lg sm:text-3xl font-bold">
                               {stats.post?.duration && stats.processing_stats?.estimated_ad_time_seconds 
                                 ? formatDuration(stats.post.duration - stats.processing_stats.estimated_ad_time_seconds)
                                 : stats.post?.duration ? formatDuration(stats.post.duration) : '--'}
                             </div>
-                            <div className="text-sm opacity-80 mt-1">After Ad Removal</div>
+                            <div className="text-xs sm:text-sm opacity-80 mt-1">After Ads</div>
                           </div>
                         </div>
                         {stats.post?.duration && stats.processing_stats?.estimated_ad_time_seconds && (
@@ -223,75 +224,75 @@ export default function ProcessingStatsButton({
                       </div>
 
                       {/* Key Metrics - Clickable to navigate to relevant tabs */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-2 gap-2 sm:gap-4">
                         <button 
                           onClick={() => setActiveTab('transcript')}
-                          className="rounded-xl p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
+                          className="rounded-xl p-3 sm:p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
                             backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
                             borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
                           }}
                         >
-                          <div className="text-3xl font-bold" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
                             {stats.processing_stats?.total_segments || 0}
                           </div>
-                          <div className="text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Total Segments</div>
+                          <div className="text-xs sm:text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Segments</div>
                         </button>
 
                         <button 
                           onClick={() => setActiveTab('transcript')}
-                          className="rounded-xl p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
+                          className="rounded-xl p-3 sm:p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
                             backgroundColor: isDark ? 'rgba(34, 197, 94, 0.15)' : '#f0fdf4',
                             borderColor: isDark ? 'rgba(34, 197, 94, 0.3)' : '#bbf7d0'
                           }}
                         >
-                          <div className="text-3xl font-bold" style={{ color: isDark ? '#86efac' : '#16a34a' }}>
+                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isDark ? '#86efac' : '#16a34a' }}>
                             {stats.processing_stats?.content_segments || 0}
                           </div>
-                          <div className="text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Content Kept</div>
+                          <div className="text-xs sm:text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Kept</div>
                         </button>
 
                         <button 
                           onClick={() => setActiveTab('identifications')}
-                          className="rounded-xl p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
+                          className="rounded-xl p-3 sm:p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
                             backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fef2f2',
                             borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecaca'
                           }}
                         >
-                          <div className="text-3xl font-bold" style={{ color: isDark ? '#fca5a5' : '#dc2626' }}>
+                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isDark ? '#fca5a5' : '#dc2626' }}>
                             {stats.processing_stats?.ad_segments_count || 0}
                           </div>
-                          <div className="text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Ads Removed</div>
+                          <div className="text-xs sm:text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Ads</div>
                         </button>
 
                         <button 
                           onClick={() => setActiveTab('model-calls')}
-                          className="rounded-xl p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
+                          className="rounded-xl p-3 sm:p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
                             backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
                             borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
                           }}
                         >
-                          <div className="text-3xl font-bold" style={{ color: isDark ? '#c4b5fd' : '#9333ea' }}>
+                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isDark ? '#c4b5fd' : '#9333ea' }}>
                             {stats.processing_stats?.total_model_calls || 0}
                           </div>
-                          <div className="text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>AI Calls</div>
+                          <div className="text-xs sm:text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>AI Calls</div>
                         </button>
                       </div>
 
                       {/* Model Performance */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-3 sm:gap-4">
                         {/* Model Call Status */}
                         <div 
-                          className="rounded-xl p-5 shadow-sm border"
+                          className="rounded-xl p-4 sm:p-5 shadow-sm border"
                           style={{ 
                             backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
                             borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
                           }}
                         >
-                          <h4 className="font-semibold mb-4 text-left" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Processing Status</h4>
+                          <h4 className="font-semibold mb-3 sm:mb-4 text-left text-sm sm:text-base" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Processing Status</h4>
                           <div className="space-y-3">
                             {Object.entries(stats.processing_stats?.model_call_statuses || {}).map(([status, count]) => (
                               <div key={status} className="flex justify-between items-center">
@@ -320,13 +321,13 @@ export default function ProcessingStatsButton({
 
                         {/* Model Types */}
                         <div 
-                          className="rounded-xl p-5 shadow-sm border"
+                          className="rounded-xl p-4 sm:p-5 shadow-sm border"
                           style={{ 
                             backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
                             borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
                           }}
                         >
-                          <h4 className="font-semibold mb-4 text-left" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Models Used</h4>
+                          <h4 className="font-semibold mb-3 sm:mb-4 text-left text-sm sm:text-base" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Models Used</h4>
                           <div className="space-y-3">
                             {Object.entries(stats.processing_stats?.model_types || {}).map(([model, count]) => (
                               <div key={model} className="flex justify-between items-center">

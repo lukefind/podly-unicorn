@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { feedsApi } from '../services/api';
-import ReprocessButton from './ReprocessButton';
-import { configApi } from '../services/api';
+import { feedsApi, configApi } from '../services/api';
 import { toast } from 'react-hot-toast';
 
 interface DownloadButtonProps {
@@ -218,28 +216,16 @@ export default function DownloadButton({
   if (status?.status === 'completed' && status.download_url) {
     return (
       <div className={`${className}`}>
-        <div className="flex gap-2">
-          <button
-            onClick={handleDownloadClick}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all border bg-white border-teal-200 text-teal-600 hover:bg-teal-50 flex items-center gap-1.5"
-            title="Download processed episode"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Download
-          </button>
-          <ReprocessButton
-            episodeGuid={episodeGuid}
-            isWhitelisted={isWhitelisted}
-            feedId={feedId}
-            onReprocessStart={() => {
-              // Reset status to trigger re-processing UI
-              setStatus(null);
-              setIsProcessing(true);
-            }}
-          />
-        </div>
+        <button
+          onClick={handleDownloadClick}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all border bg-white border-teal-200 text-teal-600 hover:bg-teal-50 flex items-center gap-1.5"
+          title="Download processed episode"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Download
+        </button>
         {error && (
           <div className="text-xs text-red-600 mt-1">
             {error}
