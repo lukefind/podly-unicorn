@@ -75,8 +75,8 @@ Open http://localhost:5001
 
 | Provider | Model | Notes |
 |----------|-------|-------|
-| **Groq** | `groq/llama-3.3-70b-versatile` | Free tier, fast, recommended |
-| **xAI Grok** | `xai/grok-3` | Best quality (~$0.10/episode) |
+| **Groq** | `groq/llama-3.3-70b-versatile` | Free tier, fast |
+| **xAI Grok** | `xai/grok-3` | Recommended for accuracy (~$0.10/episode) |
 | **OpenAI** | `gpt-4o` | High quality |
 
 For xAI Grok:

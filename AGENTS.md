@@ -175,7 +175,7 @@ Podly uses [LiteLLM](https://docs.litellm.ai/) which supports 100+ providers. Re
 | Provider | Model Format | Base URL | Notes |
 |----------|--------------|----------|-------|
 | **Groq** | `groq/llama-3.3-70b-versatile` | *(ignored)* | Fast, free tier, handles both LLM + Whisper |
-| **xAI Grok** | `xai/grok-3` | `https://api.x.ai/v1` | High quality, ~$0.10/episode |
+| **xAI Grok** | `xai/grok-3` | `https://api.x.ai/v1` | **Recommended for accuracy**, ~$0.10/episode |
 | **OpenAI** | `gpt-4o` | *(default)* | Excellent quality, higher cost |
 | **Anthropic** | `anthropic/claude-3-sonnet` | *(ignored)* | High quality alternative |
 
@@ -183,7 +183,7 @@ Podly uses [LiteLLM](https://docs.litellm.ai/) which supports 100+ providers. Re
 
 **Simplest**: Just set `GROQ_API_KEY` - it handles both transcription and ad detection.
 
-**Best quality**: Use Groq for Whisper (fast, free) + xAI Grok for LLM (better ad detection):
+**Recommended for accuracy**: Use Groq for Whisper (fast, free) + xAI Grok for LLM (best ad detection):
 ```bash
 GROQ_API_KEY=gsk_...        # For Whisper transcription
 LLM_API_KEY=xai-...         # For ad detection
