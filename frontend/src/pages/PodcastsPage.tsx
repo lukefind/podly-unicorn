@@ -608,7 +608,7 @@ export default function PodcastsPage() {
       {/* Add Feed Modal */}
       {showAddForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
           onClick={() => setShowAddForm(false)}
         >
           <div
@@ -654,7 +654,7 @@ export default function PodcastsPage() {
       {/* Help Modal - How Processing Works */}
       {showHelpModal && createPortal(
         <div 
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
           style={{ zIndex: 9999 }}
           onClick={() => setShowHelpModal(false)}
         >
@@ -784,7 +784,7 @@ function SubscriptionModal({ onClose, onUpdate }: { onClose: () => void; onUpdat
 
   return (
     <div 
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
       style={{ zIndex: 9999 }}
       onClick={onClose}
     >

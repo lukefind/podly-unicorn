@@ -141,7 +141,7 @@ export default function HomePage() {
 
       {showAddForm && (
         <div
-          className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-6"
+          className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/80 p-4 sm:p-6"
           onClick={() => setShowAddForm(false)}
         >
           <div
