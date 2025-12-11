@@ -1,10 +1,11 @@
 <div align="center">
-  <h1>🦄 Podly Unicorn</h1>
-  <h3>AI-powered podcast ad removal with a beautiful pastel theme</h3>
+  <img src="frontend/public/images/logos/unicorn-logo.png" alt="Podly Unicorn" width="120" />
+  <h1>Podly Unicorn</h1>
+  <p><strong>AI-powered podcast ad removal with a beautiful pastel theme</strong></p>
   
   <p>
+    <a href="https://github.com/lukefind/podly-unicorn"><img src="https://img.shields.io/badge/GitHub-podly--unicorn-purple?logo=github" alt="GitHub"></a>
     <a href="https://github.com/jdrbc/podly_pure_podcasts/blob/main/LICENCE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-    <a href="https://discord.gg/FRB98GtF6N"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   </p>
 </div>
 
@@ -12,336 +13,145 @@
 
 ## What is Podly Unicorn?
 
-Podly Unicorn automatically removes advertisements from podcasts using AI. Subscribe to your favorite shows through Podly's RSS feeds and enjoy ad-free listening in any podcast app.
+Podly Unicorn automatically removes advertisements from podcasts using AI. Add your favorite shows, and Podly creates ad-free RSS feeds you can subscribe to in any podcast app.
 
-<img width="100%" src="docs/images/screenshot.png" alt="Podly Dashboard" />
-
-### ✨ Key Features
-
-| Feature | Description |
-|---------|-------------|
-| 🤖 **AI-Powered Detection** | Uses LLMs (Groq, OpenAI, xAI) to identify and remove ads with high accuracy |
-| 📡 **Custom RSS Feeds** | Subscribe in Apple Podcasts, Overcast, Pocket Casts, or any podcast app |
-| 🎛️ **Adjustable Presets** | Conservative, Balanced, or Aggressive ad removal to suit your preferences |
-| 📊 **Detailed Statistics** | See exactly how much ad time was removed from each episode |
-| 👥 **Multi-User Support** | Per-user subscriptions with private/public options |
-| 🦄 **Beautiful UI** | Pastel unicorn theme with glassmorphism and responsive mobile design |
-| 🔒 **Self-Hosted** | Your data stays on your server with optional authentication |
-
-### How It Works
-
-1. **Add** — Paste any podcast RSS feed URL
-2. **Enable** — New episodes are automatically enabled for processing
-3. **Process** — Episodes process on-demand when you click "Process" or when your podcast app requests them
-4. **Listen** — Subscribe to the Podly RSS feed in your podcast app
-
-> 💡 **Note:** The first download attempt may fail while processing. Wait 1-2 minutes and try again.
+**Key Features:**
+- 🤖 **AI-Powered** — Uses LLMs (Groq, OpenAI, xAI Grok) to detect and remove ads
+- 📡 **RSS Feeds** — Subscribe in Apple Podcasts, Overcast, Pocket Casts, or any app
+- 🎛️ **Adjustable Presets** — Conservative, Balanced, or Aggressive ad removal
+- 📊 **Statistics** — See exactly how much ad time was removed per episode
+- 👥 **Multi-User** — Per-user feed subscriptions with privacy controls
+- 🦄 **Beautiful UI** — Pastel unicorn theme with dark mode and mobile support
+- 🔒 **Self-Hosted** — Your data stays on your server
 
 ---
 
-## 🚀 Quick Start
+## Quick Start (Docker)
 
-### Option 1: Try the Preview Server
-**[→ podly.up.railway.app](https://podly.up.railway.app/)** — No setup required
+### Prerequisites
+- Docker and Docker Compose
+- LLM API key from [Groq](https://console.groq.com/keys) (free) or OpenAI/xAI
 
-### Option 2: Deploy to Railway (Recommended for sharing)
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/podly?referralCode=NMdeg5&utm_medium=integration&utm_source=template&utm_campaign=generic)
-
-See our [Railway deployment guide](docs/how_to_run_railway.md) for details.
-
-### Option 3: Run Locally with Docker (Home Machine or Server)
-
-This is the recommended way to run Podly on your own hardware — whether that's a laptop, desktop, Raspberry Pi, or home server.
-
-#### Prerequisites
-
-- **Docker** and **Docker Compose** installed
-  - Mac/Windows: Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-  - Linux: `sudo apt install docker.io docker-compose-v2` (or equivalent for your distro)
-- **LLM API Key** — Get a free one from [Groq](https://console.groq.com/keys) (recommended) or use OpenAI/xAI
-
-#### Step 1: Clone the Repository
+### 1. Clone and Configure
 
 ```bash
 git clone https://github.com/lukefind/podly-unicorn.git
 cd podly-unicorn
-```
-
-#### Step 2: Create Your Config File
-
-```bash
 cp .env.local.example .env.local
 ```
 
-Edit `.env.local` with your preferred text editor:
+Edit `.env.local`:
 
 ```bash
-nano .env.local   # or vim, code, etc.
-```
-
-**Minimum required settings:**
-
-```bash
-# Get a free key at https://console.groq.com/keys
-LLM_API_KEY=gsk_your_groq_api_key_here
+# Required: LLM for ad detection
+LLM_API_KEY=gsk_your_groq_key
 LLM_MODEL=groq/llama-3.3-70b-versatile
 
-# Whisper transcription (Groq is fast and cheap)
+# Required: Whisper for transcription
 WHISPER_TYPE=groq
-GROQ_API_KEY=gsk_your_groq_api_key_here
-```
+GROQ_API_KEY=gsk_your_groq_key
 
-**Optional: Enable authentication** (recommended for servers):
-
-```bash
+# Recommended: Enable authentication
 REQUIRE_AUTH=true
 PODLY_ADMIN_USERNAME=admin
-PODLY_ADMIN_PASSWORD=your-secure-password-here
-PODLY_SECRET_KEY=generate-a-64-character-random-string
+PODLY_ADMIN_PASSWORD=your-secure-password
 ```
 
-> 💡 Generate a secret key: `openssl rand -hex 32`
-
-#### Step 3: Build and Start
+### 2. Start
 
 ```bash
 docker compose up -d --build
 ```
 
-This will:
-- Build the Docker image (~2-5 minutes first time)
-- Start the container in the background
-- Run database migrations automatically
+### 3. Access
 
-#### Step 4: Access the Web UI
+Open http://localhost:5001
 
-Open your browser to:
-- **Local machine:** http://localhost:5001
-- **Home server:** http://YOUR_SERVER_IP:5001
+---
 
-If you enabled auth, log in with the username/password you set.
+## Configuration
 
-#### Useful Commands
+### LLM Providers
+
+| Provider | Model | Notes |
+|----------|-------|-------|
+| **Groq** | `groq/llama-3.3-70b-versatile` | Free tier, fast, recommended |
+| **xAI Grok** | `xai/grok-3` | Best quality (~$0.10/episode) |
+| **OpenAI** | `gpt-4o` | High quality |
+
+For xAI Grok:
+```bash
+LLM_API_KEY=xai-your-key
+LLM_MODEL=xai/grok-3
+OPENAI_BASE_URL=https://api.x.ai/v1
+```
+
+### Whisper (Transcription)
+
+| Mode | Config | Notes |
+|------|--------|-------|
+| **Groq** | `WHISPER_TYPE=groq` | Fast, cheap, recommended |
+| **Local** | `WHISPER_TYPE=local` | Free, requires RAM |
+
+### Ad Detection Presets
+
+| Preset | Description |
+|--------|-------------|
+| **Conservative** | Only obvious ads — sponsor reads, "brought to you by" |
+| **Balanced** | Default — typical ads while preserving content |
+| **Aggressive** | All promotional content including self-promotion |
+
+---
+
+## Updating
+
+```bash
+cd podly-unicorn
+git pull
+docker compose up -d --build
+```
+
+---
+
+## Common Commands
 
 ```bash
 # View logs
 docker logs -f podly-pure-podcasts
 
-# Restart after config changes
-docker compose down && docker compose up -d
+# Restart
+docker compose restart
 
-# Rebuild after code updates (e.g., git pull)
-docker compose up -d --build
-
-# Stop Podly
+# Stop
 docker compose down
-```
 
-#### Updating to Latest Version
-
-```bash
-cd ~/podly-unicorn
-git pull origin main
-docker compose up -d --build
-```
-
-#### Data Persistence
-
-Your data is stored in Docker volumes and persists across restarts:
-- **Database:** `src/instance/sqlite3.db` (feeds, episodes, users)
-- **Processed audio:** `processing_output/` directory
-
-To back up your data:
-```bash
+# Backup database
 docker cp podly-pure-podcasts:/app/src/instance/sqlite3.db ./backup.db
 ```
 
-#### Exposing to the Internet (Optional)
-
-To access Podly from outside your home network:
-1. **Port forward** port 5001 on your router to your server's IP
-2. Or use a reverse proxy like **Caddy** or **nginx** with HTTPS
-3. Or use a tunnel service like **Cloudflare Tunnel** or **Tailscale**
-
-> ⚠️ **Always enable authentication** (`REQUIRE_AUTH=true`) if exposing to the internet!
-
-📖 See our [detailed beginner's guide](docs/how_to_run_beginners.md) for more help.
-
 ---
 
-## ⚙️ Configuration
-
-### LLM Setup (Required)
-
-Podly uses [LiteLLM](https://docs.litellm.ai/) which supports 100+ LLM providers.
-
-#### Recommended Providers
-
-| Provider | Model | Cost | Quality | Setup |
-|----------|-------|------|---------|-------|
-| **Groq** | `groq/llama-3.3-70b-versatile` | Very cheap | Good | Free API key at [console.groq.com](https://console.groq.com/keys) |
-| **xAI Grok** | `xai/grok-3` | ~$0.10/episode | Excellent | API key from [x.ai](https://x.ai) |
-| **OpenAI** | `gpt-4o` | ~$0.10/episode | Excellent | API key from [platform.openai.com](https://platform.openai.com) |
-
-#### Quick Setup (Groq)
-
-1. Get a free API key at [console.groq.com](https://console.groq.com/keys)
-2. In Podly Settings → Quick Setup, paste your Groq API key
-3. Done! Podly auto-configures the recommended models
-
-#### Using xAI Grok (Recommended for Quality)
-
-For best ad detection quality, use xAI's Grok-3:
+## Development
 
 ```bash
-# In .env.local
-LLM_API_KEY=xai-your-api-key
-LLM_MODEL=xai/grok-3
-OPENAI_BASE_URL=https://api.x.ai/v1
-```
+# Frontend (hot reload)
+cd frontend && npm install && npm run dev
 
-#### Model Name Format
-
-| Model Format | Base URL | How it works |
-|--------------|----------|--------------|
-| `groq/llama-3.3-70b-versatile` | *(ignored)* | LiteLLM routes to Groq automatically |
-| `xai/grok-3` | `https://api.x.ai/v1` | LiteLLM routes to xAI |
-| `gpt-4o` | *(default)* | Uses OpenAI directly |
-
-> 💡 **Provider prefixes** (like `groq/`, `xai/`, `anthropic/`) tell LiteLLM where to route. The Base URL is only used for models without a prefix.
-
-### Whisper Setup (Transcription)
-
-| Mode | Description | Cost |
-|------|-------------|------|
-| **Groq** | Fast cloud transcription (recommended) | ~$0.04/hour |
-| **Local** | Runs on your machine | Free (requires RAM/GPU) |
-| **Remote** | OpenAI Whisper API | ~$0.006/min |
-
----
-
-## 🎯 Ad Detection Presets
-
-Podly includes 3 preset aggressiveness levels:
-
-| Preset | Confidence | Description |
-|--------|------------|-------------|
-| **Conservative** | 80% | Only obvious ads — sponsor reads, "brought to you by" |
-| **Balanced** | 70% | Default — typical ads while preserving content |
-| **Aggressive** | 55% | All promotional content including host-read ads, self-promotion |
-
-All presets are designed to flag **complete ad blocks**, not just the announcement. When an ad is detected, all consecutive segments within that ad are flagged for removal.
-
-You can also create custom presets with your own prompts in the Presets page.
-
----
-
-## 💰 Cost Breakdown
-
-*Estimated monthly cost for ~6 podcasts, 6 hours/week*
-
-| Setup | Hosting | Transcription | LLM | Total |
-|-------|---------|---------------|-----|-------|
-| **Preview Server** | Shared | Included | Included | ~$1/3hrs |
-| **Local + Groq** | Free | ~$1 | ~$1.50 | **~$2.50/mo** |
-| **Local + Local Whisper** | Free | Free | ~$1.50 | **~$1.50/mo** |
-| **Railway + Groq** | ~$5 | ~$1 | ~$1.50 | **~$7.50/mo** |
-
----
-
-## 🔐 Authentication (Optional)
-
-Enable multi-user support with protected RSS feeds:
-
-```bash
-export REQUIRE_AUTH=true
-export PODLY_ADMIN_USERNAME='admin'
-export PODLY_ADMIN_PASSWORD='your-secure-password'
-export PODLY_SECRET_KEY='64-character-random-string'
-```
-
-Protected feeds use per-feed access tokens so your podcast app can subscribe without exposing your password.
-
----
-
-## 🛠️ Development
-
-### Frontend Development (Hot Reload)
-
-```bash
-cd frontend
-npm install
-npm run dev  # Runs on http://localhost:5173
-```
-
-The Vite dev server proxies API calls to the backend on port 5001.
-
-### Backend Development
-
-```bash
-# With Docker (recommended)
-docker compose -f compose.dev.cpu.yml up --build
-
-# Or natively with pipenv
-pipenv install
-pipenv run flask --app ./src/main.py run
-```
-
-### Running Tests
-
-```bash
-pipenv run pytest src/tests/
+# Backend
+docker compose up --build
 ```
 
 ---
 
-## 📁 Project Structure
+## Credits
 
-```
-podly_pure_podcasts/
-├── frontend/          # React + TypeScript + Vite
-│   ├── src/
-│   │   ├── pages/     # Dashboard, Podcasts, Jobs, Presets, Settings
-│   │   ├── components/
-│   │   └── services/  # API client
-├── src/
-│   ├── app/           # Flask backend
-│   │   ├── routes/    # API endpoints
-│   │   └── models.py  # Database models
-│   ├── podcast_processor/  # Core processing logic
-│   └── migrations/    # Alembic database migrations
-└── docs/              # Documentation
-```
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! See our [contributing guide](docs/contributors.md).
-
-### Quick Links
-- [Discord Community](https://discord.gg/FRB98GtF6N) — Get help, share feedback
-- [Issue Tracker](https://github.com/jdrbc/podly_pure_podcasts/issues) — Report bugs, request features
-- [Prompt Presets Guide](docs/PROMPT_PRESETS_AND_STATISTICS.md) — Customize ad detection
-
----
-
-## 📄 License
-
-MIT License — see [LICENCE](LICENCE) for details.
-
----
-
-## 🙏 Credits
-
-Podly Unicorn is a fork of [**Podly Pure Podcasts**](https://github.com/jdrbc/podly_pure_podcasts) by [@jdrbc](https://github.com/jdrbc). Thanks to the original team for creating the core podcast processing engine!
+Fork of [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podcasts) by [@jdrbc](https://github.com/jdrbc).
 
 ---
 
 <div align="center">
-  <p>Made with 🦄</p>
   <p>
-    <a href="https://discord.gg/FRB98GtF6N">Discord</a> •
+    <a href="https://github.com/lukefind/podly-unicorn">GitHub</a> •
     <a href="https://github.com/lukefind/podly-unicorn/issues">Issues</a>
   </p>
 </div>
