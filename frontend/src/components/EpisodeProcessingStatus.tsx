@@ -29,51 +29,53 @@ export default function EpisodeProcessingStatus({
   onProcessingComplete,
 }: EpisodeProcessingStatusProps) {
   const [status, setStatus] = useState<ProcessingStatus | null>(null);
-  const [isPolling, setIsPolling] = useState(false);
 
   // Poll for status updates
   useEffect(() => {
     if (!isWhitelisted || hasProcessedAudio) {
       setStatus(null);
-      setIsPolling(false);
       return;
     }
 
+    let isMounted = true;
+    let shouldPoll = true;
+
     const checkStatus = async () => {
+      if (!shouldPoll) return;
+      
       try {
         const response = await feedsApi.getPostStatus(episodeGuid);
+        if (!isMounted) return;
+        
         setStatus(response);
 
         // Check if we should keep polling
-        if (response.status === 'running' || response.status === 'pending') {
-          setIsPolling(true);
-        } else if (response.status === 'completed' || response.status === 'skipped') {
-          setIsPolling(false);
+        if (response.status === 'completed' || response.status === 'skipped') {
+          shouldPoll = false;
           onProcessingComplete?.();
         } else if (response.status === 'failed' || response.status === 'error') {
-          setIsPolling(false);
+          shouldPoll = false;
         } else if (response.status === 'not_started') {
-          setIsPolling(false);
+          shouldPoll = false;
           setStatus(null);
         }
+        // Keep polling for 'running' or 'pending'
       } catch {
-        setIsPolling(false);
+        // Keep polling on error - might be temporary
       }
     };
 
     // Initial check
     checkStatus();
 
-    // Set up polling interval if processing
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (isPolling) {
-      interval = setInterval(checkStatus, 2000);
-    }
+    // Set up polling interval - always poll initially, then stop based on status
+    const interval = setInterval(checkStatus, 2000);
 
     return () => {
-      if (interval) clearInterval(interval);
+      isMounted = false;
+      clearInterval(interval);
     };
-  }, [episodeGuid, isWhitelisted, hasProcessedAudio, isPolling, onProcessingComplete]);
+  }, [episodeGuid, isWhitelisted, hasProcessedAudio, onProcessingComplete]);
 
   // Don't show anything if not processing
   if (!status || status.status === 'not_started' || status.status === 'completed' || status.status === 'skipped') {

@@ -19,8 +19,14 @@ Podly Unicorn automatically removes advertisements from podcasts using AI. Add y
 - 🎛️ **Adjustable Presets** — Conservative, Balanced, or Aggressive ad removal
 - 📊 **Statistics** — See exactly how much ad time was removed per episode
 - 👥 **Multi-User** — Per-user feed subscriptions with privacy controls
-- 🦄 **Beautiful UI** — Pastel unicorn theme with dark mode and mobile support
+- 🦄 **Beautiful UI** — Pastel unicorn theme with light/dark mode
+- 📱 **Mobile Optimized** — Fully responsive design for phones and tablets
 - 🔒 **Self-Hosted** — Your data stays on your server
+
+<div align="center">
+  <img src="docs/images/screenshot.png" alt="Podly Unicorn Dashboard" width="700" />
+  <p><em>Dashboard showing podcast statistics and ad removal progress</em></p>
+</div>
 
 ---
 
