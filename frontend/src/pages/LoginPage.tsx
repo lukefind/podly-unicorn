@@ -67,9 +67,9 @@ export default function LoginPage() {
         )}
       </button>
 
-      <div className="max-w-5xl mx-auto px-4 py-8 flex flex-col lg:flex-row gap-8 items-center lg:min-h-screen lg:justify-center">
+      <div className="max-w-5xl mx-auto px-4 py-8 flex flex-col lg:flex-row gap-8 lg:gap-12 items-start lg:min-h-screen lg:justify-center lg:items-center">
         {/* Left side - Features */}
-        <div className="flex-1 text-center lg:text-left">
+        <div className="flex-1 text-center lg:text-left flex flex-col justify-center">
           <div className="flex items-center justify-center lg:justify-start gap-3 mb-6">
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 rounded-full blur-lg opacity-40" />
@@ -79,61 +79,69 @@ export default function LoginPage() {
                 className="relative h-16 w-16 object-contain"
               />
             </div>
-            <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 bg-clip-text text-transparent">
+            <h1 className="text-3xl lg:text-4xl font-bold rainbow-text">
               Podly Unicorn
             </h1>
           </div>
           
-          <p className="text-lg lg:text-xl text-purple-700 dark:text-purple-300 mb-8 max-w-lg mx-auto lg:mx-0">
+          <p className="text-lg lg:text-xl text-purple-700 dark:text-purple-300 mb-8 max-w-md mx-auto lg:mx-0">
             Your personal podcast ad-removal system powered by AI. Enjoy your favorite shows without interruptions.
           </p>
 
-          {/* Feature cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto lg:mx-0">
-            <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl p-4 border border-purple-100 dark:border-purple-800 shadow-sm">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center mb-3">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {/* Feature list - compact */}
+          <div className="grid grid-cols-2 gap-3 max-w-md w-full mx-auto lg:mx-0">
+            <div className="flex items-start gap-3 bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl p-3 border border-purple-100 dark:border-purple-800 shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
               </div>
-              <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">AI-Powered Detection</h3>
-              <p className="text-sm text-purple-600 dark:text-purple-400">Advanced LLMs identify and remove ads with high accuracy</p>
+              <div>
+                <h3 className="font-semibold text-purple-900 dark:text-purple-100 text-sm">AI-Powered</h3>
+                <p className="text-xs text-purple-600 dark:text-purple-400">LLMs detect and remove ads</p>
+              </div>
             </div>
 
-            <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl p-4 border border-purple-100 dark:border-purple-800 shadow-sm">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center mb-3">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-start gap-3 bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl p-3 border border-purple-100 dark:border-purple-800 shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-6 0a1 1 0 11-2 0 1 1 0 012 0z" />
                 </svg>
               </div>
-              <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Custom RSS Feeds</h3>
-              <p className="text-sm text-purple-600 dark:text-purple-400">Subscribe in your favorite podcast app</p>
+              <div>
+                <h3 className="font-semibold text-purple-900 dark:text-purple-100 text-sm">RSS Feeds</h3>
+                <p className="text-xs text-purple-600 dark:text-purple-400">Use any podcast app</p>
+              </div>
             </div>
 
-            <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl p-4 border border-purple-100 dark:border-purple-800 shadow-sm">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center mb-3">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-start gap-3 bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl p-3 border border-purple-100 dark:border-purple-800 shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                 </svg>
               </div>
-              <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Adjustable Presets</h3>
-              <p className="text-sm text-purple-600 dark:text-purple-400">Conservative to aggressive ad removal options</p>
+              <div>
+                <h3 className="font-semibold text-purple-900 dark:text-purple-100 text-sm">Presets</h3>
+                <p className="text-xs text-purple-600 dark:text-purple-400">Conservative to aggressive</p>
+              </div>
             </div>
 
-            <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl p-4 border border-purple-100 dark:border-purple-800 shadow-sm">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center mb-3">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-start gap-3 bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl p-3 border border-purple-100 dark:border-purple-800 shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </div>
-              <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Detailed Statistics</h3>
-              <p className="text-sm text-purple-600 dark:text-purple-400">See exactly how much ad time was removed</p>
+              <div>
+                <h3 className="font-semibold text-purple-900 dark:text-purple-100 text-sm">Statistics</h3>
+                <p className="text-xs text-purple-600 dark:text-purple-400">Track ad time removed</p>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Right side - Login form */}
-        <div className="w-full max-w-md bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm shadow-xl rounded-2xl border border-purple-100 dark:border-purple-800 p-8">
+        <div className="w-full max-w-md bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm shadow-xl rounded-2xl border border-purple-100 dark:border-purple-800 p-8 lg:self-center">
           <div className="text-center mb-6">
             <h2 className="text-xl font-bold text-purple-900 dark:text-purple-100 mb-2">Welcome Back</h2>
             <p className="text-sm text-purple-600/70 dark:text-purple-300/70">Sign in to access your podcasts</p>
