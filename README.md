@@ -31,6 +31,18 @@ Podly Unicorn automatically removes advertisements from podcasts using AI. Add y
 
 ---
 
+## How It Works
+
+1. **Add a podcast** — Paste an RSS feed URL or search the built-in podcast catalog
+2. **Transcribe** — Podly uses Whisper (via Groq or local) to transcribe each episode
+3. **Detect ads** — An LLM analyzes the transcript to identify ad segments with timestamps
+4. **Remove ads** — FFmpeg silently cuts the detected segments from the audio
+5. **Subscribe** — Get a new RSS feed URL to use in your favorite podcast app
+
+Processing happens on-demand when you click "Process" or when your podcast app requests an episode.
+
+---
+
 ## Quick Start (Docker)
 
 ### Prerequisites
