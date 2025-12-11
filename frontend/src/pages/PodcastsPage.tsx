@@ -140,7 +140,7 @@ export default function PodcastsPage() {
   }
 
   return (
-    <div className="h-full flex flex-col lg:flex-row gap-4 lg:gap-6">
+    <div className="min-h-full lg:h-full flex flex-col lg:flex-row gap-4 lg:gap-6">
       {/* Left Panel - Feed List - hidden on mobile when feed selected */}
       <div className={`lg:w-80 flex-shrink-0 flex-col ${selectedFeed ? 'hidden lg:flex' : 'flex w-full'}`}>
         <div className="flex items-center justify-between mb-4">
@@ -268,7 +268,7 @@ export default function PodcastsPage() {
 
       {/* Right Panel - Feed Detail - full width on mobile */}
       {selectedFeed ? (
-        <div className="flex-1 w-full flex flex-col bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden">
+        <div className="flex-1 w-full flex flex-col bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden lg:max-h-full max-h-[calc(100vh-8rem)]">
           {/* Feed Header */}
           <div className="p-6 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50">
             <div className="flex items-start gap-4">
