@@ -49,7 +49,7 @@ export default function SubscriptionsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Feed Subscriptions</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-purple-100">Feed Subscriptions</h1>
           <p className="text-sm text-gray-500 mt-1">
             Overview of all podcast feeds and their subscribers
           </p>
@@ -90,21 +90,21 @@ export default function SubscriptionsPage() {
 
                 {/* Feed Info */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 text-lg">{feed.title}</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-purple-100 text-lg">{feed.title}</h3>
                   {feed.author && (
                     <p className="text-sm text-gray-500">{feed.author}</p>
                   )}
                   
                   {/* Stats Row */}
                   <div className="flex items-center gap-4 mt-2 text-sm">
-                    <span className="text-gray-600">
+                    <span className="text-gray-600 dark:text-purple-300">
                       <span className="font-medium">{feed.posts_count}</span> episodes
                     </span>
-                    <span className="text-green-600">
+                    <span className="text-green-600 dark:text-green-400">
                       <span className="font-medium">{feed.stats.processed_count}</span> processed
                     </span>
                     {feed.stats.total_ad_time_removed > 0 && (
-                      <span className="text-pink-600">
+                      <span className="text-pink-600 dark:text-pink-400">
                         <span className="font-medium">{formatDuration(feed.stats.total_ad_time_removed)}</span> ads removed
                       </span>
                     )}

@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom input class for forms */
+.input {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900;
+  @apply focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent;
+  @apply placeholder-gray-400;
+}
+
+html.dark .input {
+  @apply bg-slate-800 border-purple-700 text-purple-100;
+  @apply placeholder-purple-400;
+}
+
+/* Fix select dropdown arrows in dark mode */
+html.dark select.input {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23a78bfa' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
 /* Pastel Unicorn Theme - Light Mode */
 :root {
   --unicorn-pink: #f9b3d1;

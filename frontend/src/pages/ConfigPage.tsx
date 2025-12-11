@@ -951,7 +951,7 @@ export default function ConfigPage() {
           <div className="space-y-4">
             <form className="grid gap-3 md:grid-cols-2" onSubmit={handleCreateUser}>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-purple-200 mb-1">Username</label>
                 <input
                   className="input"
                   type="text"
@@ -962,7 +962,7 @@ export default function ConfigPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-purple-200 mb-1">Password</label>
                 <input
                   className="input"
                   type="password"
@@ -972,7 +972,7 @@ export default function ConfigPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm password</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-purple-200 mb-1">Confirm password</label>
                 <input
                   className="input"
                   type="password"
@@ -982,7 +982,7 @@ export default function ConfigPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-purple-200 mb-1">Role</label>
                 <select
                   className="input"
                   value={newUser.role}
@@ -1003,9 +1003,9 @@ export default function ConfigPage() {
             </form>
 
             <div className="space-y-3">
-              {usersLoading && <div className="text-sm text-gray-600">Loading users…</div>}
+              {usersLoading && <div className="text-sm text-gray-600 dark:text-purple-300">Loading users…</div>}
               {!usersLoading && (!managedUsers || managedUsers.length === 0) && (
-                <div className="text-sm text-gray-600">No additional users configured.</div>
+                <div className="text-sm text-gray-600 dark:text-purple-300">No additional users configured.</div>
               )}
               {!usersLoading && managedUsers && managedUsers.length > 0 && (
                 <div className="space-y-3">
@@ -1016,11 +1016,11 @@ export default function ConfigPage() {
                     const isActive = activeResetUser === managed.username;
 
                     return (
-                      <div key={managed.id} className="border border-gray-200 rounded-lg p-3 space-y-3 bg-white">
+                      <div key={managed.id} className="border border-gray-200 dark:border-purple-700 rounded-lg p-3 space-y-3 bg-white dark:bg-slate-800/60">
                         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                           <div>
-                            <div className="text-sm font-semibold text-gray-900">{managed.username}</div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-sm font-semibold text-gray-900 dark:text-purple-100">{managed.username}</div>
+                            <div className="text-xs text-gray-500 dark:text-purple-400">
                               Added {new Date(managed.created_at).toLocaleString()} • Role {managed.role}
                             </div>
                           </div>
@@ -1041,7 +1041,7 @@ export default function ConfigPage() {
                             </select>
                             <button
                               type="button"
-                              className="px-3 py-1 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+                              className="px-3 py-1 border border-gray-300 dark:border-purple-600 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-purple-800 dark:text-purple-200"
                               onClick={() => {
                                 if (isActive) {
                                   setActiveResetUser(null);
@@ -1070,7 +1070,7 @@ export default function ConfigPage() {
                         {isActive && (
                           <form className="grid gap-2 md:grid-cols-3" onSubmit={handleResetPassword}>
                             <div className="md:col-span-1">
-                              <label className="block text-xs font-medium text-gray-600 mb-1">New password</label>
+                              <label className="block text-xs font-medium text-gray-600 dark:text-purple-300 mb-1">New password</label>
                               <input
                                 className="input"
                                 type="password"
@@ -1080,7 +1080,7 @@ export default function ConfigPage() {
                               />
                             </div>
                             <div className="md:col-span-1">
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Confirm password</label>
+                              <label className="block text-xs font-medium text-gray-600 dark:text-purple-300 mb-1">Confirm password</label>
                               <input
                                 className="input"
                                 type="password"
@@ -1096,7 +1096,7 @@ export default function ConfigPage() {
                               >
                                 Update
                               </button>
-                              <p className="text-xs text-gray-500">Share new credentials securely.</p>
+                              <p className="text-xs text-gray-500 dark:text-purple-400">Share new credentials securely.</p>
                             </div>
                           </form>
                         )}
@@ -1121,7 +1121,7 @@ export default function ConfigPage() {
       <div className="space-y-6">
         <div className="border-t border-purple-200 pt-6">
           <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Advanced Settings</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-purple-100">Advanced Settings</h2>
             <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-medium">Changes below require clicking "Save Changes" to apply</span>
           </div>
         </div>

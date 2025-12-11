@@ -67,10 +67,10 @@ export default function LoginPage() {
         )}
       </button>
 
-      <div className="max-w-5xl mx-auto px-4 py-8 flex flex-col lg:flex-row gap-8 lg:gap-12 items-start lg:min-h-screen lg:justify-center lg:items-center">
+      <div className="max-w-5xl mx-auto px-4 py-8 flex flex-col md:flex-row gap-8 md:gap-12 items-start md:min-h-screen md:justify-center md:items-center">
         {/* Left side - Features */}
-        <div className="flex-1 text-center lg:text-left flex flex-col justify-center">
-          <div className="flex items-center justify-center lg:justify-start gap-3 mb-6">
+        <div className="flex-1 text-center md:text-left flex flex-col justify-center">
+          <div className="flex items-center justify-center md:justify-start gap-3 mb-6">
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 rounded-full blur-lg opacity-40" />
               <img 
@@ -79,17 +79,17 @@ export default function LoginPage() {
                 className="relative h-16 w-16 object-contain"
               />
             </div>
-            <h1 className="text-3xl lg:text-4xl font-bold rainbow-text">
+            <h1 className="text-3xl md:text-4xl font-bold rainbow-text">
               Podly Unicorn
             </h1>
           </div>
           
-          <p className="text-lg lg:text-xl text-purple-700 dark:text-purple-300 mb-8 max-w-md mx-auto lg:mx-0">
+          <p className="text-lg md:text-xl text-purple-700 dark:text-purple-300 mb-8 max-w-md mx-auto md:mx-0">
             Your personal podcast ad-removal system powered by AI. Enjoy your favorite shows without interruptions.
           </p>
 
           {/* Feature list - compact */}
-          <div className="grid grid-cols-2 gap-3 max-w-md w-full mx-auto lg:mx-0">
+          <div className="grid grid-cols-2 gap-3 max-w-md w-full mx-auto md:mx-0">
             <div className="flex items-start gap-3 bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl p-3 border border-purple-100 dark:border-purple-800 shadow-sm">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center flex-shrink-0">
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -141,7 +141,7 @@ export default function LoginPage() {
         </div>
 
         {/* Right side - Login form */}
-        <div className="w-full max-w-md bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm shadow-xl rounded-2xl border border-purple-100 dark:border-purple-800 p-8 lg:self-center">
+        <div className="w-full max-w-md bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm shadow-xl rounded-2xl border border-purple-100 dark:border-purple-800 p-8 md:self-center">
           <div className="text-center mb-6">
             <h2 className="text-xl font-bold text-purple-900 dark:text-purple-100 mb-2">Welcome Back</h2>
             <p className="text-sm text-purple-600/70 dark:text-purple-300/70">Sign in to access your podcasts</p>
