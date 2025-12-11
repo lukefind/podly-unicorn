@@ -18,17 +18,52 @@ Podly Unicorn is a fork of Podly - a podcast ad-removal system. It uses Whisper 
 
 ### Migrations (Alembic / Flask‑Migrate)
 
+**CRITICAL: Every model change MUST have a corresponding migration file.**
+
+When adding or modifying models in `src/app/models.py`:
+1. **ALWAYS create a migration file** in `src/migrations/versions/` immediately after changing models
+2. Check existing migrations to find the latest `revision` ID to use as `down_revision`
+3. Use descriptive revision IDs (e.g., `f3a4b5c6d7e8_add_user_feed_subscription.py`)
+
 The assistant may generate or modify Alembic/Flask‑Migrate migrations, but must:
+- **Create a migration file for EVERY new table, column, or index added to models.py**
 - Clearly announce when a schema change requires a migration.
 - Keep migrations minimal and focused on the actual model changes made in this PR.
 - Never drop or rename tables/columns that contain production data unless explicitly requested and the intent is documented.
 - Prefer additive changes (new tables/columns/indexes) over destructive ones.
 
 After editing models, the assistant should:
-- Either provide the exact `flask db migrate` / `flask db upgrade` commands for the user to run,
-- Or, if asked to generate migrations, ensure they are idempotent, reversible, and match the updated models.
+- **Immediately create the migration file** - do not wait for the user to ask
+- Ensure migrations are idempotent, reversible, and match the updated models
+- Test that the migration applies cleanly
 
 The assistant must not fabricate migrations for schemas it hasn't actually inspected; it should always base migration content on the current `app/models.py` and existing migration history.
+
+### Migration File Template
+
+```python
+"""Description of change
+
+Revision ID: <unique_id>
+Revises: <previous_revision_id>
+Create Date: <date>
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = '<unique_id>'
+down_revision = '<previous_revision_id>'
+branch_labels = None
+depends_on = None
+
+def upgrade():
+    # Create table / add column / create index
+    pass
+
+def downgrade():
+    # Reverse the upgrade
+    pass
+```
 
 ---
 

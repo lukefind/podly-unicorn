@@ -71,7 +71,12 @@ def api_feed_posts(feed_id: int) -> flask.Response:
     """Returns a JSON list of posts for a specific feed."""
     from app.models import Feed  # local import to avoid circular in other modules
 
+    # Verify feed exists
     feed = Feed.query.get_or_404(feed_id)
+    
+    # Use optimized direct query with only needed columns
+    posts_query = Post.query.filter_by(feed_id=feed_id).order_by(Post.release_date.desc())
+    
     posts = [
         {
             "id": post.id,
@@ -89,7 +94,7 @@ def api_feed_posts(feed_id: int) -> flask.Response:
             "image_url": post.image_url,
             "download_count": post.download_count,
         }
-        for post in feed.posts
+        for post in posts_query
     ]
     return flask.jsonify(posts)
 
