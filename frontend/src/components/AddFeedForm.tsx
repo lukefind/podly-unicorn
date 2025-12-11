@@ -5,13 +5,14 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface AddFeedFormProps {
   onSuccess: () => void;
+  subscribedFeedUrls?: string[];
 }
 
 type AddMode = 'url' | 'search';
 
 const PAGE_SIZE = 10;
 
-export default function AddFeedForm({ onSuccess }: AddFeedFormProps) {
+export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddFeedFormProps) {
   const [url, setUrl] = useState('');
   const [activeMode, setActiveMode] = useState<AddMode>('search');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -19,6 +20,11 @@ export default function AddFeedForm({ onSuccess }: AddFeedFormProps) {
   const [addingFeedUrl, setAddingFeedUrl] = useState<string | null>(null);
   const [addingPrivately, setAddingPrivately] = useState(false);
   const { requireAuth } = useAuth();
+
+  // Normalize URLs for comparison (remove trailing slashes, lowercase)
+  const normalizeUrl = (url: string) => url.toLowerCase().replace(/\/+$/, '');
+  const subscribedUrlsSet = new Set(subscribedFeedUrls.map(normalizeUrl));
+  const isSubscribed = (feedUrl: string) => subscribedUrlsSet.has(normalizeUrl(feedUrl));
 
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<PodcastSearchResult[]>([]);
@@ -284,7 +290,14 @@ export default function AddFeedForm({ onSuccess }: AddFeedFormProps) {
                       <p className="text-xs text-gray-500 break-all mt-2">{result.feedUrl}</p>
                     </div>
                     <div className="flex items-center gap-1">
-                      {requireAuth ? (
+                      {isSubscribed(result.feedUrl) ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-100 text-green-700 rounded-md text-sm font-medium">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Subscribed
+                        </span>
+                      ) : requireAuth ? (
                         <>
                           <button
                             type="button"

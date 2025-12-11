@@ -1,7 +1,5 @@
 <div align="center">
-  <img src="frontend/public/images/logos/unicorn-logo.png" alt="Podly Unicorn" width="120" />
-  <h1>Podly Unicorn</h1>
-  <p><strong>AI-powered podcast ad removal with a beautiful pastel theme</strong></p>
+  <img src="frontend/public/images/social-card1200x630.png" alt="Podly Unicorn" width="600" />
   
   <p>
     <a href="https://github.com/lukefind/podly-unicorn"><img src="https://img.shields.io/badge/GitHub-podly--unicorn-purple?logo=github" alt="GitHub"></a>

@@ -635,6 +635,7 @@ export default function PodcastsPage() {
                   setShowAddForm(false);
                   refetchFeeds();
                 }}
+                subscribedFeedUrls={feedsArray.map((f: Feed) => f.rss_url)}
               />
             </div>
           </div>

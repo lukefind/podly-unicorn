@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import HelpModal from '../HelpModal';
 
 interface NavItem {
   path: string;
@@ -81,6 +83,7 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
   const location = useLocation();
   const { requireAuth, user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -147,8 +150,20 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
         ))}
       </nav>
 
-      {/* Theme toggle */}
-      <div className="px-4 py-2 border-t border-purple-800/30">
+      {/* Help & Theme toggle */}
+      <div className="px-4 py-2 border-t border-purple-800/30 space-y-1">
+        <button
+          onClick={() => setHelpOpen(true)}
+          className={`w-full flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg hover:bg-purple-800/30 text-purple-200 hover:text-white transition-colors`}
+          title="How to use Podly"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {(!collapsed || isMobile) && (
+            <span className="text-sm font-medium">Help</span>
+          )}
+        </button>
         <button
           onClick={toggleTheme}
           className={`w-full flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg hover:bg-purple-800/30 text-purple-200 hover:text-white transition-colors`}
@@ -170,6 +185,9 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
           )}
         </button>
       </div>
+
+      {/* Help Modal */}
+      <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
 
       {/* User section */}
       {requireAuth && user && (
