@@ -1,8 +1,84 @@
-# Podly Unicorn - Initial Release Changelog
+# Podly Unicorn - Changelog
 
-**Fork of:** [jdrbc/podly_pure_podcasts](https://github.com/jdrbc/podly_pure_podcasts)  
-**Date:** December 10, 2024  
-**Version:** 1.0.0-unicorn
+**Fork of:** [jdrbc/podly_pure_podcasts](https://github.com/jdrbc/podly_pure_podcasts)
+
+---
+
+## [1.1.0] - December 11, 2024
+
+### ✨ New Features
+
+#### Feed Subscription System
+- **Per-user feed filtering** - Users only see feeds they've subscribed to on the Podcasts page
+- **"Browse Podcasts on Server"** button - Users can discover and subscribe to feeds added by others
+- **Private subscriptions** - Users can subscribe privately so their subscription isn't visible to other users
+- **Admin Subscriptions page** (`/subscriptions`) - Admins can view all feeds with subscriber lists and usage stats
+- **Inline subscription controls** - Each feed shows Public/Private toggle and Unsubscribe button
+
+#### Privacy Controls
+- **Public vs Private subscriptions** - Split subscribe button with eye icon for private option
+- **Feed visibility rules** - Feeds only appear in browse if at least one user has a public subscription
+- **Private indicator** - Admin page shows private subscriptions with eye-slash icon (grayed out)
+
+#### Improved Delete Behavior
+- **Smart deletion** - Clicking delete unsubscribes the user; feed is only fully deleted if no other subscribers remain
+- **Safe for shared feeds** - Users can't accidentally delete feeds others are using
+
+#### On-Demand Processing
+- **Episodes enabled but not auto-processed** - Enabling an episode marks it as eligible, but doesn't start processing
+- **Process button** - New purple "Process" button for enabled episodes that haven't been processed yet
+- **Reprocess button** - Orange "Reprocess" button only shows for already-processed episodes
+- **Processing triggered by**: Manual "Process" click or podcast app RSS request
+
+#### Improved Episode Status UI
+- **Enabled** (blue) - Episode is eligible for processing
+- **Disabled** (gray dashed) - Episode is skipped entirely
+- **Ready** (green) - Episode has been processed and is ready to play
+- **"How processing works"** help modal - Explains the workflow in detail
+
+### 🔧 Technical Changes
+
+#### New Database Model
+- `UserFeedSubscription` table with fields: `user_id`, `feed_id`, `subscribed_at`, `is_private`
+
+#### New API Endpoints
+- `POST /api/feeds/<id>/subscribe` - Subscribe to a feed (with optional `private` flag)
+- `POST /api/feeds/<id>/unsubscribe` - Unsubscribe from a feed
+- `GET /api/feeds/all` - Get all discoverable feeds for subscription modal
+- `GET /api/admin/feed-subscriptions` - Admin endpoint for subscription overview
+
+#### Processing Changes
+- Removed auto-job creation when enabling episodes
+- Jobs only created on-demand via UI or RSS request
+- Default cleanup retention changed from 5 to 14 days
+
+#### Performance Optimizations
+- Optimized `/feeds` endpoint with efficient `COUNT()` query instead of lazy loading
+- Fixed N+1 query issue that was causing slow page loads
+
+### 📁 Files Changed
+
+| File | Changes |
+|------|---------|
+| `src/app/models.py` | Added `UserFeedSubscription` model |
+| `src/app/routes/feed_routes.py` | Added subscription endpoints, optimized queries, smart delete logic |
+| `src/app/feeds.py` | Removed auto-job creation on feed add/refresh |
+| `src/app/jobs_manager.py` | Disabled auto-job creation for whitelisted posts |
+| `src/shared/defaults.py` | Changed cleanup retention to 14 days |
+| `frontend/src/pages/PodcastsPage.tsx` | Subscription controls, Process button, help modal |
+| `frontend/src/pages/SubscriptionsPage.tsx` | New admin subscriptions page |
+| `frontend/src/components/ProcessButton.tsx` | New component for processing unprocessed episodes |
+| `frontend/src/services/api.ts` | Added subscription API methods |
+| `AGENTS.md` | Added Feed Subscriptions documentation |
+
+### 🐛 Bug Fixes
+- Fixed feed delete failing due to SQLAlchemy cascade issues (now uses raw SQL)
+- Fixed slow Podcasts page load due to N+1 query on posts count
+- Fixed episodes not showing correct status when subscribing to existing feeds
+
+---
+
+## [1.0.0-unicorn] - December 10, 2024
 
 ---
 

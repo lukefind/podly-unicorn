@@ -168,9 +168,22 @@ The `api_key` and `api_base` are passed explicitly in completion calls to suppor
 
 ## Processing Flow
 
-**On-Demand**: Episodes are NOT auto-processed when enabled. Processing triggers:
-1. Podcast app requests episode from Podly RSS feed
-2. User clicks "Process" in web UI
+**On-Demand**: Episodes are NOT auto-processed when enabled. Processing only triggers when:
+1. User clicks "Process" button in web UI
+2. Podcast app requests episode from Podly RSS feed
+
+### Episode States
+- **Enabled** (blue badge) - Eligible for processing, but not yet processed
+- **Disabled** (gray dashed badge) - Skipped entirely, won't appear in RSS feed
+- **Ready** (green badge) - Processed and ready to play/download
+
+### Buttons
+- **Enable/Disable** - Toggle whether episode is eligible for processing
+- **Process** (purple) - Start processing an enabled episode that hasn't been processed
+- **Reprocess** (orange) - Re-process an already-processed episode (clears existing data)
+
+### Auto-Cleanup
+Processed files are automatically deleted after 14 days (configurable in Settings → App Settings).
 
 ---
 
@@ -220,3 +233,42 @@ The running app locks the database. To run scripts:
 
 ### RSS Feed Authentication
 When auth is enabled, RSS feeds require tokens. The "Subscribe to Podly RSS" button automatically generates a tokenized URL that podcast apps can use without login.
+
+---
+
+## Feed Subscriptions
+
+### Overview
+Users subscribe to feeds to see them in their Podcasts page. This provides per-user feed filtering and privacy controls.
+
+### Database Model
+`UserFeedSubscription` table tracks subscriptions with fields:
+- `user_id` - The subscribing user
+- `feed_id` - The feed being subscribed to
+- `subscribed_at` - Timestamp
+- `is_private` - Boolean, hides subscription from other users
+
+### Subscription Types
+- **Public subscription**: Visible to other users in "Browse Podcasts on Server"
+- **Private subscription**: Hidden from other users, but visible to admin for usage tracking
+
+### Feed Visibility Rules
+A feed appears in "Browse Podcasts on Server" if:
+1. User is already subscribed (public or private), OR
+2. At least one other user has a PUBLIC subscription
+
+Feeds with only private subscribers are hidden from non-subscribers.
+
+### Admin Subscriptions Page
+Admins can view all subscriptions at `/subscriptions`:
+- Shows all feeds with subscriber counts
+- Lists all subscribers (including private ones, marked with eye icon)
+- Displays processing stats per feed
+
+### Delete Behavior
+When a user clicks "Delete" on a feed:
+- **If other subscribers exist**: Just unsubscribes the user
+- **If user is last subscriber**: Fully deletes the feed and all data
+
+### Auto-Subscribe
+When a user adds a new feed, they are automatically subscribed to it.

@@ -92,18 +92,22 @@ function UserStatCard({ user }: { user: UserStats }) {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-lg p-3 text-center">
-          <div className="text-2xl font-bold text-pink-600">{user.episodes_processed}</div>
+      <div className="grid grid-cols-4 gap-2 mb-4">
+        <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-lg p-2 text-center">
+          <div className="text-xl font-bold text-pink-600">{user.episodes_processed}</div>
           <div className="text-xs text-pink-500">Processed</div>
         </div>
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 text-center">
-          <div className="text-2xl font-bold text-purple-600">{user.processed_downloads}</div>
+        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-2 text-center">
+          <div className="text-xl font-bold text-purple-600">{user.processed_downloads}</div>
           <div className="text-xs text-purple-500">Downloads</div>
         </div>
-        <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg p-3 text-center">
-          <div className="text-lg font-bold text-cyan-600">{user.ad_time_removed_formatted || '0s'}</div>
+        <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg p-2 text-center">
+          <div className="text-sm font-bold text-cyan-600">{user.ad_time_removed_formatted || '0s'}</div>
           <div className="text-xs text-cyan-500">Ads Removed</div>
+        </div>
+        <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-2 text-center">
+          <div className="text-xl font-bold text-indigo-600">{user.subscriptions_count ?? 0}</div>
+          <div className="text-xs text-indigo-500">Subscribed</div>
         </div>
       </div>
 

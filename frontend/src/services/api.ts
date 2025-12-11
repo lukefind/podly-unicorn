@@ -43,10 +43,13 @@ export const feedsApi = {
     return response.data;
   },
 
-  addFeed: async (url: string): Promise<void> => {
+  addFeed: async (url: string): Promise<{ status: string; feed_id: number; title: string }> => {
     const formData = new FormData();
     formData.append('url', url);
-    await api.post('/feed', formData);
+    const response = await api.post('/feed', formData, {
+      headers: { 'Accept': 'application/json' },
+    });
+    return response.data;
   },
 
   deleteFeed: async (feedId: number): Promise<void> => {
@@ -97,6 +100,50 @@ export const feedsApi = {
     const response = await api.get('/api/feeds/search', {
       params: { term },
     });
+    return response.data;
+  },
+
+  // Feed subscription methods
+  getAllFeeds: async (): Promise<(Feed & { is_subscribed: boolean })[]> => {
+    const response = await api.get('/api/feeds/all');
+    return response.data;
+  },
+
+  subscribeFeed: async (feedId: number, isPrivate: boolean = false): Promise<{ message: string; subscribed: boolean; is_private: boolean }> => {
+    const response = await api.post(`/api/feeds/${feedId}/subscribe`, { private: isPrivate });
+    return response.data;
+  },
+
+  unsubscribeFeed: async (feedId: number): Promise<{ message: string; subscribed: boolean }> => {
+    const response = await api.post(`/api/feeds/${feedId}/unsubscribe`);
+    return response.data;
+  },
+
+  // Admin feed subscriptions overview
+  getAdminFeedSubscriptions: async (): Promise<{
+    feeds: Array<{
+      id: number;
+      title: string;
+      rss_url: string;
+      description: string | null;
+      author: string | null;
+      image_url: string | null;
+      posts_count: number;
+      subscribers: Array<{
+        user_id: number;
+        username: string;
+        subscribed_at: string | null;
+      }>;
+      subscriber_count: number;
+      stats: {
+        processed_count: number;
+        total_ad_time_removed: number;
+      };
+    }>;
+    total_feeds: number;
+    total_subscriptions: number;
+  }> => {
+    const response = await api.get('/api/admin/feed-subscriptions');
     return response.data;
   },
 
@@ -429,6 +476,7 @@ export interface UserStats {
   ad_time_removed_formatted: string;
   total_downloads: number;
   processed_downloads: number;
+  subscriptions_count: number;
   last_activity: string | null;
   recent_downloads: Array<{
     post_id: number;

@@ -12,6 +12,7 @@ import JobsPage from './pages/JobsPage';
 import PresetsPage from './pages/PresetsPage';
 import ConfigPage from './pages/ConfigPage';
 import LoginPage from './pages/LoginPage';
+import SubscriptionsPage from './pages/SubscriptionsPage';
 import AudioPlayer from './components/AudioPlayer';
 import './App.css';
 
@@ -63,6 +64,7 @@ function AppShell() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/podcasts" element={<PodcastsPage />} />
             <Route path="/jobs" element={<JobsPage />} />
+            {showSettingsRoute && <Route path="/subscriptions" element={<SubscriptionsPage />} />}
             {showSettingsRoute && <Route path="/presets" element={<PresetsPage />} />}
             {showSettingsRoute && <Route path="/settings" element={<ConfigPage />} />}
             <Route path="*" element={<Navigate to="/" replace />} />

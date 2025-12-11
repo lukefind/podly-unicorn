@@ -258,6 +258,33 @@ def _register_routes_and_middleware(app: Flask) -> None:
     from app import models  # pylint: disable=import-outside-toplevel, unused-import
 
 
+def _init_prompt_presets() -> None:
+    """Initialize default prompt presets if they don't exist."""
+    try:
+        from app.models import PromptPreset  # pylint: disable=import-outside-toplevel
+        from prompt_presets import PRESET_DEFINITIONS  # pylint: disable=import-outside-toplevel
+        
+        for preset_def in PRESET_DEFINITIONS:
+            existing = PromptPreset.query.filter_by(name=preset_def["name"]).first()
+            if not existing:
+                logger.info(f"Creating prompt preset: {preset_def['name']}")
+                preset = PromptPreset(
+                    name=preset_def["name"],
+                    description=preset_def["description"],
+                    aggressiveness=preset_def["aggressiveness"],
+                    system_prompt=preset_def["system_prompt"],
+                    user_prompt_template=preset_def["user_prompt_template"],
+                    min_confidence=preset_def["min_confidence"],
+                    is_active=preset_def["is_default"],
+                    is_default=preset_def["is_default"],
+                )
+                db.session.add(preset)
+        db.session.commit()
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error(f"Failed to initialize prompt presets: {exc}")
+        db.session.rollback()
+
+
 def _run_app_startup(auth_settings: AuthSettings) -> None:
     # Try Flask-Migrate upgrade first, fall back to db.create_all() if it fails
     try:
@@ -267,6 +294,9 @@ def _run_app_startup(auth_settings: AuthSettings) -> None:
         from app.extensions import db  # pylint: disable=import-outside-toplevel
         db.create_all()
         logger.info("Database tables created via db.create_all()")
+    
+    # Initialize default prompt presets
+    _init_prompt_presets()
     
     bootstrap_admin_user(auth_settings)
     try:

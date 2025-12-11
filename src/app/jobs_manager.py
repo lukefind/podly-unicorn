@@ -125,21 +125,13 @@ class JobsManager:
         return response
 
     def _ensure_jobs_for_all_posts(self, run_id: Optional[str]) -> int:
-        """Ensure every post has an associated ProcessingJob record."""
-        posts_without_jobs = (
-            Post.query.outerjoin(ProcessingJob, ProcessingJob.post_guid == Post.guid)
-            .filter(ProcessingJob.id.is_(None))
-            .all()
-        )
-
-        created = 0
-        for post in posts_without_jobs:
-            if post.whitelisted:
-                SingleJobManager(
-                    post.guid, self._status_manager, logger, run_id
-                ).ensure_job()
-                created += 1
-        return created
+        """
+        Previously auto-created jobs for all whitelisted posts.
+        Now returns 0 - jobs are only created on-demand via UI or RSS request.
+        This ensures episodes are enabled but not auto-processed.
+        """
+        # Don't auto-create jobs - processing is triggered on-demand only
+        return 0
 
     def get_post_status(self, post_guid: str) -> Dict[str, Any]:
         with scheduler.app.app_context():

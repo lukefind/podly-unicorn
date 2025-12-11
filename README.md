@@ -24,7 +24,8 @@ Podly Unicorn automatically removes advertisements from podcasts using AI. It cr
 - 🎨 Improved UI/UX with glass-morphism cards and rainbow effects
 - 📋 Better job history management with clear history button
 - ⚙️ Streamlined settings page layout
-- 👥 Multi-user support with per-user usage statistics
+- 👥 Multi-user support with per-user feed subscriptions and usage statistics
+- 🔒 Private subscriptions - subscribe to feeds without others seeing
 - 🔐 Themed login page with custom unicorn branding
 - 📖 Updated documentation
 

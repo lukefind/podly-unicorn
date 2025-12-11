@@ -176,6 +176,28 @@ class UserDownload(db.Model):  # type: ignore[name-defined, misc]
         return f"<UserDownload user={self.user_id} post={self.post_id} at={self.downloaded_at}>"
 
 
+class UserFeedSubscription(db.Model):  # type: ignore[name-defined, misc]
+    """Tracks which feeds each user has subscribed to for privacy filtering."""
+    __tablename__ = "user_feed_subscription"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    feed_id = db.Column(db.Integer, db.ForeignKey("feed.id"), nullable=False, index=True)
+    subscribed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    is_private = db.Column(db.Boolean, default=False, nullable=False)  # Hide from admin subscription list
+
+    # Relationships - cascade delete when user or feed is deleted
+    user = db.relationship("User", backref=db.backref("feed_subscriptions", lazy="dynamic", cascade="all, delete-orphan"))
+    feed = db.relationship("Feed", backref=db.backref("subscribers", lazy="dynamic", cascade="all, delete-orphan"))
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "feed_id", name="uq_user_feed_subscription"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<UserFeedSubscription user={self.user_id} feed={self.feed_id}>"
+
+
 class ModelCall(db.Model):  # type: ignore[name-defined, misc]
     __tablename__ = "model_call"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)

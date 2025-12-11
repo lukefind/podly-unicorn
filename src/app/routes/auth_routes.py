@@ -322,20 +322,21 @@ def admin_user_stats() -> RouteResult:
             ).count()
         )
 
-        # Total ad time removed from jobs triggered by this user
-        ad_time_removed = 0.0
-        triggered_jobs = ProcessingJob.query.filter_by(
-            triggered_by_user_id=u.id, status="completed"
-        ).all()
-        for job in triggered_jobs:
-            post = Post.query.filter_by(guid=job.post_guid).first()
-            if post and post.statistics:
-                ad_time_removed += post.statistics.total_duration_removed_seconds
-
         # Downloads by this user
         downloads = UserDownload.query.filter_by(user_id=u.id).all()
         total_downloads = len(downloads)
         processed_downloads = len([d for d in downloads if d.is_processed])
+
+        # Total ad time removed from processed downloads by this user
+        # This counts ad time saved for episodes the user actually downloaded
+        ad_time_removed = 0.0
+        seen_post_ids = set()
+        for download in downloads:
+            if download.is_processed and download.post_id not in seen_post_ids:
+                seen_post_ids.add(download.post_id)
+                post = download.post
+                if post and post.statistics:
+                    ad_time_removed += post.statistics.total_duration_removed_seconds
 
         # Last activity (most recent download or job)
         last_download = (
@@ -366,6 +367,10 @@ def admin_user_stats() -> RouteResult:
             .all()
         )
 
+        # Feed subscriptions count
+        from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
+        subscriptions_count = UserFeedSubscription.query.filter_by(user_id=u.id).count()
+
         user_stats.append({
             "id": u.id,
             "username": u.username,
@@ -376,6 +381,7 @@ def admin_user_stats() -> RouteResult:
             "ad_time_removed_formatted": _format_duration(ad_time_removed),
             "total_downloads": total_downloads,
             "processed_downloads": processed_downloads,
+            "subscriptions_count": subscriptions_count,
             "last_activity": last_activity,
             "recent_downloads": [
                 {

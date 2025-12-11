@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { createPortal } from 'react-dom';
 import { feedsApi } from '../services/api';
 import { toast } from 'react-hot-toast';
 import type { Feed, Episode } from '../types';
@@ -9,7 +10,9 @@ import DownloadButton from '../components/DownloadButton';
 import PlayButton from '../components/PlayButton';
 import ProcessingStatsButton from '../components/ProcessingStatsButton';
 import ReprocessButton from '../components/ReprocessButton';
+import ProcessButton from '../components/ProcessButton';
 import EpisodeProcessingStatus from '../components/EpisodeProcessingStatus';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function PodcastsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -17,6 +20,9 @@ export default function PodcastsPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showMenu, setShowMenu] = useState(false);
+  const [showSubscriptions, setShowSubscriptions] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const { requireAuth } = useAuth();
 
   // Get selected feed from URL
   const selectedFeedId = searchParams.get('feed') ? parseInt(searchParams.get('feed')!) : null;
@@ -65,6 +71,25 @@ export default function PodcastsPage() {
     },
     onError: () => {
       toast.error('Failed to delete feed');
+    },
+  });
+
+  // Subscription mutations for the feed list
+  const togglePrivacyMutation = useMutation({
+    mutationFn: ({ feedId, isPrivate }: { feedId: number; isPrivate: boolean }) => 
+      feedsApi.subscribeFeed(feedId, isPrivate),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+    },
+  });
+
+  const unsubscribeMutation = useMutation({
+    mutationFn: (feedId: number) => feedsApi.unsubscribeFeed(feedId),
+    onSuccess: () => {
+      toast.success('Unsubscribed');
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      queryClient.invalidateQueries({ queryKey: ['all-feeds'] });
+      handleCloseFeed();
     },
   });
 
@@ -126,6 +151,18 @@ export default function PodcastsPage() {
             + Add
           </button>
         </div>
+        
+        {requireAuth && (
+          <button
+            onClick={() => setShowSubscriptions(true)}
+            className="w-full mb-4 px-3 py-2 bg-purple-50 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            Browse Podcasts on Server
+          </button>
+        )}
 
         <input
           type="search"
@@ -139,19 +176,29 @@ export default function PodcastsPage() {
           {filteredFeeds.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500">No podcasts found</p>
+              {requireAuth && (
+                <button
+                  onClick={() => setShowSubscriptions(true)}
+                  className="mt-3 px-4 py-2 bg-purple-100 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-200 transition-colors"
+                >
+                  Browse Podcasts on Server
+                </button>
+              )}
             </div>
           ) : (
             filteredFeeds.map((feed: Feed) => (
               <div
                 key={feed.id}
-                onClick={() => handleSelectFeed(feed)}
-                className={`p-3 rounded-lg cursor-pointer transition-all ${
+                className={`p-3 rounded-lg transition-all ${
                   selectedFeedId === feed.id
                     ? 'bg-purple-100 dark:bg-purple-900/40 border-2 border-purple-500'
                     : 'bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 hover:border-purple-300 dark:hover:border-purple-600/50 hover:shadow-sm'
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div 
+                  className="flex items-center gap-3 cursor-pointer"
+                  onClick={() => handleSelectFeed(feed)}
+                >
                   {feed.image_url ? (
                     <img
                       src={feed.image_url}
@@ -170,6 +217,48 @@ export default function PodcastsPage() {
                     <p className="text-xs text-gray-500">{feed.posts_count} episodes</p>
                   </div>
                 </div>
+                {/* Subscription controls - only show when auth is enabled */}
+                {requireAuth && (
+                  <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-purple-100/50">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePrivacyMutation.mutate({ feedId: feed.id, isPrivate: !(feed as any).is_private });
+                      }}
+                      disabled={togglePrivacyMutation.isPending}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+                        (feed as any).is_private
+                          ? 'bg-gray-200 text-gray-600'
+                          : 'bg-green-100 text-green-700'
+                      }`}
+                      title={(feed as any).is_private 
+                        ? 'Private - This feed is hidden from other users. Click to make public.' 
+                        : 'Public - Other users can discover this feed. Click to make private.'}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {(feed as any).is_private ? (
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                        ) : (
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        )}
+                      </svg>
+                      {(feed as any).is_private ? 'Private' : 'Public'}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('Unsubscribe from this podcast?')) {
+                          unsubscribeMutation.mutate(feed.id);
+                        }
+                      }}
+                      disabled={unsubscribeMutation.isPending}
+                      className="px-2 py-1 rounded text-xs bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                      title="Unsubscribe from this podcast"
+                    >
+                      Unsubscribe
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -331,10 +420,7 @@ export default function PodcastsPage() {
                       <div className="border-t border-purple-100 my-1" />
                       <button
                         onClick={() => {
-                          toast(
-                            'Enabled = eligible for processing when requested by your podcast app or manually. Disabled = skipped entirely. Processing happens on-demand, not automatically.',
-                            { duration: 8000 }
-                          );
+                          setShowHelpModal(true);
                           setShowMenu(false);
                         }}
                         className="w-full px-4 py-2 text-sm text-left flex items-center gap-3 hover:bg-purple-50 transition-colors"
@@ -343,7 +429,7 @@ export default function PodcastsPage() {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Explain enable/disable
+                        How processing works
                       </button>
                       <div className="border-t border-purple-100 my-1" />
                       <button
@@ -405,18 +491,18 @@ export default function PodcastsPage() {
                             Ready
                           </span>
                         ) : episode.whitelisted ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-amber-100 text-amber-700 rounded-lg">
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-lg">
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
-                            Pending
+                            Enabled
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-purple-100/50 dark:bg-purple-900/30 text-purple-400 dark:text-purple-500 rounded-lg border border-dashed border-purple-300/50 dark:border-purple-700/50">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                             </svg>
-                            Skipped
+                            Disabled
                           </span>
                         )}
                       </div>
@@ -445,7 +531,7 @@ export default function PodcastsPage() {
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
-                            Skip
+                            Disable
                           </>
                         ) : (
                           <>
@@ -476,6 +562,14 @@ export default function PodcastsPage() {
 
                       {/* Process button for enabled but not yet processed */}
                       {episode.whitelisted && !episode.has_processed_audio && (
+                        <ProcessButton 
+                          episodeGuid={episode.guid}
+                          feedId={selectedFeed?.id}
+                        />
+                      )}
+
+                      {/* Reprocess button for already processed episodes */}
+                      {episode.has_processed_audio && (
                         <ReprocessButton 
                           episodeGuid={episode.guid}
                           isWhitelisted={episode.whitelisted}
@@ -549,6 +643,269 @@ export default function PodcastsPage() {
           </div>
         </div>
       )}
+
+      {/* Subscription Management Modal */}
+      {showSubscriptions && createPortal(
+        <SubscriptionModal 
+          onClose={() => setShowSubscriptions(false)} 
+          onUpdate={() => refetchFeeds()}
+        />,
+        document.body
+      )}
+
+      {/* Help Modal - How Processing Works */}
+      {showHelpModal && createPortal(
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          style={{ zIndex: 9999 }}
+          onClick={() => setShowHelpModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-purple-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-purple-100 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50">
+              <h2 className="text-xl font-bold text-purple-900">How Processing Works</h2>
+              <button
+                onClick={() => setShowHelpModal(false)}
+                className="p-2 text-purple-400 hover:text-purple-600 rounded-lg hover:bg-purple-100 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-purple-900">Enabled</h3>
+                  <p className="text-sm text-purple-700">Episode is eligible for ad removal. Click "Process" to start, or it will process automatically when your podcast app requests it.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-purple-900">Disabled</h3>
+                  <p className="text-sm text-purple-700">Episode is skipped entirely. It won't be processed and won't appear in your podcast app's Podly feed.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-purple-900">Ready</h3>
+                  <p className="text-sm text-purple-700">Episode has been processed and ads removed. You can play, download, or view stats.</p>
+                </div>
+              </div>
+
+              <div className="mt-4 p-4 bg-purple-50 rounded-xl border border-purple-100">
+                <p className="text-sm text-purple-800">
+                  <strong>💡 Tip:</strong> Processing happens on-demand, not automatically. This saves resources and API costs. Enable episodes you want, then either click "Process" or let your podcast app trigger it when you subscribe to the Podly RSS feed.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-purple-100 bg-purple-50/50">
+              <button
+                onClick={() => setShowHelpModal(false)}
+                className="w-full px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all"
+              >
+                Got it!
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+// Subscription Management Modal Component
+function SubscriptionModal({ onClose, onUpdate }: { onClose: () => void; onUpdate: () => void }) {
+  const queryClient = useQueryClient();
+  
+  const { data: allFeeds, isLoading } = useQuery({
+    queryKey: ['all-feeds'],
+    queryFn: feedsApi.getAllFeeds,
+  });
+
+  const subscribeMutation = useMutation({
+    mutationFn: ({ feedId, isPrivate }: { feedId: number; isPrivate: boolean }) => 
+      feedsApi.subscribeFeed(feedId, isPrivate),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['all-feeds'] });
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      queryClient.invalidateQueries({ queryKey: ['episodes', variables.feedId] });
+      onUpdate();
+    },
+  });
+
+  const unsubscribeMutation = useMutation({
+    mutationFn: (feedId: number) => feedsApi.unsubscribeFeed(feedId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['all-feeds'] });
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      onUpdate();
+    },
+  });
+
+  const handleSubscribe = (feedId: number, isPrivate: boolean = false) => {
+    subscribeMutation.mutate({ feedId, isPrivate });
+  };
+
+  const handleUnsubscribe = (feedId: number) => {
+    unsubscribeMutation.mutate(feedId);
+  };
+
+  const handleTogglePrivacy = (feedId: number, currentPrivacy: boolean) => {
+    // Re-subscribe with toggled privacy
+    subscribeMutation.mutate({ feedId, isPrivate: !currentPrivacy });
+  };
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+      style={{ zIndex: 9999 }}
+      onClick={onClose}
+    >
+      <div 
+        className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[80vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Manage Subscriptions</h2>
+            <p className="text-sm text-gray-500 mt-1">Choose which podcasts appear in your feed list</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="overflow-y-auto px-6 py-4 flex-1">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+            </div>
+          ) : allFeeds && allFeeds.length > 0 ? (
+            <div className="space-y-3">
+              {allFeeds.map((feed) => (
+                <div 
+                  key={feed.id}
+                  className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${
+                    feed.is_subscribed 
+                      ? 'bg-purple-50 border-purple-200' 
+                      : 'bg-gray-50 border-gray-200'
+                  }`}
+                >
+                  {feed.image_url ? (
+                    <img
+                      src={feed.image_url}
+                      alt={feed.title}
+                      className="w-12 h-12 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-gray-200 flex items-center justify-center">
+                      <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-gray-900 truncate">{feed.title}</h3>
+                    <p className="text-xs text-gray-500">{feed.posts_count} episodes</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {feed.is_subscribed ? (
+                      <>
+                        {/* Privacy indicator and toggle */}
+                        <button
+                          onClick={() => handleTogglePrivacy(feed.id, (feed as any).is_private || false)}
+                          disabled={subscribeMutation.isPending}
+                          className={`p-2 rounded-lg transition-colors ${
+                            (feed as any).is_private
+                              ? 'bg-gray-700 text-white'
+                              : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                          }`}
+                          title={(feed as any).is_private 
+                            ? 'Private subscription - This feed won\'t appear in "Browse Podcasts" for other users. Click to make public.' 
+                            : 'Public subscription - Other users can see this feed in "Browse Podcasts". Click to make private.'}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {(feed as any).is_private ? (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                            ) : (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            )}
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleUnsubscribe(feed.id)}
+                          disabled={unsubscribeMutation.isPending}
+                          className="px-4 py-2 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                          title="Click to unsubscribe from this feed"
+                        >
+                          Subscribed
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleSubscribe(feed.id, false)}
+                          disabled={subscribeMutation.isPending}
+                          className="px-3 py-2 text-sm font-medium rounded-l-lg bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+                          title="Subscribe publicly - other users will see this feed in Browse Podcasts"
+                        >
+                          Subscribe
+                        </button>
+                        <button
+                          onClick={() => handleSubscribe(feed.id, true)}
+                          disabled={subscribeMutation.isPending}
+                          className="px-2 py-2 text-sm font-medium rounded-r-lg bg-gray-300 text-gray-600 hover:bg-gray-400 disabled:opacity-50"
+                          title="Subscribe privately - this feed won't appear in Browse Podcasts for other users"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500">No podcasts available</p>
+              <p className="text-sm text-gray-400 mt-1">Ask an admin to add some podcasts first</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

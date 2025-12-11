@@ -222,10 +222,11 @@ export default function ProcessingStatsButton({
                         )}
                       </div>
 
-                      {/* Key Metrics */}
+                      {/* Key Metrics - Clickable to navigate to relevant tabs */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div 
-                          className="rounded-xl p-4 text-center shadow-sm border"
+                        <button 
+                          onClick={() => setActiveTab('transcript')}
+                          className="rounded-xl p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
                             backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
                             borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
@@ -235,10 +236,11 @@ export default function ProcessingStatsButton({
                             {stats.processing_stats?.total_segments || 0}
                           </div>
                           <div className="text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Total Segments</div>
-                        </div>
+                        </button>
 
-                        <div 
-                          className="rounded-xl p-4 text-center shadow-sm border"
+                        <button 
+                          onClick={() => setActiveTab('transcript')}
+                          className="rounded-xl p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
                             backgroundColor: isDark ? 'rgba(34, 197, 94, 0.15)' : '#f0fdf4',
                             borderColor: isDark ? 'rgba(34, 197, 94, 0.3)' : '#bbf7d0'
@@ -248,10 +250,11 @@ export default function ProcessingStatsButton({
                             {stats.processing_stats?.content_segments || 0}
                           </div>
                           <div className="text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Content Kept</div>
-                        </div>
+                        </button>
 
-                        <div 
-                          className="rounded-xl p-4 text-center shadow-sm border"
+                        <button 
+                          onClick={() => setActiveTab('identifications')}
+                          className="rounded-xl p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
                             backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fef2f2',
                             borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecaca'
@@ -261,10 +264,11 @@ export default function ProcessingStatsButton({
                             {stats.processing_stats?.ad_segments_count || 0}
                           </div>
                           <div className="text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Ads Removed</div>
-                        </div>
+                        </button>
 
-                        <div 
-                          className="rounded-xl p-4 text-center shadow-sm border"
+                        <button 
+                          onClick={() => setActiveTab('model-calls')}
+                          className="rounded-xl p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
                             backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
                             borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
@@ -274,7 +278,7 @@ export default function ProcessingStatsButton({
                             {stats.processing_stats?.total_model_calls || 0}
                           </div>
                           <div className="text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>AI Calls</div>
-                        </div>
+                        </button>
                       </div>
 
                       {/* Model Performance */}
