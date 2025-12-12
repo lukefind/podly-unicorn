@@ -30,9 +30,18 @@ class Feed(db.Model):  # type: ignore[name-defined, misc]
     author = db.Column(db.Text)
     rss_url = db.Column(db.Text, unique=True, nullable=False)
     image_url = db.Column(db.Text)
+    default_prompt_preset_id = db.Column(
+        db.Integer, db.ForeignKey("prompt_preset.id"), nullable=True
+    )
 
     posts = db.relationship(
         "Post", backref="feed", lazy=True, order_by="Post.release_date.desc()"
+    )
+
+    default_prompt_preset = db.relationship(
+        "PromptPreset",
+        foreign_keys=[default_prompt_preset_id],
+        lazy="joined",
     )
 
     def __repr__(self) -> str:

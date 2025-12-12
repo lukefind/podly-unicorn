@@ -2,9 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
+import { useState } from 'react';
 
 export default function SubscriptionsPage() {
   const { user, requireAuth } = useAuth();
+  const [expandedSubscribers, setExpandedSubscribers] = useState<Record<number, boolean>>({});
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-feed-subscriptions'],
@@ -12,10 +14,8 @@ export default function SubscriptionsPage() {
     enabled: user?.role === 'admin',
   });
 
-  // Redirect non-admins
-  if (requireAuth && user?.role !== 'admin') {
-    return <Navigate to="/podcasts" replace />;
-  }
+  // useMemo must be called before any early returns (React rules of hooks)
+  const feeds = data?.feeds ?? [];
 
   const formatDuration = (seconds: number) => {
     if (seconds < 60) return `${Math.round(seconds)}s`;
@@ -25,6 +25,11 @@ export default function SubscriptionsPage() {
     const remainingMins = minutes % 60;
     return `${hours}h ${remainingMins}m`;
   };
+
+  // Redirect non-admins
+  if (requireAuth && user && user.role !== 'admin') {
+    return <Navigate to="/podcasts" replace />;
+  }
 
   if (isLoading) {
     return (
@@ -45,20 +50,20 @@ export default function SubscriptionsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-purple-100">Feed Subscriptions</h1>
           <p className="text-sm text-gray-500 mt-1">
             Overview of all podcast feeds and their subscribers
           </p>
         </div>
-        <div className="flex items-center gap-4 text-sm">
-          <div className="bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-medium">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
+          <div className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-lg font-medium">
             {data?.total_feeds || 0} feeds
           </div>
-          <div className="bg-cyan-100 text-cyan-700 px-3 py-1.5 rounded-lg font-medium">
+          <div className="bg-cyan-100 text-cyan-700 px-2.5 py-1 rounded-lg font-medium">
             {data?.total_subscriptions || 0} subscriptions
           </div>
         </div>
@@ -66,22 +71,22 @@ export default function SubscriptionsPage() {
 
       {/* Feeds Grid */}
       <div className="space-y-4">
-        {data?.feeds.map((feed) => (
+        {feeds.map((feed) => (
           <div
             key={feed.id}
             className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden"
           >
-            <div className="p-5">
-              <div className="flex items-start gap-4">
+            <div className="p-4 sm:p-5">
+              <div className="flex items-start gap-3 sm:gap-4">
                 {/* Feed Image */}
                 {feed.image_url ? (
                   <img
                     src={feed.image_url}
                     alt={feed.title}
-                    className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg object-cover flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-16 h-16 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
                     <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                     </svg>
@@ -90,13 +95,13 @@ export default function SubscriptionsPage() {
 
                 {/* Feed Info */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 dark:text-purple-100 text-lg">{feed.title}</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-purple-100 text-base sm:text-lg leading-snug">{feed.title}</h3>
                   {feed.author && (
                     <p className="text-sm text-gray-500">{feed.author}</p>
                   )}
                   
                   {/* Stats Row */}
-                  <div className="flex items-center gap-4 mt-2 text-sm">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm">
                     <span className="text-gray-600 dark:text-purple-300">
                       <span className="font-medium">{feed.posts_count}</span> episodes
                     </span>
@@ -113,12 +118,12 @@ export default function SubscriptionsPage() {
 
                 {/* Subscriber Count Badge */}
                 <div className="flex-shrink-0 text-center">
-                  <div className={`px-4 py-2 rounded-lg ${
+                  <div className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg ${
                     feed.subscriber_count > 0 
                       ? 'bg-purple-100 text-purple-700' 
                       : 'bg-gray-100 text-gray-500'
                   }`}>
-                    <div className="text-2xl font-bold">{feed.subscriber_count}</div>
+                    <div className="text-xl sm:text-2xl font-bold">{feed.subscriber_count}</div>
                     <div className="text-xs">subscriber{feed.subscriber_count !== 1 ? 's' : ''}</div>
                   </div>
                 </div>
@@ -127,12 +132,29 @@ export default function SubscriptionsPage() {
               {/* Subscribers List */}
               {feed.subscribers.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-purple-100">
-                  <div className="text-xs font-medium text-gray-500 mb-2">Subscribers</div>
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="text-xs font-medium text-gray-500">Subscribers</div>
+                    {feed.subscribers.length > 4 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedSubscribers((prev) => ({
+                            ...prev,
+                            [feed.id]: !prev[feed.id],
+                          }))
+                        }
+                        className="text-xs font-medium text-purple-700 hover:text-purple-800"
+                      >
+                        {expandedSubscribers[feed.id] ? 'Show less' : `+${feed.subscribers.length - 4} more`}
+                      </button>
+                    )}
+                  </div>
+
                   <div className="flex flex-wrap gap-2">
-                    {feed.subscribers.map((sub) => (
+                    {(expandedSubscribers[feed.id] ? feed.subscribers : feed.subscribers.slice(0, 4)).map((sub) => (
                       <div
                         key={sub.user_id}
-                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
+                        className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-sm ${
                           (sub as any).is_private 
                             ? 'bg-gray-100 text-gray-500' 
                             : 'bg-purple-50 text-purple-700'
@@ -146,7 +168,7 @@ export default function SubscriptionsPage() {
                         }`}>
                           {sub.username.charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium">{sub.username}</span>
+                        <span className="font-medium max-w-[8rem] truncate">{sub.username}</span>
                         {(sub as any).is_private && (
                           <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
@@ -167,7 +189,7 @@ export default function SubscriptionsPage() {
           </div>
         ))}
 
-        {data?.feeds.length === 0 && (
+        {feeds.length === 0 && (
           <div className="text-center py-12 bg-white/80 rounded-xl border border-purple-200/50">
             <p className="text-gray-500">No feeds have been added yet</p>
           </div>

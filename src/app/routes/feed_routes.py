@@ -32,6 +32,7 @@ from app.models import (
     ModelCall,
     Post,
     ProcessingJob,
+    PromptPreset,
     TranscriptSegment,
     User,
 )
@@ -42,6 +43,22 @@ logger = logging.getLogger("global_logger")
 
 
 feed_bp = Blueprint("feed", __name__)
+
+
+def _require_admin() -> ResponseReturnValue | None:
+    settings = current_app.config.get("AUTH_SETTINGS")
+    if not settings or not settings.require_auth:
+        return None
+
+    current = getattr(g, "current_user", None)
+    if current is None:
+        return jsonify({"error": "Authentication required."}), 401
+
+    user = User.query.get(current.id)
+    if not user or user.role != "admin":
+        return jsonify({"error": "Admin privileges required."}), 403
+
+    return None
 
 
 def fix_url(url: str) -> str:
@@ -520,6 +537,17 @@ def api_feeds() -> Response:
     )
     
     results = base_query.all()
+
+    active_preset = PromptPreset.query.filter_by(is_active=True).first()
+    default_preset_ids = {
+        feed.default_prompt_preset_id
+        for feed, _posts_count in results
+        if getattr(feed, "default_prompt_preset_id", None) is not None
+    }
+    presets_by_id = {}
+    if default_preset_ids:
+        for preset in PromptPreset.query.filter(PromptPreset.id.in_(default_preset_ids)).all():
+            presets_by_id[preset.id] = preset
     
     feeds_data = [
         {
@@ -531,6 +559,29 @@ def api_feeds() -> Response:
             "image_url": feed.image_url,
             "posts_count": posts_count,
             "is_private": subscriptions_map.get(feed.id, False),
+            "default_prompt_preset": (
+                {
+                    "id": presets_by_id.get(feed.default_prompt_preset_id).id,
+                    "name": presets_by_id.get(feed.default_prompt_preset_id).name,
+                }
+                if presets_by_id.get(feed.default_prompt_preset_id)
+                else None
+            ),
+            "effective_prompt_preset": (
+                {
+                    "id": presets_by_id.get(feed.default_prompt_preset_id).id,
+                    "name": presets_by_id.get(feed.default_prompt_preset_id).name,
+                }
+                if presets_by_id.get(feed.default_prompt_preset_id)
+                else (
+                    {
+                        "id": active_preset.id,
+                        "name": active_preset.name,
+                    }
+                    if active_preset
+                    else None
+                )
+            ),
             "auto_download_enabled": feed.id in auto_download_enabled_feed_ids,
             "auto_download_enabled_by_user": subscriptions_auto_download_map.get(
                 feed.id, False
@@ -543,6 +594,49 @@ def api_feeds() -> Response:
         for feed, posts_count in results
     ]
     return jsonify(feeds_data)
+
+
+@feed_bp.route("/api/feeds/<int:feed_id>/default-preset", methods=["POST"])
+def set_feed_default_preset(feed_id: int) -> ResponseReturnValue:
+    error_response = _require_admin()
+    if error_response:
+        return error_response
+
+    feed = Feed.query.get_or_404(feed_id)
+    payload = request.json if request.is_json else {}
+    preset_id = payload.get("preset_id", None)
+
+    if preset_id is None:
+        feed.default_prompt_preset_id = None
+    else:
+        preset = PromptPreset.query.get(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found."}), 404
+        feed.default_prompt_preset_id = preset.id
+
+    db.session.commit()
+
+    active_preset = PromptPreset.query.filter_by(is_active=True).first()
+    effective = (
+        PromptPreset.query.get(feed.default_prompt_preset_id)
+        if feed.default_prompt_preset_id
+        else active_preset
+    )
+
+    return jsonify(
+        {
+            "status": "ok",
+            "feed_id": feed.id,
+            "default_prompt_preset": (
+                {"id": effective.id, "name": effective.name}
+                if feed.default_prompt_preset_id and effective
+                else None
+            ),
+            "effective_prompt_preset": (
+                {"id": effective.id, "name": effective.name} if effective else None
+            ),
+        }
+    )
 
 
 @feed_bp.route("/api/feeds/<int:feed_id>/subscribe", methods=["POST"])

@@ -277,6 +277,8 @@ class PodcastProcessor:
 
         # Step 3: Classify ad segments (returns the preset ID used)
         preset_id = self._classify_ad_segments(post, job, transcript_segments)
+        post.processed_with_preset_id = preset_id
+        self.db_session.commit()
         self._raise_if_cancelled(job, cancel_callback)
 
         # Step 4: Process audio (remove ad segments)
@@ -285,9 +287,8 @@ class PodcastProcessor:
         )
         self.audio_processor.process_audio(post, processed_audio_path)
 
-        # Update the database with the processed audio path and preset used
+        # Update the database with the processed audio path
         post.processed_audio_path = processed_audio_path
-        post.processed_with_preset_id = preset_id
         self.db_session.commit()
 
         # Mark job complete
@@ -326,8 +327,10 @@ class PodcastProcessor:
             job, "running", 3, "Identifying ads", 75.0
         )
         
-        # Try to use active prompt preset, fallback to default files
-        system_prompt, user_prompt_template, preset_id = self._get_prompts_from_preset_or_default()
+        # Prefer per-feed preset when configured, fallback to active preset, then default files
+        system_prompt, user_prompt_template, preset_id = self._get_prompts_from_preset_or_default(
+            post
+        )
         
         self.ad_classifier.classify(
             transcript_segments=transcript_segments,
@@ -338,7 +341,9 @@ class PodcastProcessor:
         
         return preset_id
 
-    def _get_prompts_from_preset_or_default(self) -> tuple[str, Template, int | None]:
+    def _get_prompts_from_preset_or_default(
+        self, post: Post
+    ) -> tuple[str, Template, int | None]:
         """
         Get prompts from active preset or fall back to default files.
         
@@ -347,19 +352,25 @@ class PodcastProcessor:
         """
         from app.models import PromptPreset
         
-        # Try to get active preset
-        active_preset = PromptPreset.query.filter_by(is_active=True).first()
-        
-        if active_preset:
+        selected_preset = None
+        feed = getattr(post, "feed", None)
+        feed_preset_id = getattr(feed, "default_prompt_preset_id", None)
+        if feed_preset_id is not None:
+            selected_preset = PromptPreset.query.get(feed_preset_id)
+
+        if selected_preset is None:
+            selected_preset = PromptPreset.query.filter_by(is_active=True).first()
+
+        if selected_preset:
             self.logger.info(
-                f"Using active prompt preset: {active_preset.name} "
-                f"(aggressiveness: {active_preset.aggressiveness})"
+                f"Using prompt preset: {selected_preset.name} "
+                f"(aggressiveness: {selected_preset.aggressiveness})"
             )
             from jinja2 import Template
             return (
-                active_preset.system_prompt,
-                Template(active_preset.user_prompt_template),
-                active_preset.id,
+                selected_preset.system_prompt,
+                Template(selected_preset.user_prompt_template),
+                selected_preset.id,
             )
         
         # Fallback to default files
