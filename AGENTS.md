@@ -125,6 +125,23 @@ All presets emphasize flagging **ALL segments within an ad block**, not just the
 - Examples showing multiple consecutive segments being flagged
 - Clear distinction between ad content and legitimate discussion
 
+### Per-Show Default Preset
+
+Admins can set a custom default preset for individual shows/feeds. This overrides the server-wide active preset for that specific show.
+
+**Database:** `Feed.default_prompt_preset_id` (nullable FK to `prompt_preset`)
+
+**API:**
+- `GET /api/feeds` returns `default_prompt_preset` and `effective_prompt_preset` for each feed
+- `POST /api/feeds/<feed_id>/default-preset` (admin-only) sets the default preset
+
+**Processing Logic:**
+1. If feed has `default_prompt_preset_id` set → use that preset
+2. Otherwise → use server-wide active preset
+3. If no active preset → fall back to default prompt files
+
+**UI:** In the "Show settings" modal on the Podcasts page, admins see a "Choose custom preset" dropdown.
+
 ---
 
 ## Frontend
@@ -144,6 +161,25 @@ Use `createPortal` from `react-dom` to render modals to `document.body` to avoid
 
 ### CSS Overrides
 Global CSS in `index.css` overrides gray colors with purple tints. Use inline `style={{}}` for elements that need original colors (e.g., inside modals).
+
+### Podcasts Page UI
+
+The Podcasts page (`/podcasts`) displays subscribed feeds and their episodes.
+
+**Feed Header:**
+- Feed image, title, author, episode count
+- Action buttons: **Podly RSS** (gradient), **Settings**, **Unsubscribe**
+- Feed description below header
+
+**Show Settings Modal:**
+Accessed via the "Settings" button. Contains:
+- **Original RSS** - Copy/open the source RSS URL
+- **Auto process new episodes** - Toggle for auto-processing (auth required)
+- **Choose custom preset** - Admin-only dropdown to override server preset
+- **Footer buttons**: Enable all, Refresh feed, Disable all, Help
+- **Unsubscribe** - Full-width button at bottom
+
+The modal uses `createPortal` and has proper dark mode support with inline styles.
 
 ### User Statistics
 Admin users can view per-user statistics in Settings → User Statistics section:
@@ -309,17 +345,17 @@ When a user clicks "Delete" on a feed:
 ### Auto-Subscribe
 When a user adds a new feed, they are automatically subscribed to it.
 
-### Auto-Download New Episodes
+### Auto-Process New Episodes
 
-Per-feed toggle to automatically process new episodes when they are released.
+Per-feed toggle to automatically process new episodes when they are released. (Renamed from "Auto-Download" in the UI for clarity.)
 
 **Behavior:**
 - Default is **OFF** for all users
-- If **any user** enables auto-download for a feed, new episodes are auto-processed for **everyone**
+- If **any user** enables auto-process for a feed, new episodes are auto-processed for **everyone**
 - Other users see the toggle disabled with note: "Enabled by another user"
-- When the enabling user disables it (or unsubscribes), auto-download stops (unless another user has it enabled)
+- When the enabling user disables it (or unsubscribes), auto-process stops (unless another user has it enabled)
 
-**UI Location:** Toggle button on the Podcasts page when viewing a feed (only visible when auth is enabled)
+**UI Location:** "Show settings" modal on the Podcasts page (only visible when auth is enabled)
 
 **Backend:** When feeds are refreshed and new episodes are discovered, if any subscriber has `auto_download_new_episodes=True`, those episodes are automatically whitelisted and processing jobs are started.
 
@@ -359,12 +395,13 @@ docker restart <container-name>
 
 ### Current Migration Head
 
-**Revision:** `a1b2c3d4e5f6` (Add auto_download_new_episodes to user_feed_subscription)
+**Revision:** `b2c3d4e5f6a7` (Add default_prompt_preset_id to feed)
 
 ### Migration History (recent)
 
 | Revision | Description |
 |----------|-------------|
+| `b2c3d4e5f6a7` | Add `default_prompt_preset_id` to `feed` table |
 | `a1b2c3d4e5f6` | Add `auto_download_new_episodes` to `user_feed_subscription` |
 | `f3a4b5c6d7e8` | Add `user_feed_subscription` table |
 | `e2f3a4b5c6d7` | Add `processed_with_preset_id` to `post` table |
