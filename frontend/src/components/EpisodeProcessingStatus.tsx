@@ -18,6 +18,7 @@ interface EpisodeProcessingStatusProps {
   isWhitelisted: boolean;
   hasProcessedAudio: boolean;
   onProcessingComplete?: () => void;
+  pollTrigger?: number;
 }
 
 const STEP_NAMES = ['Download', 'Transcribe', 'Detect Ads', 'Process Audio'];
@@ -27,18 +28,20 @@ export default function EpisodeProcessingStatus({
   isWhitelisted,
   hasProcessedAudio,
   onProcessingComplete,
+  pollTrigger,
 }: EpisodeProcessingStatusProps) {
   const [status, setStatus] = useState<ProcessingStatus | null>(null);
 
   // Poll for status updates
   useEffect(() => {
-    if (!isWhitelisted || hasProcessedAudio) {
+    if (!isWhitelisted || (hasProcessedAudio && !pollTrigger)) {
       setStatus(null);
       return;
     }
 
     let isMounted = true;
     let shouldPoll = true;
+    const pollStartedAt = Date.now();
 
     const checkStatus = async () => {
       if (!shouldPoll) return;
@@ -56,8 +59,13 @@ export default function EpisodeProcessingStatus({
         } else if (response.status === 'failed' || response.status === 'error') {
           shouldPoll = false;
         } else if (response.status === 'not_started') {
-          shouldPoll = false;
           setStatus(null);
+          // If the user just triggered processing, the backend may briefly report
+          // 'not_started' while the job is enqueued. Keep polling for a short grace period.
+          if (pollTrigger && Date.now() - pollStartedAt < 15000) {
+            return;
+          }
+          shouldPoll = false;
         }
         // Keep polling for 'running' or 'pending'
       } catch {
@@ -75,7 +83,7 @@ export default function EpisodeProcessingStatus({
       isMounted = false;
       clearInterval(interval);
     };
-  }, [episodeGuid, isWhitelisted, hasProcessedAudio, onProcessingComplete]);
+  }, [episodeGuid, isWhitelisted, hasProcessedAudio, onProcessingComplete, pollTrigger]);
 
   // Don't show anything if not processing
   if (!status || status.status === 'not_started' || status.status === 'completed' || status.status === 'skipped') {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { jobsApi } from '../services/api';
 import type { Job, JobManagerRun, JobManagerStatus } from '../types';
+import { copyTextToClipboard } from '../services/clipboard';
 
 function getStatusColor(status: string) {
   switch (status) {
@@ -247,7 +248,7 @@ export default function JobsPage() {
         ) : null}
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h3 className="text-xl font-semibold text-gray-900">{mode === 'active' ? 'Active Jobs' : 'All Jobs'}</h3>
           <p className="text-sm text-gray-600">
@@ -256,10 +257,10 @@ export default function JobsPage() {
               : 'All jobs ordered by priority (running/pending first).'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end">
           <button
             onClick={() => { void refresh(); }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 px-3 py-1.5 text-sm font-medium text-white hover:shadow-lg hover:shadow-purple-500/30 transition-all"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 px-3 py-1.5 text-sm font-medium text-white hover:shadow-lg hover:shadow-purple-500/30 transition-all flex-1 sm:flex-none"
             disabled={loading}
           >
             <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -267,7 +268,7 @@ export default function JobsPage() {
             </svg>
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
-          <div className="flex rounded-xl border border-purple-200 overflow-hidden">
+          <div className="flex w-full sm:w-auto rounded-xl border border-purple-200 overflow-hidden">
             <button
               onClick={async () => { setMode('active'); await loadStatus(); await loadActive(); }}
               className={`px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -294,7 +295,7 @@ export default function JobsPage() {
           {mode === 'all' && jobs.some(j => ['completed', 'failed', 'cancelled', 'skipped'].includes(j.status)) && (
             <button
               onClick={() => { void clearHistory(); }}
-              className="px-3 py-1.5 text-sm font-medium text-pink-600 border border-pink-200 rounded-xl hover:bg-pink-50 transition-colors disabled:opacity-50"
+              className="px-3 py-1.5 text-sm font-medium text-pink-600 border border-pink-200 rounded-xl hover:bg-pink-50 transition-colors disabled:opacity-50 w-full sm:w-auto"
               disabled={clearing}
             >
               {clearing ? 'Clearing...' : 'Clear History'}
@@ -431,9 +432,7 @@ export default function JobsPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
               <button
-                onClick={() => {
-                  navigator.clipboard.writeText(selectedJobError.error);
-                }}
+                onClick={() => { void copyTextToClipboard(selectedJobError.error); }}
                 className="px-4 py-2 text-sm font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200"
               >
                 Copy Error

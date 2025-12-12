@@ -83,59 +83,81 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-pink-200/50 p-6 shadow-sm unicorn-card">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-pink-100 to-pink-200 rounded-xl">
-              <svg className="w-6 h-6 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Link
+          to="/podcasts"
+          className="bg-white/80 backdrop-blur-sm rounded-xl border border-pink-200/50 p-4 sm:p-6 shadow-sm unicorn-card block focus:outline-none focus:ring-2 focus:ring-purple-400/60"
+        >
+          <div className="flex items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="p-2.5 sm:p-3 bg-gradient-to-br from-pink-100 to-pink-200 rounded-xl flex-shrink-0">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-purple-500">Podcasts</p>
+                <p className="text-xl sm:text-2xl font-bold text-purple-900">{feedsArray.length}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center text-purple-600 font-medium">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>
-            <div>
-              <p className="text-sm text-purple-500">Podcasts</p>
-              <p className="text-2xl font-bold text-purple-900">{feedsArray.length}</p>
-            </div>
           </div>
-        </div>
+        </Link>
 
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 p-6 shadow-sm unicorn-card">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl">
-              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <Link
+          to="/podcasts"
+          className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 p-4 sm:p-6 shadow-sm unicorn-card block focus:outline-none focus:ring-2 focus:ring-purple-400/60"
+        >
+          <div className="flex items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="p-2.5 sm:p-3 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex-shrink-0">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
               </svg>
             </div>
-            <div>
-              <p className="text-sm text-purple-500">Episodes Processed</p>
-              <p className="text-2xl font-bold text-purple-900">{statsSummary?.total_episodes_processed || 0}</p>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-purple-500">Episodes</p>
+                <p className="text-xl sm:text-2xl font-bold text-purple-900">{statsSummary?.total_episodes_processed || 0}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center text-purple-600 font-medium">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+        </Link>
+
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-cyan-200/50 p-4 sm:p-6 shadow-sm unicorn-card">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-cyan-100 to-cyan-200 rounded-xl flex-shrink-0">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          </div>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-purple-500">Ads</p>
+              <p className="text-xl sm:text-2xl font-bold text-purple-900">{statsSummary?.total_ad_segments_removed || 0}</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-cyan-200/50 p-6 shadow-sm unicorn-card">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-cyan-100 to-cyan-200 rounded-xl">
-              <svg className="w-6 h-6 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm text-purple-500">Ads Removed</p>
-              <p className="text-2xl font-bold text-purple-900">{statsSummary?.total_ad_segments_removed || 0}</p>
-            </div>
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-teal-200/50 p-4 sm:p-6 shadow-sm unicorn-card">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-teal-100 to-teal-200 rounded-xl flex-shrink-0">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
           </div>
-        </div>
-
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-teal-200/50 p-6 shadow-sm unicorn-card">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-teal-100 to-teal-200 rounded-xl">
-              <svg className="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm text-purple-500">Time Saved</p>
-              <p className="text-2xl font-bold text-purple-900">{statsSummary?.total_time_saved_formatted || '0m'}</p>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-purple-500">Time</p>
+              <p className="text-xl sm:text-2xl font-bold text-purple-900">{statsSummary?.total_time_saved_formatted || '0m'}</p>
             </div>
           </div>
         </div>
