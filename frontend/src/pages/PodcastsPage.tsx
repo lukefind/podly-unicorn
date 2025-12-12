@@ -563,7 +563,17 @@ export default function PodcastsPage() {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-gray-900 truncate">{feed.title}</h3>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="font-medium text-gray-900 truncate">{feed.title}</h3>
+                      {(feed.auto_download_enabled || feed.auto_download_enabled_by_user) && (
+                        <span 
+                          className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                          title="Auto-process enabled for new episodes"
+                        >
+                          Auto
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500">{feed.posts_count} episodes</p>
                     {feed.effective_prompt_preset?.name && (
                       <p className="text-[11px] text-purple-600 truncate">
