@@ -119,6 +119,20 @@ export const feedsApi = {
     return response.data;
   },
 
+  setFeedAutoDownload: async (
+    feedId: number,
+    enabled: boolean
+  ): Promise<{
+    status: string;
+    feed_id: number;
+    auto_download_enabled: boolean;
+    auto_download_enabled_by_user: boolean;
+    auto_download_enabled_by_other: boolean;
+  }> => {
+    const response = await api.post(`/api/feeds/${feedId}/auto-download`, { enabled });
+    return response.data;
+  },
+
   // Admin feed subscriptions overview
   getAdminFeedSubscriptions: async (): Promise<{
     feeds: Array<{

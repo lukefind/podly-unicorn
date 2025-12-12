@@ -61,6 +61,8 @@ def _set_sqlite_pragmas(dbapi_connection: Any, connection_record: Any) -> None:
 
 def setup_scheduler(app: Flask) -> None:
     """Initialize and start the scheduler."""
+    if os.environ.get("PODLY_DISABLE_SCHEDULER") == "1":
+        return
     if not is_test:
         scheduler.init_app(app)
         scheduler.start()
@@ -316,6 +318,8 @@ def _run_app_startup(auth_settings: AuthSettings) -> None:
 
 
 def _start_scheduler_and_jobs(app: Flask) -> None:
+    if os.environ.get("PODLY_DISABLE_SCHEDULER") == "1":
+        return
     _clear_scheduler_jobstore()
     setup_scheduler(app)
 

@@ -373,7 +373,13 @@ def _refresh_feed_background(app: Flask, feed_id: int) -> None:
             return
 
         try:
-            refresh_feed(feed)
+            auto_process_post_guids = refresh_feed(feed)
+
+            if auto_process_post_guids:
+                manager = get_jobs_manager()
+                for post_guid in auto_process_post_guids:
+                    manager.start_post_processing(post_guid, priority="background")
+
             get_jobs_manager().enqueue_pending_jobs(
                 trigger="feed_refresh", context={"feed_id": feed_id}
             )
@@ -494,11 +500,24 @@ def api_feeds() -> Response:
     
     # Get user's subscription privacy status
     subscriptions_map: dict = {}  # feed_id -> is_private
+    subscriptions_auto_download_map: dict = {}  # feed_id -> auto_download_new_episodes
     if settings and settings.require_auth and current:
         for sub in UserFeedSubscription.query.filter_by(user_id=current.id).all():
             subscriptions_map[sub.feed_id] = sub.is_private
+            subscriptions_auto_download_map[sub.feed_id] = bool(
+                getattr(sub, "auto_download_new_episodes", False)
+            )
         # Filter to subscribed feeds only
         base_query = base_query.filter(Feed.id.in_(subscriptions_map.keys()))
+
+    # Global auto-download state: enabled if any subscriber has it enabled.
+    auto_download_enabled_feed_ids = set(
+        row[0]
+        for row in db.session.query(UserFeedSubscription.feed_id)
+        .filter_by(auto_download_new_episodes=True)
+        .distinct()
+        .all()
+    )
     
     results = base_query.all()
     
@@ -512,6 +531,14 @@ def api_feeds() -> Response:
             "image_url": feed.image_url,
             "posts_count": posts_count,
             "is_private": subscriptions_map.get(feed.id, False),
+            "auto_download_enabled": feed.id in auto_download_enabled_feed_ids,
+            "auto_download_enabled_by_user": subscriptions_auto_download_map.get(
+                feed.id, False
+            ),
+            "auto_download_enabled_by_other": (
+                feed.id in auto_download_enabled_feed_ids
+                and not subscriptions_auto_download_map.get(feed.id, False)
+            ),
         }
         for feed, posts_count in results
     ]
@@ -549,7 +576,9 @@ def subscribe_to_feed(feed_id: int) -> ResponseReturnValue:
             return jsonify({"message": "Subscription updated", "subscribed": True, "is_private": is_private})
         return jsonify({"message": "Already subscribed", "subscribed": True, "is_private": existing.is_private})
     
-    subscription = UserFeedSubscription(user_id=current.id, feed_id=feed_id, is_private=is_private)
+    subscription = UserFeedSubscription(
+        user_id=current.id, feed_id=feed_id, is_private=is_private
+    )
     db.session.add(subscription)
     db.session.commit()
     
@@ -579,6 +608,54 @@ def unsubscribe_from_feed(feed_id: int) -> ResponseReturnValue:
         return jsonify({"message": "Unsubscribed", "subscribed": False})
     
     return jsonify({"message": "Not subscribed", "subscribed": False})
+
+
+@feed_bp.route("/api/feeds/<int:feed_id>/auto-download", methods=["POST"])
+def set_feed_auto_download(feed_id: int) -> ResponseReturnValue:
+    """Toggle per-user auto-download for a feed.
+
+    Global behavior: if any user has this enabled for a feed, new episodes will be
+    auto-processed for everyone.
+    """
+
+    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
+
+    settings = current_app.config.get("AUTH_SETTINGS")
+    if not settings or not settings.require_auth:
+        return jsonify({"error": "Authentication is disabled."}), 404
+
+    current = getattr(g, "current_user", None)
+    if current is None:
+        return jsonify({"error": "Authentication required."}), 401
+
+    payload = request.json if request.is_json else {}
+    enabled = bool(payload.get("enabled", False))
+
+    subscription = UserFeedSubscription.query.filter_by(
+        user_id=current.id, feed_id=feed_id
+    ).first()
+    if not subscription:
+        return jsonify({"error": "Not subscribed."}), 400
+
+    subscription.auto_download_new_episodes = enabled
+    db.session.commit()
+
+    global_enabled = (
+        UserFeedSubscription.query.filter_by(
+            feed_id=feed_id, auto_download_new_episodes=True
+        ).count()
+        > 0
+    )
+
+    return jsonify(
+        {
+            "status": "ok",
+            "feed_id": feed_id,
+            "auto_download_enabled": global_enabled,
+            "auto_download_enabled_by_user": enabled,
+            "auto_download_enabled_by_other": global_enabled and not enabled,
+        }
+    )
 
 
 @feed_bp.route("/api/feeds/all", methods=["GET"])

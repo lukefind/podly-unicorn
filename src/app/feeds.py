@@ -10,7 +10,7 @@ import PyRSS2Gen  # type: ignore[import-untyped]
 from flask import current_app, g, request
 
 from app.extensions import db
-from app.models import Feed, Post
+from app.models import Feed, Post, UserFeedSubscription
 from app.runtime_config import config
 from podcast_processor.podcast_downloader import find_audio_link
 
@@ -64,9 +64,17 @@ def fetch_feed(url: str) -> feedparser.FeedParserDict:
     return feed_data
 
 
-def refresh_feed(feed: Feed) -> None:
+def refresh_feed(feed: Feed) -> list[str]:
     logger.info(f"Refreshing feed with ID: {feed.id}")
     feed_data = fetch_feed(feed.rss_url)
+
+    auto_download_enabled = (
+        UserFeedSubscription.query.filter_by(
+            feed_id=feed.id, auto_download_new_episodes=True
+        ).count()
+        > 0
+    )
+    auto_process_post_guids: list[str] = []
 
     image_info = feed_data.feed.get("image")
     if image_info and "href" in image_info:
@@ -98,11 +106,16 @@ def refresh_feed(feed: Feed) -> None:
 number_of_episodes_to_whitelist_from_archive_of_new_feed setting: {entry.title}"
                 )
             else:
-                p.whitelisted = config.automatically_whitelist_new_episodes
-            # Don't auto-create jobs - processing is triggered on-demand via UI or RSS request
+                if auto_download_enabled:
+                    p.whitelisted = True
+                    auto_process_post_guids.append(p.guid)
+                else:
+                    p.whitelisted = config.automatically_whitelist_new_episodes
+            # Don't auto-create jobs by default; auto-processing is managed by callers.
             db.session.add(p)
     db.session.commit()
     logger.info(f"Feed with ID: {feed.id} refreshed")
+    return auto_process_post_guids
 
 
 def add_or_refresh_feed(url: str) -> Feed:

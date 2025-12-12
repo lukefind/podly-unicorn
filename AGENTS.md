@@ -282,6 +282,7 @@ Users subscribe to feeds to see them in their Podcasts page. This provides per-u
 - `feed_id` - The feed being subscribed to
 - `subscribed_at` - Timestamp
 - `is_private` - Boolean, hides subscription from other users
+- `auto_download_new_episodes` - Boolean, enables auto-processing of new episodes
 
 ### Subscription Types
 - **Public subscription**: Visible to other users in "Browse Podcasts on Server"
@@ -307,3 +308,63 @@ When a user clicks "Delete" on a feed:
 
 ### Auto-Subscribe
 When a user adds a new feed, they are automatically subscribed to it.
+
+### Auto-Download New Episodes
+
+Per-feed toggle to automatically process new episodes when they are released.
+
+**Behavior:**
+- Default is **OFF** for all users
+- If **any user** enables auto-download for a feed, new episodes are auto-processed for **everyone**
+- Other users see the toggle disabled with note: "Enabled by another user"
+- When the enabling user disables it (or unsubscribes), auto-download stops (unless another user has it enabled)
+
+**UI Location:** Toggle button on the Podcasts page when viewing a feed (only visible when auth is enabled)
+
+**Backend:** When feeds are refreshed and new episodes are discovered, if any subscriber has `auto_download_new_episodes=True`, those episodes are automatically whitelisted and processing jobs are started.
+
+---
+
+## Migrations
+
+### Running Migrations in Docker
+
+**IMPORTANT:** The standard `flask db upgrade` command often fails in Docker because the Flask app startup initializes the scheduler and jobs manager, which conflicts with the running container's SQLite locks.
+
+**Recommended approach:** Apply migrations directly via Python script:
+
+```bash
+docker exec <container-name> bash -lc 'python - <<"PY"
+import sqlite3
+
+conn = sqlite3.connect("/app/src/instance/sqlite3.db")
+cursor = conn.cursor()
+
+# Example: Add a column
+# cursor.execute("ALTER TABLE table_name ADD COLUMN column_name TYPE DEFAULT value")
+
+# Update alembic_version to the new revision
+# cursor.execute("UPDATE alembic_version SET version_num = ?", ("new_revision_id",))
+
+conn.commit()
+conn.close()
+print("Migration complete!")
+PY'
+```
+
+Then restart the container:
+```bash
+docker restart <container-name>
+```
+
+### Current Migration Head
+
+**Revision:** `a1b2c3d4e5f6` (Add auto_download_new_episodes to user_feed_subscription)
+
+### Migration History (recent)
+
+| Revision | Description |
+|----------|-------------|
+| `a1b2c3d4e5f6` | Add `auto_download_new_episodes` to `user_feed_subscription` |
+| `f3a4b5c6d7e8` | Add `user_feed_subscription` table |
+| `e2f3a4b5c6d7` | Add `processed_with_preset_id` to `post` table |
