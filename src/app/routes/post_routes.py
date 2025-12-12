@@ -1,10 +1,11 @@
 import logging
 import os
 from pathlib import Path
-from typing import Dict
+from threading import Thread
+from typing import Any, cast
 
 import flask
-from flask import Blueprint, g, jsonify, request, send_file
+from flask import Blueprint, Flask, current_app, g, jsonify, request, send_file
 from flask.typing import ResponseReturnValue
 
 from app.extensions import db
@@ -648,17 +649,17 @@ def api_download_post(p_guid: str) -> flask.Response:
         return flask.make_response(("Post not whitelisted", 403))
 
     if not post.processed_audio_path or not Path(post.processed_audio_path).exists():
-        # Trigger on-demand processing for whitelisted episodes
+        # Trigger on-demand processing for whitelisted episodes in background thread
         logger.info(f"Triggering on-demand processing for post: {post.guid}")
         try:
-            jobs_manager = get_jobs_manager()
-            # Use start_post_processing which handles job creation and deduplication
-            result = jobs_manager.start_post_processing(
-                post.guid, 
-                priority="interactive",
-                triggered_by_user_id=None  # No user context for RSS requests
-            )
-            logger.info(f"On-demand processing result for {post.guid}: {result}")
+            app = cast(Any, current_app)._get_current_object()
+            post_guid = post.guid  # Cache before leaving request context
+            Thread(
+                target=_start_post_processing_async,
+                args=(app, post_guid),
+                daemon=True,
+                name=f"on-demand-process-{post_guid[:8]}",
+            ).start()
             
             # Return 202 Accepted with Retry-After header
             # Podcast apps will retry after this delay
@@ -719,6 +720,20 @@ def api_download_original_post(p_guid: str) -> flask.Response:
     _increment_download_count(post)
     _track_user_download(post, is_processed=False)
     return response
+
+
+def _start_post_processing_async(app: Flask, post_guid: str) -> None:
+    """Start post processing in a background thread with proper app context."""
+    with app.app_context():
+        try:
+            result = get_jobs_manager().start_post_processing(
+                post_guid,
+                priority="interactive",
+                triggered_by_user_id=None,  # No user context for RSS requests
+            )
+            logger.info(f"On-demand processing started for {post_guid}: {result}")
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.error(f"Failed to start on-demand processing for {post_guid}: {exc}")
 
 
 # Legacy endpoints for backward compatibility
