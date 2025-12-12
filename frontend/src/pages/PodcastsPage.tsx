@@ -13,6 +13,7 @@ import ReprocessButton from '../components/ReprocessButton';
 import ProcessButton from '../components/ProcessButton';
 import EpisodeProcessingStatus from '../components/EpisodeProcessingStatus';
 import { useAuth } from '../contexts/AuthContext';
+import { copyTextToClipboard } from '../services/clipboard';
 
 export default function PodcastsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -22,7 +23,8 @@ export default function PodcastsPage() {
   const [showMenu, setShowMenu] = useState(false);
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const { requireAuth } = useAuth();
+  const [processingPollTriggers, setProcessingPollTriggers] = useState<Record<string, number>>({});
+  const { requireAuth, isAuthenticated } = useAuth();
 
   // Get selected feed from URL
   const selectedFeedId = searchParams.get('feed') ? parseInt(searchParams.get('feed')!) : null;
@@ -325,16 +327,26 @@ export default function PodcastsPage() {
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-4">
               <button
                 onClick={async () => {
+                  if (requireAuth && !isAuthenticated) {
+                    toast.error('Please sign in to copy a protected RSS URL.');
+                    return;
+                  }
+
                   try {
                     // Try to get authenticated share link first
                     const shareData = await feedsApi.getFeedShareLink(selectedFeed.id);
-                    navigator.clipboard.writeText(shareData.url);
+                    await copyTextToClipboard(shareData.url);
                     toast.success('RSS URL copied to clipboard!');
                   } catch {
                     // If auth is disabled or error, use simple URL
                     const rssUrl = `${window.location.origin}/feed/${selectedFeed.id}`;
-                    navigator.clipboard.writeText(rssUrl);
-                    toast.success('RSS URL copied to clipboard!');
+                    try {
+                      await copyTextToClipboard(rssUrl);
+                      toast.success('RSS URL copied to clipboard!');
+                    } catch (err) {
+                      console.error('Failed to copy RSS URL', err);
+                      toast.error('Failed to copy RSS URL');
+                    }
                   }
                 }}
                 className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-1.5 sm:gap-2"
@@ -558,6 +570,12 @@ export default function PodcastsPage() {
                             episodeGuid={episode.guid}
                             isWhitelisted={episode.whitelisted}
                             feedId={selectedFeed?.id}
+                            onReprocessStart={() => {
+                              setProcessingPollTriggers(prev => ({
+                                ...prev,
+                                [episode.guid]: Date.now(),
+                              }));
+                            }}
                           />
                           <ProcessingStatsButton 
                             episodeGuid={episode.guid}
@@ -571,6 +589,12 @@ export default function PodcastsPage() {
                         <ProcessButton 
                           episodeGuid={episode.guid}
                           feedId={selectedFeed?.id}
+                          onProcessStart={() => {
+                            setProcessingPollTriggers(prev => ({
+                              ...prev,
+                              [episode.guid]: Date.now(),
+                            }));
+                          }}
                         />
                       )}
                     </div>
@@ -580,6 +604,7 @@ export default function PodcastsPage() {
                       episodeGuid={episode.guid}
                       isWhitelisted={episode.whitelisted}
                       hasProcessedAudio={episode.has_processed_audio}
+                      pollTrigger={processingPollTriggers[episode.guid]}
                       onProcessingComplete={() => {
                         queryClient.invalidateQueries({ queryKey: ['episodes', selectedFeed?.id] });
                       }}

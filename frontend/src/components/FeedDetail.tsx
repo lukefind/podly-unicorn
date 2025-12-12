@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import type { Feed, Episode } from '../types';
 import { feedsApi } from '../services/api';
+import { copyTextToClipboard } from '../services/clipboard';
 import DownloadButton from './DownloadButton';
 import PlayButton from './PlayButton';
 import ProcessingStatsButton from './ProcessingStatsButton';
@@ -169,22 +170,7 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
         rssUrl = new URL(`/feed/${feed.id}`, window.location.origin).toString();
       }
 
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(rssUrl);
-      } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = rssUrl;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-9999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textArea);
-        if (!successful) {
-          throw new Error('Copy command failed');
-        }
-      }
+      await copyTextToClipboard(rssUrl);
 
       if (requireAuth) {
         toast.success('Feed URL copied to clipboard');
@@ -202,22 +188,7 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
       const rssUrl = feed.rss_url || '';
       if (!rssUrl) throw new Error('No RSS URL');
 
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(rssUrl);
-      } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = rssUrl;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-9999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textArea);
-        if (!successful) {
-          throw new Error('Copy command failed');
-        }
-      }
+      await copyTextToClipboard(rssUrl);
       toast.success('Original RSS URL copied to clipboard');
     } catch (err) {
       console.error('Failed to copy original RSS URL', err);
