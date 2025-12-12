@@ -258,9 +258,10 @@ class AudioProcessor:
             else 0.0
         )
 
-        # Get active prompt preset (if any)
-        active_preset = PromptPreset.query.filter_by(is_active=True).first()
-        prompt_preset_id = active_preset.id if active_preset else None
+        prompt_preset_id = getattr(post, "processed_with_preset_id", None)
+        if prompt_preset_id is None:
+            active_preset = PromptPreset.query.filter_by(is_active=True).first()
+            prompt_preset_id = active_preset.id if active_preset else None
 
         # Check if statistics already exist for this post
         existing_stats = ProcessingStatistics.query.filter_by(post_id=post.id).first()

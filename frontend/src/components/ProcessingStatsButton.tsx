@@ -90,16 +90,17 @@ export default function ProcessingStatsButton({
           onClick={() => setShowModal(false)}
         >
           <div 
-            className="modal-content rounded-xl sm:rounded-2xl max-w-6xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden shadow-2xl border"
+            className="modal-content rounded-xl sm:rounded-2xl max-w-6xl w-full overflow-hidden shadow-2xl border flex flex-col"
             style={{ 
               backgroundColor: isDark ? '#1a0f2e' : '#ffffff',
-              borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(196, 181, 253, 0.5)'
+              borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(196, 181, 253, 0.5)',
+              maxHeight: 'calc(100vh - 1rem)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div 
-              className="flex items-center justify-between p-4 sm:p-6 border-b"
+              className="flex items-center justify-between p-4 sm:p-6 border-b flex-shrink-0"
               style={{ 
                 backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : undefined,
                 borderColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(243, 232, 255, 1)',
@@ -120,7 +121,7 @@ export default function ProcessingStatsButton({
 
             {/* Tabs */}
             <div 
-              className="border-b overflow-x-auto"
+              className="border-b overflow-x-auto flex-shrink-0"
               style={{ 
                 backgroundColor: isDark ? 'rgba(25, 15, 45, 0.9)' : '#faf5ff',
                 borderColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(243, 232, 255, 1)'
@@ -155,7 +156,7 @@ export default function ProcessingStatsButton({
 
             {/* Content */}
             <div 
-              className="p-3 sm:p-6 overflow-y-auto max-h-[calc(95vh-140px)] sm:max-h-[calc(90vh-200px)]" 
+              className="p-3 sm:p-6 overflow-y-auto flex-1 min-h-0" 
               style={{ backgroundColor: isDark ? '#1a0f2e' : '#ffffff' }}
             >
               {isLoading ? (

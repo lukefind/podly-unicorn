@@ -7,6 +7,8 @@ export interface Feed {
   image_url?: string;
   posts_count: number;
   is_private?: boolean;
+  default_prompt_preset?: { id: number; name: string } | null;
+  effective_prompt_preset?: { id: number; name: string } | null;
   auto_download_enabled?: boolean;
   auto_download_enabled_by_user?: boolean;
   auto_download_enabled_by_other?: boolean;

@@ -133,6 +133,21 @@ export const feedsApi = {
     return response.data;
   },
 
+  setFeedDefaultPreset: async (
+    feedId: number,
+    presetId: number | null
+  ): Promise<{
+    status: string;
+    feed_id: number;
+    default_prompt_preset: { id: number; name: string } | null;
+    effective_prompt_preset: { id: number; name: string } | null;
+  }> => {
+    const response = await api.post(`/api/feeds/${feedId}/default-preset`, {
+      preset_id: presetId,
+    });
+    return response.data;
+  },
+
   // Admin feed subscriptions overview
   getAdminFeedSubscriptions: async (): Promise<{
     feeds: Array<{

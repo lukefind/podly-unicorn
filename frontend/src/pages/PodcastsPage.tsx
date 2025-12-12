@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
-import { feedsApi } from '../services/api';
+import { feedsApi, presetsApi } from '../services/api';
 import { toast } from 'react-hot-toast';
 import type { Feed, Episode } from '../types';
 import AddFeedForm from '../components/AddFeedForm';
@@ -13,6 +13,7 @@ import ReprocessButton from '../components/ReprocessButton';
 import ProcessButton from '../components/ProcessButton';
 import EpisodeProcessingStatus from '../components/EpisodeProcessingStatus';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { copyTextToClipboard } from '../services/clipboard';
 
 export default function PodcastsPage() {
@@ -20,11 +21,13 @@ export default function PodcastsPage() {
   const queryClient = useQueryClient();
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showMenu, setShowMenu] = useState(false);
+  const [showShowSettingsModal, setShowShowSettingsModal] = useState(false);
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [processingPollTriggers, setProcessingPollTriggers] = useState<Record<string, number>>({});
-  const { requireAuth, isAuthenticated } = useAuth();
+  const { requireAuth, isAuthenticated, user } = useAuth();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   // Get selected feed from URL
   const selectedFeedId = searchParams.get('feed') ? parseInt(searchParams.get('feed')!) : null;
@@ -32,6 +35,12 @@ export default function PodcastsPage() {
   const { data: feeds, isLoading: feedsLoading, refetch: refetchFeeds } = useQuery({
     queryKey: ['feeds'],
     queryFn: feedsApi.getFeeds,
+  });
+
+  const { data: presets } = useQuery({
+    queryKey: ['presets'],
+    queryFn: presetsApi.getPresets,
+    enabled: requireAuth && user?.role === 'admin',
   });
 
   const setAutoDownloadMutation = useMutation({
@@ -43,6 +52,18 @@ export default function PodcastsPage() {
     onError: (err) => {
       console.error('Failed to update auto-download setting', err);
       toast.error('Failed to update auto-download setting');
+    },
+  });
+
+  const setDefaultPresetMutation = useMutation({
+    mutationFn: ({ feedId, presetId }: { feedId: number; presetId: number | null }) =>
+      feedsApi.setFeedDefaultPreset(feedId, presetId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+    },
+    onError: (err) => {
+      console.error('Failed to update default preset', err);
+      toast.error('Failed to update show preset');
     },
   });
 
@@ -76,18 +97,6 @@ export default function PodcastsPage() {
   const handleCloseFeed = () => {
     setSearchParams({});
   };
-
-  const deleteFeedMutation = useMutation({
-    mutationFn: (feedId: number) => feedsApi.deleteFeed(feedId),
-    onSuccess: () => {
-      toast.success('Feed deleted');
-      queryClient.invalidateQueries({ queryKey: ['feeds'] });
-      handleCloseFeed();
-    },
-    onError: () => {
-      toast.error('Failed to delete feed');
-    },
-  });
 
   // Subscription mutations for the feed list
   const togglePrivacyMutation = useMutation({
@@ -179,6 +188,332 @@ export default function PodcastsPage() {
           </button>
         )}
 
+      {showShowSettingsModal && selectedFeed && createPortal(
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center p-2 sm:p-4"
+          style={{ zIndex: 9999 }}
+          onClick={() => setShowShowSettingsModal(false)}
+        >
+          <div
+            className="w-full max-w-xl rounded-xl sm:rounded-2xl shadow-xl flex flex-col max-h-[90vh]"
+            style={{ 
+              backgroundColor: isDark ? '#1a0f2e' : '#ffffff',
+              borderWidth: 1,
+              borderColor: isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(196, 181, 253, 0.5)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div 
+              className="p-3 sm:p-4 flex items-center justify-between flex-shrink-0"
+              style={{ 
+                borderBottomWidth: 1,
+                borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(243, 232, 255, 1)',
+                background: isDark ? 'linear-gradient(to right, rgba(30, 10, 40, 0.9), rgba(20, 10, 50, 0.9))' : 'linear-gradient(to right, #fdf2f8, #faf5ff)'
+              }}
+            >
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-semibold truncate" style={{ color: isDark ? '#e9d5ff' : '#581c87' }}>Show settings</h3>
+                <p className="text-xs sm:text-sm truncate" style={{ color: isDark ? '#c4b5fd' : '#7c3aed' }}>{selectedFeed.title}</p>
+              </div>
+              <button
+                onClick={() => setShowShowSettingsModal(false)}
+                className="p-1.5 sm:p-2 rounded-lg transition-colors"
+                style={{ color: isDark ? '#a78bfa' : '#a855f7' }}
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-3 sm:p-4 space-y-3 overflow-y-auto flex-1 min-h-0" style={{ backgroundColor: isDark ? '#1a0f2e' : '#ffffff' }}>
+              <div 
+                className="rounded-lg sm:rounded-xl p-3"
+                style={{ 
+                  borderWidth: 1,
+                  borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(243, 232, 255, 1)',
+                  backgroundColor: isDark ? 'rgba(30, 20, 50, 0.5)' : undefined
+                }}
+              >
+                <div className="text-xs sm:text-sm font-medium" style={{ color: isDark ? '#e9d5ff' : '#581c87' }}>Original RSS</div>
+                <div className="mt-1.5 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+                  <div 
+                    className="flex-1 min-w-0 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs truncate"
+                    style={{ 
+                      borderWidth: 1,
+                      borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(196, 181, 253, 0.5)',
+                      backgroundColor: isDark ? 'rgba(20, 10, 40, 0.6)' : 'rgba(250, 245, 255, 0.4)',
+                      color: isDark ? '#c4b5fd' : '#6b21a8'
+                    }}
+                  >
+                    {selectedFeed.rss_url}
+                  </div>
+                  <div className="flex items-center gap-1.5 justify-end">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await copyTextToClipboard(selectedFeed.rss_url);
+                          toast.success('Original RSS copied!');
+                        } catch (err) {
+                          console.error('Failed to copy original RSS', err);
+                          toast.error('Failed to copy');
+                        }
+                      }}
+                      className="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+                      style={{ 
+                        borderWidth: 1,
+                        borderColor: isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(196, 181, 253, 0.5)',
+                        backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : '#ffffff',
+                        color: isDark ? '#c4b5fd' : '#7c3aed'
+                      }}
+                    >
+                      Copy
+                    </button>
+                    <a
+                      href={selectedFeed.rss_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+                      style={{ 
+                        borderWidth: 1,
+                        borderColor: isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(196, 181, 253, 0.5)',
+                        backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : '#ffffff',
+                        color: isDark ? '#c4b5fd' : '#7c3aed'
+                      }}
+                    >
+                      Open
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {requireAuth && (
+                <div 
+                  className="rounded-lg sm:rounded-xl p-3"
+                  style={{ 
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(243, 232, 255, 1)',
+                    backgroundColor: isDark ? 'rgba(30, 20, 50, 0.5)' : undefined
+                  }}
+                >
+                  <div className="text-xs sm:text-sm font-medium" style={{ color: isDark ? '#e9d5ff' : '#581c87' }}>Auto process new episodes</div>
+                  <div className="mt-1 text-[11px] sm:text-xs" style={{ color: isDark ? '#a78bfa' : '#7c3aed' }}>
+                    New episodes will be auto-processed when released.
+                  </div>
+                  <div className="mt-2">
+                    <button
+                      onClick={() => {
+                        if (!isAuthenticated) {
+                          toast.error('Please sign in to change this setting.');
+                          return;
+                        }
+
+                        const enabledByOther = Boolean(selectedFeed.auto_download_enabled_by_other);
+                        if (enabledByOther) {
+                          toast('Auto process is currently enabled by another user.');
+                          return;
+                        }
+
+                        const currentlyEnabledByUser = Boolean(selectedFeed.auto_download_enabled_by_user);
+                        setAutoDownloadMutation.mutate({
+                          feedId: selectedFeed.id,
+                          enabled: !currentlyEnabledByUser,
+                        });
+                      }}
+                      disabled={
+                        setAutoDownloadMutation.isPending ||
+                        Boolean(selectedFeed.auto_download_enabled_by_other)
+                      }
+                      className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
+                        selectedFeed.auto_download_enabled_by_other ? 'opacity-60 cursor-not-allowed' : ''
+                      }`}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: (selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user)
+                          ? (isDark ? 'rgba(16, 185, 129, 0.5)' : 'rgba(167, 243, 208, 1)')
+                          : (isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(196, 181, 253, 0.5)'),
+                        backgroundColor: (selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user)
+                          ? (isDark ? 'rgba(16, 185, 129, 0.2)' : 'rgba(236, 253, 245, 1)')
+                          : (isDark ? 'rgba(30, 20, 50, 0.8)' : '#ffffff'),
+                        color: (selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user)
+                          ? (isDark ? '#6ee7b7' : '#047857')
+                          : (isDark ? '#c4b5fd' : '#7c3aed')
+                      }}
+                    >
+                      {(selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user)
+                        ? 'Auto process: On'
+                        : 'Auto process: Off'}
+                    </button>
+
+                    {selectedFeed.auto_download_enabled_by_other && (
+                      <div className="mt-1.5 text-[10px] sm:text-[11px]" style={{ color: isDark ? '#a78bfa' : '#7c3aed' }}>
+                        Enabled by another user
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {requireAuth && user?.role === 'admin' && (
+                <div 
+                  className="rounded-lg sm:rounded-xl p-3"
+                  style={{ 
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(243, 232, 255, 1)',
+                    backgroundColor: isDark ? 'rgba(30, 20, 50, 0.5)' : undefined
+                  }}
+                >
+                  <div className="text-xs sm:text-sm font-medium" style={{ color: isDark ? '#e9d5ff' : '#581c87' }}>Choose custom preset</div>
+                  <div className="mt-1 text-[11px] sm:text-xs" style={{ color: isDark ? '#a78bfa' : '#7c3aed' }}>
+                    Override the server preset for this show.
+                  </div>
+                  <div className="mt-2">
+                    <select
+                      value={selectedFeed.default_prompt_preset?.id ?? ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const presetId = value ? Number(value) : null;
+                        setDefaultPresetMutation.mutate({
+                          feedId: selectedFeed.id,
+                          presetId,
+                        });
+                      }}
+                      disabled={setDefaultPresetMutation.isPending}
+                      className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg"
+                      style={{
+                        borderWidth: 1,
+                        borderColor: isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(196, 181, 253, 0.5)',
+                        backgroundColor: isDark ? 'rgba(20, 10, 40, 0.8)' : '#ffffff',
+                        color: isDark ? '#e9d5ff' : '#6b21a8'
+                      }}
+                    >
+                      <option value="">Use server active preset</option>
+                      {(presets ?? []).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {selectedFeed.effective_prompt_preset?.name && (
+                      <div className="mt-1.5 text-[10px] sm:text-xs" style={{ color: isDark ? '#a78bfa' : '#7c3aed' }}>
+                        Effective: <span className="font-medium">{selectedFeed.effective_prompt_preset.name}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            <div 
+              className="p-3 sm:p-4 flex-shrink-0"
+              style={{ 
+                borderTopWidth: 1,
+                borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(243, 232, 255, 1)',
+                backgroundColor: isDark ? 'rgba(25, 15, 45, 0.9)' : 'rgba(250, 245, 255, 0.4)'
+              }}
+            >
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    episodes?.forEach((ep: Episode) => {
+                      if (!ep.whitelisted) {
+                        whitelistMutation.mutate({ guid: ep.guid, whitelisted: true });
+                      }
+                    });
+                    toast.success('All episodes enabled');
+                  }}
+                  className="px-3 py-2 text-sm font-medium rounded-xl transition-colors"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(16, 185, 129, 0.4)' : 'rgba(167, 243, 208, 1)',
+                    backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(236, 253, 245, 1)',
+                    color: isDark ? '#6ee7b7' : '#047857'
+                  }}
+                >
+                  Enable all
+                </button>
+                <button
+                  onClick={() => {
+                    refreshFeedMutation.mutate(selectedFeed.id);
+                  }}
+                  disabled={refreshFeedMutation.isPending}
+                  className="px-3 py-2 text-sm font-medium rounded-xl transition-colors"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(196, 181, 253, 0.5)',
+                    backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : '#ffffff',
+                    color: isDark ? '#c4b5fd' : '#7c3aed'
+                  }}
+                >
+                  Refresh feed
+                </button>
+                <button
+                  onClick={() => {
+                    episodes?.forEach((ep: Episode) => {
+                      if (ep.whitelisted) {
+                        whitelistMutation.mutate({ guid: ep.guid, whitelisted: false });
+                      }
+                    });
+                    toast.success('All episodes disabled');
+                  }}
+                  className="px-3 py-2 text-sm font-medium rounded-xl transition-colors"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(244, 114, 182, 0.4)' : 'rgba(251, 207, 232, 1)',
+                    backgroundColor: isDark ? 'rgba(244, 114, 182, 0.15)' : 'rgba(253, 242, 248, 1)',
+                    color: isDark ? '#f9a8d4' : '#be185d'
+                  }}
+                >
+                  Disable all
+                </button>
+                <button
+                  onClick={() => {
+                    setShowShowSettingsModal(false);
+                    setShowHelpModal(true);
+                  }}
+                  className="px-3 py-2 text-sm font-medium rounded-xl transition-colors"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(196, 181, 253, 0.5)',
+                    backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : '#ffffff',
+                    color: isDark ? '#c4b5fd' : '#7c3aed'
+                  }}
+                >
+                  Help
+                </button>
+              </div>
+
+              {requireAuth && (
+                <button
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      toast.error('Please sign in to unsubscribe.');
+                      return;
+                    }
+                    if (confirm(`Unsubscribe from "${selectedFeed.title}"?`)) {
+                      unsubscribeMutation.mutate(selectedFeed.id);
+                      setShowShowSettingsModal(false);
+                    }
+                  }}
+                  disabled={unsubscribeMutation.isPending}
+                  className="mt-3 w-full px-3 py-2 text-sm font-medium rounded-xl transition-colors"
+                  style={{
+                    backgroundColor: isDark ? 'rgba(236, 72, 153, 0.8)' : '#ec4899',
+                    color: '#ffffff'
+                  }}
+                >
+                  Unsubscribe
+                </button>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
         <input
           type="search"
           placeholder="Search podcasts..."
@@ -230,6 +565,11 @@ export default function PodcastsPage() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-gray-900 truncate">{feed.title}</h3>
                     <p className="text-xs text-gray-500">{feed.posts_count} episodes</p>
+                    {feed.effective_prompt_preset?.name && (
+                      <p className="text-[11px] text-purple-600 truncate">
+                        Preset: {feed.effective_prompt_preset.name}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {/* Subscription controls - only show when auth is enabled */}
@@ -259,19 +599,6 @@ export default function PodcastsPage() {
                       </svg>
                       {(feed as any).is_private ? 'Private' : 'Public'}
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm('Unsubscribe from this podcast?')) {
-                          unsubscribeMutation.mutate(feed.id);
-                        }
-                      }}
-                      disabled={unsubscribeMutation.isPending}
-                      className="px-2 py-1 rounded text-xs bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                      title="Unsubscribe from this podcast"
-                    >
-                      Unsubscribe
-                    </button>
                   </div>
                 )}
               </div>
@@ -285,113 +612,36 @@ export default function PodcastsPage() {
         <div className="flex-1 w-full flex flex-col bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden">
           {/* Feed Header */}
           <div className="p-6 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50">
-            <div className="flex items-start gap-4">
-              <button
-                onClick={handleCloseFeed}
-                className="lg:hidden p-2 -ml-2 text-purple-500 hover:text-purple-700"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              {selectedFeed.image_url && (
-                <img
-                  src={selectedFeed.image_url}
-                  alt={selectedFeed.title}
-                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shadow-md flex-shrink-0"
-                />
-              )}
-              <div className="flex-1 min-w-0">
-                <h2 className="text-lg sm:text-xl font-bold text-purple-900 truncate">{selectedFeed.title}</h2>
-                {selectedFeed.author && (
-                  <p className="text-purple-600 mt-1 text-sm sm:text-base truncate">by {selectedFeed.author}</p>
-                )}
-                <p className="text-xs sm:text-sm text-purple-500 mt-1">{selectedFeed.posts_count} episodes</p>
-              </div>
-              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
                 <button
-                  onClick={() => refreshFeedMutation.mutate(selectedFeed.id)}
-                  disabled={refreshFeedMutation.isPending}
-                  className="p-2 text-purple-500 hover:text-purple-700 hover:bg-purple-100 rounded-xl transition-colors"
-                  title="Refresh feed"
-                >
-                  <svg className={`w-5 h-5 ${refreshFeedMutation.isPending ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm(`Delete "${selectedFeed.title}"?`)) {
-                      deleteFeedMutation.mutate(selectedFeed.id);
-                    }
-                  }}
-                  className="p-2 text-pink-500 hover:text-pink-700 hover:bg-pink-50 rounded-xl transition-colors"
-                  title="Delete feed"
+                  onClick={handleCloseFeed}
+                  className="lg:hidden p-2 -ml-2 text-purple-500 hover:text-purple-700"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
+                {selectedFeed.image_url && (
+                  <img
+                    src={selectedFeed.image_url}
+                    alt={selectedFeed.title}
+                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shadow-sm border border-purple-200/50 flex-shrink-0"
+                  />
+                )}
+                <div className="min-w-0">
+                  <h2 className="text-xl sm:text-2xl font-bold text-purple-900 leading-tight truncate">{selectedFeed.title}</h2>
+                  {selectedFeed.author && (
+                    <p className="text-purple-700 mt-1 truncate">{selectedFeed.author}</p>
+                  )}
+                  <p className="text-xs sm:text-sm text-purple-500 mt-1">{selectedFeed.posts_count} episodes</p>
+                </div>
               </div>
+
             </div>
 
             {/* Subscribe Button & Actions */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-4">
-              {requireAuth && (
-                <div className="flex flex-col">
-                  <button
-                    onClick={() => {
-                      if (!selectedFeed) return;
-                      if (!isAuthenticated) {
-                        toast.error('Please sign in to change auto-download settings.');
-                        return;
-                      }
-
-                      const enabledByOther = Boolean(selectedFeed.auto_download_enabled_by_other);
-                      if (enabledByOther) {
-                        toast('Auto-download is currently enabled by another user.');
-                        return;
-                      }
-
-                      const currentlyEnabledByUser = Boolean(selectedFeed.auto_download_enabled_by_user);
-                      setAutoDownloadMutation.mutate({
-                        feedId: selectedFeed.id,
-                        enabled: !currentlyEnabledByUser,
-                      });
-                    }}
-                    disabled={
-                      setAutoDownloadMutation.isPending ||
-                      Boolean(selectedFeed.auto_download_enabled_by_other)
-                    }
-                    className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-xl border transition-colors flex items-center gap-2 ${
-                      (selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user)
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-white/80 text-purple-700 border-purple-200 hover:bg-purple-50'
-                    } ${
-                      selectedFeed.auto_download_enabled_by_other
-                        ? 'opacity-60 cursor-not-allowed'
-                        : ''
-                    }`}
-                    title={
-                      selectedFeed.auto_download_enabled_by_other
-                        ? 'Another user has enabled auto-download for this show'
-                        : 'Automatically process new episodes when they are released'
-                    }
-                  >
-                    <span>
-                      {selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user
-                        ? 'Auto-download: On'
-                        : 'Auto-download: Off'}
-                    </span>
-                  </button>
-                  {selectedFeed.auto_download_enabled_by_other && (
-                    <div className="mt-1 text-[11px] text-purple-600">
-                      Enabled by another user
-                    </div>
-                  )}
-                </div>
-              )}
-
+            <div className="flex items-center gap-2 mt-4">
               <button
                 onClick={async () => {
                   if (requireAuth && !isAuthenticated) {
@@ -416,128 +666,55 @@ export default function PodcastsPage() {
                     }
                   }
                 }}
-                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-1.5 sm:gap-2"
+                className="px-3 py-2 text-sm font-medium text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2"
+                style={{ background: 'linear-gradient(to right, #ec4899, #8b5cf6, #06b6d4)' }}
               >
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1Z"/>
                 </svg>
-                <span className="hidden xs:inline">Subscribe to</span> Podly RSS
+                Podly RSS
               </button>
               <button
-                onClick={() => refreshFeedMutation.mutate(selectedFeed.id)}
-                disabled={refreshFeedMutation.isPending}
-                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-purple-700 bg-white/80 border border-purple-200 rounded-xl hover:bg-purple-50 transition-colors flex items-center gap-1.5 sm:gap-2"
+                onClick={() => setShowShowSettingsModal(true)}
+                className="px-3 py-2 text-sm font-medium rounded-xl transition-colors"
+                style={{
+                  backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                  borderWidth: 1,
+                  borderColor: isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(196, 181, 253, 0.5)',
+                  color: isDark ? '#c4b5fd' : '#7c3aed'
+                }}
               >
-                <svg className={`w-4 h-4 ${refreshFeedMutation.isPending ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Refresh
+                Settings
               </button>
-              <a
-                href={selectedFeed.rss_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 text-sm font-medium text-purple-700 bg-white/80 border border-purple-200 rounded-xl hover:bg-purple-50 transition-colors flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1Z"/>
-                </svg>
-                Original RSS
-              </a>
-
-              {/* More Options Menu */}
-              <div className="relative">
+              {requireAuth && (
                 <button
-                  onClick={() => setShowMenu(!showMenu)}
-                  className="p-2 text-purple-700 bg-white/80 border border-purple-200 rounded-xl hover:bg-purple-50 transition-colors"
+                  onClick={() => {
+                    if (!selectedFeed) return;
+                    if (!isAuthenticated) {
+                      toast.error('Please sign in to unsubscribe.');
+                      return;
+                    }
+                    if (confirm(`Unsubscribe from "${selectedFeed.title}"?`)) {
+                      unsubscribeMutation.mutate(selectedFeed.id);
+                    }
+                  }}
+                  disabled={unsubscribeMutation.isPending}
+                  className="px-3 py-2 text-sm font-medium text-white rounded-xl transition-colors"
+                  style={{ backgroundColor: '#ec4899' }}
+                  title="Unsubscribe"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                  </svg>
+                  Unsubscribe
                 </button>
-                
-                {showMenu && (
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl shadow-lg border border-purple-200 overflow-hidden" style={{ backgroundColor: '#ffffff', zIndex: 50 }}>
-                    <div className="py-1">
-                      <button
-                        onClick={() => {
-                          // Enable all episodes
-                          episodes?.forEach((ep: Episode) => {
-                            if (!ep.whitelisted) {
-                              whitelistMutation.mutate({ guid: ep.guid, whitelisted: true });
-                            }
-                          });
-                          setShowMenu(false);
-                          toast.success('All episodes enabled');
-                        }}
-                        className="w-full px-4 py-2 text-sm text-left flex items-center gap-3 hover:bg-purple-50 transition-colors"
-                        style={{ color: '#059669' }}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        Enable all episodes
-                      </button>
-                      <button
-                        onClick={() => {
-                          // Disable all episodes
-                          episodes?.forEach((ep: Episode) => {
-                            if (ep.whitelisted) {
-                              whitelistMutation.mutate({ guid: ep.guid, whitelisted: false });
-                            }
-                          });
-                          setShowMenu(false);
-                          toast.success('All episodes disabled');
-                        }}
-                        className="w-full px-4 py-2 text-sm text-left flex items-center gap-3 hover:bg-purple-50 transition-colors"
-                        style={{ color: '#dc2626' }}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                        </svg>
-                        Disable all episodes
-                      </button>
-                      <div className="border-t border-purple-100 my-1" />
-                      <button
-                        onClick={() => {
-                          setShowHelpModal(true);
-                          setShowMenu(false);
-                        }}
-                        className="w-full px-4 py-2 text-sm text-left flex items-center gap-3 hover:bg-purple-50 transition-colors"
-                        style={{ color: '#6b7280' }}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        How processing works
-                      </button>
-                      <div className="border-t border-purple-100 my-1" />
-                      <button
-                        onClick={() => {
-                          if (confirm(`Delete "${selectedFeed.title}"? This cannot be undone.`)) {
-                            deleteFeedMutation.mutate(selectedFeed.id);
-                          }
-                          setShowMenu(false);
-                        }}
-                        className="w-full px-4 py-2 text-sm text-left flex items-center gap-3 hover:bg-red-50 transition-colors"
-                        style={{ color: '#dc2626' }}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        Delete feed
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
-
-            {/* Description */}
-            {selectedFeed.description && (
-              <p className="mt-4 text-sm text-purple-700 line-clamp-3">{selectedFeed.description}</p>
-            )}
           </div>
+
+          {/* Description */}
+          {selectedFeed.description && (
+            <div className="px-6 pt-4 pb-2">
+              <p className="text-sm text-purple-700 dark:text-purple-300 line-clamp-3">{selectedFeed.description}</p>
+            </div>
+          )}
 
           {/* Episodes List */}
           <div className="flex-1 overflow-y-auto p-4">
@@ -572,8 +749,8 @@ export default function PodcastsPage() {
                           </span>
                         ) : episode.whitelisted ? (
                           <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-lg">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
                             Enabled
                           </span>
