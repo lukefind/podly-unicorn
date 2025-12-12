@@ -3,10 +3,14 @@ html, body {
   padding: 0 !important;
   height: 100% !important;
   overflow: hidden !important;
+  /* Prevent iOS bounce/overscroll */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 #root {
   height: 100vh !important;
+  height: 100dvh !important; /* Use dynamic viewport height for mobile browsers */
   overflow: hidden !important;
   max-width: none !important;
   margin: 0 !important;

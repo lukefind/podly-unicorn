@@ -631,7 +631,12 @@ def api_get_post_audio(p_guid: str) -> ResponseReturnValue:
 
 @post_bp.route("/api/posts/<string:p_guid>/download", methods=["GET"])
 def api_download_post(p_guid: str) -> flask.Response:
-    """API endpoint to download processed audio files."""
+    """API endpoint to download processed audio files.
+    
+    If the episode is whitelisted but not yet processed, this will trigger
+    on-demand processing and return 202 Accepted with a Retry-After header.
+    Podcast apps will typically retry the request after the specified delay.
+    """
     logger.info(f"Request to download post with GUID: {p_guid}")
     post = Post.query.filter_by(guid=p_guid).first()
     if post is None:
@@ -643,8 +648,26 @@ def api_download_post(p_guid: str) -> flask.Response:
         return flask.make_response(("Post not whitelisted", 403))
 
     if not post.processed_audio_path or not Path(post.processed_audio_path).exists():
-        logger.warning(f"Processed audio not found for post: {post.id}")
-        return flask.make_response(("Processed audio not found", 404))
+        # Trigger on-demand processing for whitelisted episodes
+        logger.info(f"Triggering on-demand processing for post: {post.guid}")
+        try:
+            jobs_manager = get_jobs_manager()
+            # Use start_post_processing which handles job creation and deduplication
+            result = jobs_manager.start_post_processing(
+                post.guid, 
+                priority="interactive",
+                triggered_by_user_id=None  # No user context for RSS requests
+            )
+            logger.info(f"On-demand processing result for {post.guid}: {result}")
+            
+            # Return 202 Accepted with Retry-After header
+            # Podcast apps will retry after this delay
+            response = flask.make_response(("Processing in progress, please retry", 202))
+            response.headers["Retry-After"] = "60"  # Suggest retry in 60 seconds
+            return response
+        except Exception as e:
+            logger.error(f"Failed to trigger on-demand processing for {p_guid}: {e}")
+            return flask.make_response(("Processing not available", 503))
 
     try:
         response = send_file(

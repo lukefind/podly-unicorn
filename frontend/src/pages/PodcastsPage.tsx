@@ -268,7 +268,7 @@ export default function PodcastsPage() {
 
       {/* Right Panel - Feed Detail - full width on mobile */}
       {selectedFeed ? (
-        <div className="flex-1 w-full flex flex-col bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden lg:max-h-full max-h-[calc(100vh-8rem)]">
+        <div className="flex-1 w-full flex flex-col bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden">
           {/* Feed Header */}
           <div className="p-6 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50">
             <div className="flex items-start gap-4">

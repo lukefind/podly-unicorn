@@ -709,6 +709,7 @@ def api_admin_feed_subscriptions() -> ResponseReturnValue:
             "stats": feed_stats.get(feed.id, {"processed_count": 0, "total_ad_time_removed": 0}),
         }
         for feed, posts_count in feeds_with_counts
+        if feed.id in subscriptions_by_feed  # Only include feeds with at least one subscriber
     ]
     
     # Sort by subscriber count descending

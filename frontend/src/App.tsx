@@ -51,7 +51,7 @@ function AppShell() {
   const showSettingsRoute = !requireAuth || user?.role === 'admin';
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-100">
+    <div className="h-screen h-[100dvh] flex overflow-hidden bg-gray-100">
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-gradient-to-r from-purple-800 via-purple-900 to-slate-900 flex items-center px-4 shadow-lg">
         <button
@@ -94,7 +94,7 @@ function AppShell() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden pt-14 lg:pt-0">
-        <main className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-6 pb-20 lg:pb-6">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/podcasts" element={<PodcastsPage />} />
