@@ -6,6 +6,8 @@ html, body {
   /* Prevent iOS bounce/overscroll */
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
+  /* Safe area insets for notched devices and browser chrome */
+  padding-bottom: env(safe-area-inset-bottom, 0) !important;
 }
 
 #root {

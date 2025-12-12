@@ -94,7 +94,7 @@ function AppShell() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden pt-14 lg:pt-0">
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-6 pb-20 lg:pb-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-6 pb-24 lg:pb-6">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/podcasts" element={<PodcastsPage />} />
