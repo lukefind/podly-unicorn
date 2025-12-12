@@ -442,8 +442,20 @@ class JobsManager:
         """
         with scheduler.app.app_context():
             feeds = Feed.query.all()
+            auto_process_post_guids: List[str] = []
             for feed in feeds:
-                refresh_feed(feed)
+                try:
+                    auto_process_post_guids.extend(refresh_feed(feed))
+                except Exception as exc:  # pylint: disable=broad-except
+                    logger.error(
+                        "Failed to refresh feed %s during refresh-all: %s",
+                        getattr(feed, "id", None),
+                        exc,
+                    )
+
+            if auto_process_post_guids:
+                for post_guid in auto_process_post_guids:
+                    self.start_post_processing(post_guid, priority="background")
 
             # Clean up posts with missing audio files
             self._cleanup_inconsistent_posts()

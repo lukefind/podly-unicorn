@@ -34,6 +34,18 @@ export default function PodcastsPage() {
     queryFn: feedsApi.getFeeds,
   });
 
+  const setAutoDownloadMutation = useMutation({
+    mutationFn: ({ feedId, enabled }: { feedId: number; enabled: boolean }) =>
+      feedsApi.setFeedAutoDownload(feedId, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+    },
+    onError: (err) => {
+      console.error('Failed to update auto-download setting', err);
+      toast.error('Failed to update auto-download setting');
+    },
+  });
+
   const { data: episodes, isLoading: episodesLoading } = useQuery({
     queryKey: ['episodes', selectedFeedId],
     queryFn: () => feedsApi.getFeedPosts(selectedFeedId!),
@@ -325,6 +337,61 @@ export default function PodcastsPage() {
 
             {/* Subscribe Button & Actions */}
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-4">
+              {requireAuth && (
+                <div className="flex flex-col">
+                  <button
+                    onClick={() => {
+                      if (!selectedFeed) return;
+                      if (!isAuthenticated) {
+                        toast.error('Please sign in to change auto-download settings.');
+                        return;
+                      }
+
+                      const enabledByOther = Boolean(selectedFeed.auto_download_enabled_by_other);
+                      if (enabledByOther) {
+                        toast('Auto-download is currently enabled by another user.');
+                        return;
+                      }
+
+                      const currentlyEnabledByUser = Boolean(selectedFeed.auto_download_enabled_by_user);
+                      setAutoDownloadMutation.mutate({
+                        feedId: selectedFeed.id,
+                        enabled: !currentlyEnabledByUser,
+                      });
+                    }}
+                    disabled={
+                      setAutoDownloadMutation.isPending ||
+                      Boolean(selectedFeed.auto_download_enabled_by_other)
+                    }
+                    className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-xl border transition-colors flex items-center gap-2 ${
+                      (selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user)
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-white/80 text-purple-700 border-purple-200 hover:bg-purple-50'
+                    } ${
+                      selectedFeed.auto_download_enabled_by_other
+                        ? 'opacity-60 cursor-not-allowed'
+                        : ''
+                    }`}
+                    title={
+                      selectedFeed.auto_download_enabled_by_other
+                        ? 'Another user has enabled auto-download for this show'
+                        : 'Automatically process new episodes when they are released'
+                    }
+                  >
+                    <span>
+                      {selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user
+                        ? 'Auto-download: On'
+                        : 'Auto-download: Off'}
+                    </span>
+                  </button>
+                  {selectedFeed.auto_download_enabled_by_other && (
+                    <div className="mt-1 text-[11px] text-purple-600">
+                      Enabled by another user
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button
                 onClick={async () => {
                   if (requireAuth && !isAuthenticated) {

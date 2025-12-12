@@ -185,6 +185,7 @@ class UserFeedSubscription(db.Model):  # type: ignore[name-defined, misc]
     feed_id = db.Column(db.Integer, db.ForeignKey("feed.id"), nullable=False, index=True)
     subscribed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     is_private = db.Column(db.Boolean, default=False, nullable=False)  # Hide from admin subscription list
+    auto_download_new_episodes = db.Column(db.Boolean, default=False, nullable=False)
 
     # Relationships - cascade delete when user or feed is deleted
     user = db.relationship("User", backref=db.backref("feed_subscriptions", lazy="dynamic", cascade="all, delete-orphan"))
