@@ -336,6 +336,14 @@ Admins can view all subscriptions at `/subscriptions`:
 - Shows all feeds with subscriber counts
 - Lists all subscribers (including private ones, marked with eye icon)
 - Displays processing stats per feed
+- **Status badges** on each feed:
+  - **Auto** (green) - Auto-process enabled by at least one user
+  - **Public** (blue) - Has public subscribers, visible in Browse Podcasts
+  - **Private Only** (amber) - All subscribers are private
+  - **Hidden** (gray) - Admin has hidden the feed
+- **Settings button** (gear icon) on each feed card opens modal with:
+  - **Hide from Browse** toggle - Admin can hide feed from Browse Podcasts
+  - **Auto-Process** toggle - Admin can disable auto-process for all users
 
 ### Delete Behavior
 When a user clicks "Delete" on a feed:
@@ -395,12 +403,13 @@ docker restart <container-name>
 
 ### Current Migration Head
 
-**Revision:** `b2c3d4e5f6a7` (Add default_prompt_preset_id to feed)
+**Revision:** `c3d4e5f6a7b8` (Add is_hidden to feed)
 
 ### Migration History (recent)
 
 | Revision | Description |
 |----------|-------------|
+| `c3d4e5f6a7b8` | Add `is_hidden` to `feed` table |
 | `b2c3d4e5f6a7` | Add `default_prompt_preset_id` to `feed` table |
 | `a1b2c3d4e5f6` | Add `auto_download_new_episodes` to `user_feed_subscription` |
 | `f3a4b5c6d7e8` | Add `user_feed_subscription` table |

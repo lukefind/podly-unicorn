@@ -33,6 +33,7 @@ class Feed(db.Model):  # type: ignore[name-defined, misc]
     default_prompt_preset_id = db.Column(
         db.Integer, db.ForeignKey("prompt_preset.id"), nullable=True
     )
+    is_hidden = db.Column(db.Boolean, default=False, nullable=False)
 
     posts = db.relationship(
         "Post", backref="feed", lazy=True, order_by="Post.release_date.desc()"

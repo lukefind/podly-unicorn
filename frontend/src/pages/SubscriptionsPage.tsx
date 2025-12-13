@@ -1,12 +1,15 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 
 export default function SubscriptionsPage() {
   const { user, requireAuth } = useAuth();
   const [expandedSubscribers, setExpandedSubscribers] = useState<Record<number, boolean>>({});
+  const [settingsModalFeedId, setSettingsModalFeedId] = useState<number | null>(null);
+  const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-feed-subscriptions'],
@@ -16,6 +19,32 @@ export default function SubscriptionsPage() {
 
   // useMemo must be called before any early returns (React rules of hooks)
   const feeds = data?.feeds ?? [];
+  const selectedFeed = feeds.find(f => f.id === settingsModalFeedId);
+
+  const visibilityMutation = useMutation({
+    mutationFn: ({ feedId, isHidden }: { feedId: number; isHidden: boolean }) =>
+      feedsApi.setFeedVisibility(feedId, isHidden),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-feed-subscriptions'] });
+      toast.success(data.is_hidden ? 'Feed hidden from browse' : 'Feed visible in browse');
+    },
+    onError: () => {
+      toast.error('Failed to update feed visibility');
+    },
+  });
+
+  const disableAutoProcessMutation = useMutation({
+    mutationFn: (feedId: number) => feedsApi.disableAutoProcessAll(feedId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-feed-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      toast.success(`Auto-process disabled for ${data.subscriptions_updated} subscription(s)`);
+      setSettingsModalFeedId(null);
+    },
+    onError: () => {
+      toast.error('Failed to disable auto-process');
+    },
+  });
 
   const formatDuration = (seconds: number) => {
     if (seconds < 60) return `${Math.round(seconds)}s`;
@@ -95,7 +124,27 @@ export default function SubscriptionsPage() {
 
                 {/* Feed Info */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 dark:text-purple-100 text-base sm:text-lg leading-snug">{feed.title}</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-gray-900 dark:text-purple-100 text-base sm:text-lg leading-snug">{feed.title}</h3>
+                    {feed.auto_process_enabled && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" title="Auto-process enabled">
+                        Auto
+                      </span>
+                    )}
+                    {feed.is_hidden ? (
+                      <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300" title="Admin hidden from browse page">
+                        Hidden
+                      </span>
+                    ) : !feed.has_public_subscriber ? (
+                      <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400" title="All subscribers are private - not visible in Browse Podcasts">
+                        Private Only
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400" title="Visible in Browse Podcasts">
+                        Public
+                      </span>
+                    )}
+                  </div>
                   {feed.author && (
                     <p className="text-sm text-gray-500">{feed.author}</p>
                   )}
@@ -116,9 +165,19 @@ export default function SubscriptionsPage() {
                   </div>
                 </div>
 
-                {/* Subscriber Count Badge */}
-                <div className="flex-shrink-0 text-center">
-                  <div className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg ${
+                {/* Settings Button + Subscriber Count */}
+                <div className="flex-shrink-0 flex items-start gap-2">
+                  <button
+                    onClick={() => setSettingsModalFeedId(feed.id)}
+                    className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                    title="Feed settings"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </button>
+                  <div className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-center ${
                     feed.subscriber_count > 0 
                       ? 'bg-purple-100 text-purple-700' 
                       : 'bg-gray-100 text-gray-500'
@@ -195,6 +254,101 @@ export default function SubscriptionsPage() {
           </div>
         )}
       </div>
+
+      {/* Settings Modal */}
+      {settingsModalFeedId && selectedFeed && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setSettingsModalFeedId(null)}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900">Feed Settings</h3>
+                <button
+                  onClick={() => setSettingsModalFeedId(null)}
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mt-1 truncate">{selectedFeed.title}</p>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Visibility Toggle */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <div className="font-medium text-gray-900 text-sm">Hide from Browse</div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    Hidden feeds won't appear in "Browse Podcasts on Server"
+                  </div>
+                </div>
+                <button
+                  onClick={() => visibilityMutation.mutate({ 
+                    feedId: selectedFeed.id, 
+                    isHidden: !selectedFeed.is_hidden 
+                  })}
+                  disabled={visibilityMutation.isPending}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    selectedFeed.is_hidden ? 'bg-purple-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      selectedFeed.is_hidden ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Auto-Process Toggle */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <div className="font-medium text-gray-900 text-sm">Auto-Process</div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    {selectedFeed.auto_process_enabled 
+                      ? 'Enabled by a user - new episodes auto-process'
+                      : 'Disabled - no auto-processing'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (selectedFeed.auto_process_enabled) {
+                      disableAutoProcessMutation.mutate(selectedFeed.id);
+                    }
+                  }}
+                  disabled={disableAutoProcessMutation.isPending || !selectedFeed.auto_process_enabled}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    selectedFeed.auto_process_enabled ? 'bg-emerald-500' : 'bg-gray-300'
+                  } ${!selectedFeed.auto_process_enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={selectedFeed.auto_process_enabled ? 'Click to disable for all users' : 'No users have enabled auto-process'}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      selectedFeed.auto_process_enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-100 bg-gray-50">
+              <button
+                onClick={() => setSettingsModalFeedId(null)}
+                className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

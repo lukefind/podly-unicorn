@@ -18,6 +18,8 @@ function getStatusColor(status: string) {
       return 'bg-gradient-to-r from-lavender-100 to-lavender-200 text-purple-700';
     case 'cancelled':
       return 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700';
+    case 'idle':
+      return 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-600';
     default:
       return 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700';
   }

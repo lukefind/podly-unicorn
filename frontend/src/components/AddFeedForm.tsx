@@ -264,76 +264,80 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
                 {displayedResults.map((result) => (
                   <li
                     key={result.feedUrl}
-                    className="flex gap-3 p-3 border border-gray-200 rounded-md bg-gray-50"
+                    className="p-3 border border-gray-200 rounded-md bg-gray-50"
                   >
-                    {result.artworkUrl ? (
-                      <img
-                        src={result.artworkUrl}
-                        alt={result.title}
-                        className="w-16 h-16 rounded-md object-cover"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs">
-                        No Image
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{result.title}</h4>
-                      {result.author && (
-                        <p className="text-sm text-gray-600">{result.author}</p>
-                      )}
-                      {result.genres.length > 0 && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          {result.genres.join(' · ')}
-                        </p>
-                      )}
-                      <p className="text-xs text-gray-500 break-all mt-2">{result.feedUrl}</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {isSubscribed(result.feedUrl) ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-100 text-green-700 rounded-md text-sm font-medium">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          Subscribed
-                        </span>
-                      ) : requireAuth ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleAddFromSearch(result, false)}
-                            disabled={isSubmitting && addingFeedUrl === result.feedUrl}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-3 py-2 rounded-l-md text-sm transition-colors"
-                            title="Subscribe publicly - other users will see this feed in Browse Podcasts"
-                          >
-                            {isSubmitting && addingFeedUrl === result.feedUrl && !addingPrivately ? 'Adding...' : 'Subscribe'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleAddFromSearch(result, true)}
-                            disabled={isSubmitting && addingFeedUrl === result.feedUrl}
-                            className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-400 text-white px-2 py-2 rounded-r-md text-sm transition-colors"
-                            title="Subscribe privately - this feed won't appear in Browse Podcasts for other users"
-                          >
-                            {isSubmitting && addingFeedUrl === result.feedUrl && addingPrivately ? (
-                              <span className="px-1">...</span>
-                            ) : (
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                              </svg>
-                            )}
-                          </button>
-                        </>
+                    <div className="flex gap-3">
+                      {result.artworkUrl ? (
+                        <img
+                          src={result.artworkUrl}
+                          alt={result.title}
+                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-md object-cover flex-shrink-0"
+                        />
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleAddFromSearch(result)}
-                          disabled={isSubmitting && addingFeedUrl === result.feedUrl}
-                          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-3 py-2 rounded-md text-sm transition-colors"
-                        >
-                          {isSubmitting && addingFeedUrl === result.feedUrl ? 'Adding...' : 'Add'}
-                        </button>
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs flex-shrink-0">
+                          No Image
+                        </div>
                       )}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 line-clamp-2">{result.title}</h4>
+                        {result.author && (
+                          <p className="text-sm text-gray-600 truncate">{result.author}</p>
+                        )}
+                        {result.genres.length > 0 && (
+                          <p className="text-xs text-gray-500 truncate">
+                            {result.genres.join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-gray-200">
+                      <p className="text-xs text-gray-400 truncate flex-1 min-w-0">{result.feedUrl}</p>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {isSubscribed(result.feedUrl) ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1.5 bg-green-100 text-green-700 rounded-md text-xs font-medium">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Subscribed
+                          </span>
+                        ) : requireAuth ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleAddFromSearch(result, false)}
+                              disabled={isSubmitting && addingFeedUrl === result.feedUrl}
+                              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-2.5 py-1.5 rounded-l-md text-xs font-medium transition-colors"
+                              title="Subscribe publicly - other users will see this feed in Browse Podcasts"
+                            >
+                              {isSubmitting && addingFeedUrl === result.feedUrl && !addingPrivately ? '...' : 'Subscribe'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAddFromSearch(result, true)}
+                              disabled={isSubmitting && addingFeedUrl === result.feedUrl}
+                              className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-400 text-white px-1.5 py-1.5 rounded-r-md text-xs transition-colors"
+                              title="Subscribe privately - this feed won't appear in Browse Podcasts for other users"
+                            >
+                              {isSubmitting && addingFeedUrl === result.feedUrl && addingPrivately ? (
+                                <span>...</span>
+                              ) : (
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                </svg>
+                              )}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleAddFromSearch(result)}
+                            disabled={isSubmitting && addingFeedUrl === result.feedUrl}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors"
+                          >
+                            {isSubmitting && addingFeedUrl === result.feedUrl ? '...' : 'Add'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </li>
                 ))}

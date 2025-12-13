@@ -131,7 +131,7 @@ def recalculate_run_counts(session: Any) -> Optional[JobsManagerRun]:
             run.counters_reset_at = run.started_at or now
         run.completed_at = None
     else:
-        run.status = "pending"
+        run.status = "idle"
         run.completed_at = now
         run.started_at = None
         run.total_jobs = 0

@@ -639,6 +639,51 @@ def set_feed_default_preset(feed_id: int) -> ResponseReturnValue:
     )
 
 
+@feed_bp.route("/api/feeds/<int:feed_id>/visibility", methods=["POST"])
+def set_feed_visibility(feed_id: int) -> ResponseReturnValue:
+    """Admin-only: Set whether a feed is hidden from the browse page."""
+    error_response = _require_admin()
+    if error_response:
+        return error_response
+
+    feed = Feed.query.get_or_404(feed_id)
+    payload = request.json if request.is_json else {}
+    is_hidden = payload.get("is_hidden", False)
+
+    feed.is_hidden = bool(is_hidden)
+    db.session.commit()
+
+    return jsonify({
+        "status": "ok",
+        "feed_id": feed.id,
+        "is_hidden": feed.is_hidden,
+    })
+
+
+@feed_bp.route("/api/feeds/<int:feed_id>/disable-auto-process", methods=["POST"])
+def disable_auto_process_all(feed_id: int) -> ResponseReturnValue:
+    """Admin-only: Disable auto-process for all users on this feed."""
+    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
+    
+    error_response = _require_admin()
+    if error_response:
+        return error_response
+
+    feed = Feed.query.get_or_404(feed_id)
+    
+    # Disable auto_download_new_episodes for all subscriptions to this feed
+    updated = UserFeedSubscription.query.filter_by(feed_id=feed_id).update(
+        {"auto_download_new_episodes": False}
+    )
+    db.session.commit()
+
+    return jsonify({
+        "status": "ok",
+        "feed_id": feed.id,
+        "subscriptions_updated": updated,
+    })
+
+
 @feed_bp.route("/api/feeds/<int:feed_id>/subscribe", methods=["POST"])
 def subscribe_to_feed(feed_id: int) -> ResponseReturnValue:
     """Subscribe the current user to a feed. Optionally mark as private."""
@@ -836,15 +881,24 @@ def api_admin_feed_subscriptions() -> ResponseReturnValue:
     # Get all subscriptions grouped by feed (including private - admin sees all for usage tracking)
     all_subscriptions = UserFeedSubscription.query.all()
     subscriptions_by_feed: dict = {}
+    auto_process_by_feed: dict = {}  # Track if any user has auto-process enabled
+    has_public_subscriber: dict = {}  # Track if any user has public subscription
     for sub in all_subscriptions:
         if sub.feed_id not in subscriptions_by_feed:
             subscriptions_by_feed[sub.feed_id] = []
+            auto_process_by_feed[sub.feed_id] = False
+            has_public_subscriber[sub.feed_id] = False
         subscriptions_by_feed[sub.feed_id].append({
             "user_id": sub.user_id,
             "username": sub.user.username if sub.user else "Unknown",
             "subscribed_at": sub.subscribed_at.isoformat() if sub.subscribed_at else None,
             "is_private": sub.is_private,
+            "auto_download": getattr(sub, 'auto_download_new_episodes', False),
         })
+        if getattr(sub, 'auto_download_new_episodes', False):
+            auto_process_by_feed[sub.feed_id] = True
+        if not sub.is_private:
+            has_public_subscriber[sub.feed_id] = True
     
     # Get processing stats per feed
     feed_stats: dict = {}
@@ -878,6 +932,9 @@ def api_admin_feed_subscriptions() -> ResponseReturnValue:
             "subscribers": subscriptions_by_feed.get(feed.id, []),
             "subscriber_count": len(subscriptions_by_feed.get(feed.id, [])),
             "stats": feed_stats.get(feed.id, {"processed_count": 0, "total_ad_time_removed": 0}),
+            "is_hidden": getattr(feed, 'is_hidden', False),
+            "auto_process_enabled": auto_process_by_feed.get(feed.id, False),
+            "has_public_subscriber": has_public_subscriber.get(feed.id, False),
         }
         for feed, posts_count in feeds_with_counts
         if feed.id in subscriptions_by_feed  # Only include feeds with at least one subscriber
