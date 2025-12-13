@@ -200,8 +200,10 @@ def _configure_session(app: Flask, auth_settings: AuthSettings) -> None:
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-    # We always allow HTTP cookies so self-hosted installs work behind simple HTTP reverse proxies.
-    app.config["SESSION_COOKIE_SECURE"] = False
+    # Default to False for HTTP reverse proxies; set SESSION_COOKIE_SECURE=true for HTTPS.
+    app.config["SESSION_COOKIE_SECURE"] = (
+        os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
+    )
 
 
 def _configure_cors(app: Flask) -> None:
