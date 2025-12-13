@@ -605,6 +605,12 @@ export const configApi = {
     const response = await api.post('/api/config/test-whisper', payload ?? {});
     return response.data;
   },
+  testEmail: async (
+    toEmail: string
+  ): Promise<{ ok: boolean; message?: string; error?: string }> => {
+    const response = await api.post('/api/config/test-email', { to_email: toEmail });
+    return response.data;
+  },
   getWhisperCapabilities: async (): Promise<{ local_available: boolean }> => {
     const response = await api.get('/api/config/whisper-capabilities');
     const local_available = !!response.data?.local_available;

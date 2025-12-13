@@ -474,7 +474,9 @@ def _update_section_email(data: Dict[str, Any]) -> None:
     ]:
         if key in data:
             new_val = data[key]
-            if key == "smtp_password" and _is_empty(new_val):
+            # Skip empty string values to avoid overwriting existing settings
+            # (except for booleans which can legitimately be False)
+            if key not in ("smtp_use_tls", "smtp_use_ssl") and _is_empty(new_val):
                 continue
             setattr(row, key, new_val)
     db.session.commit()

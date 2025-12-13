@@ -1675,6 +1675,37 @@ export default function ConfigPage() {
                     />
                   </Field>
                 </div>
+                <div className="flex justify-center mt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const toEmail = pending?.email?.admin_notify_email || pending?.email?.from_email;
+                      if (!toEmail) {
+                        toast.error('Please configure Admin Notify Email or From Email first');
+                        return;
+                      }
+                      toast.promise(
+                        configApi.testEmail(toEmail),
+                        {
+                          loading: 'Sending test email...',
+                          success: (res) => res?.message || 'Test email sent!',
+                          error: (err: unknown) => {
+                            const e = err as { response?: { data?: { error?: string; message?: string } }; message?: string };
+                            return (
+                              e?.response?.data?.error ||
+                              e?.response?.data?.message ||
+                              e?.message ||
+                              'Failed to send test email'
+                            );
+                          }
+                        }
+                      );
+                    }}
+                    className="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:from-purple-700 hover:to-pink-600 transition-colors"
+                  >
+                    Send Test Email
+                  </button>
+                </div>
               </div>
             </Section>
           )}

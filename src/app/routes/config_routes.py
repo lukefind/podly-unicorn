@@ -728,3 +728,32 @@ def api_configured_check() -> flask.Response:
         logger.error(f"Failed to check API configuration: {e}")
         # Be conservative: report not configured on error
         return flask.jsonify({"configured": False})
+
+
+@config_bp.route("/api/config/test-email", methods=["POST"])
+def api_test_email() -> flask.Response:
+    """Send a test email to verify SMTP configuration."""
+    _, error_response = _require_admin()
+    if error_response:
+        return error_response
+
+    payload: Dict[str, Any] = request.get_json(silent=True) or {}
+    to_email = payload.get("to_email")
+
+    if not to_email:
+        return _make_error_response("to_email is required")
+
+    try:
+        from app.email_sender import send_email, EmailSendError
+
+        send_email(
+            to_email=to_email,
+            subject="Podly Test Email",
+            body="This is a test email from Podly to verify your SMTP configuration is working correctly.",
+        )
+        return _make_success_response(f"Test email sent to {to_email}")
+    except EmailSendError as e:
+        return _make_error_response(str(e))
+    except Exception as e:  # pylint: disable=broad-except
+        logger.error(f"Failed to send test email: {e}")
+        return _make_error_response(f"Failed to send test email: {e}")
