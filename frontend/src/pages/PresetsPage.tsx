@@ -151,12 +151,13 @@ export default function PresetsPage() {
         </div>
         <button
           onClick={handleCreateNew}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all text-sm sm:text-base"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Create Preset
+          <span className="hidden sm:inline">Create Preset</span>
+          <span className="sm:hidden">Create</span>
         </button>
       </div>
 
