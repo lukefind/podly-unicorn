@@ -162,17 +162,33 @@ export const feedsApi = {
         user_id: number;
         username: string;
         subscribed_at: string | null;
+        auto_download?: boolean;
       }>;
       subscriber_count: number;
       stats: {
         processed_count: number;
         total_ad_time_removed: number;
       };
+      is_hidden: boolean;
+      auto_process_enabled: boolean;
+      has_public_subscriber: boolean;
     }>;
     total_feeds: number;
     total_subscriptions: number;
   }> => {
     const response = await api.get('/api/admin/feed-subscriptions');
+    return response.data;
+  },
+
+  // Admin: Set feed visibility (hide from browse page)
+  setFeedVisibility: async (feedId: number, isHidden: boolean): Promise<{ status: string; feed_id: number; is_hidden: boolean }> => {
+    const response = await api.post(`/api/feeds/${feedId}/visibility`, { is_hidden: isHidden });
+    return response.data;
+  },
+
+  // Admin: Disable auto-process for all users on a feed
+  disableAutoProcessAll: async (feedId: number): Promise<{ status: string; feed_id: number; subscriptions_updated: number }> => {
+    const response = await api.post(`/api/feeds/${feedId}/disable-auto-process`);
     return response.data;
   },
 

@@ -20,6 +20,7 @@ Podly Unicorn automatically removes advertisements from podcasts using AI. Add y
 - 🎛️ **Adjustable Presets** — Conservative, Balanced, or Aggressive ad removal
 - 📊 **Statistics** — See exactly how much ad time was removed per episode
 - 👥 **Multi-User** — Per-user feed subscriptions with privacy controls
+- 🔐 **Admin Controls** — Hide feeds, disable auto-process, manage visibility
 - 🦄 **Beautiful UI** — Pastel unicorn theme with light/dark mode
 - 📱 **Mobile Optimized** — Fully responsive design for phones and tablets
 - 🔒 **Self-Hosted** — Your data stays on your server
@@ -117,6 +118,15 @@ OPENAI_BASE_URL=https://api.x.ai/v1
 | **Conservative** | Only obvious ads — sponsor reads, "brought to you by" |
 | **Balanced** | Default — typical ads while preserving content |
 | **Aggressive** | All promotional content including self-promotion |
+
+### Admin Features
+
+Admins have additional controls in the **Subscriptions** page (`/subscriptions`):
+
+- **Feed visibility badges** — See which feeds are Public, Private Only, or Hidden
+- **Auto-process indicator** — See which feeds have auto-process enabled
+- **Hide from Browse** — Hide sensitive feeds from the public browse page
+- **Disable auto-process** — Turn off auto-process for all users on a feed
 
 ---
 
