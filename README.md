@@ -14,21 +14,68 @@
 
 Podly Unicorn automatically removes advertisements from podcasts using AI. Add your favorite shows, and Podly creates ad-free RSS feeds you can subscribe to in any podcast app.
 
-**Key Features:**
-- 🤖 **AI-Powered** — Uses LLMs (Groq, OpenAI, xAI Grok) to detect and remove ads
-- 📡 **RSS Feeds** — Subscribe in Apple Podcasts, Overcast, Pocket Casts, or any app
-- 🎛️ **Adjustable Presets** — Conservative, Balanced, or Aggressive ad removal
-- 📊 **Statistics** — See exactly how much ad time was removed per episode
-- 👥 **Multi-User** — Per-user feed subscriptions with privacy controls
-- 🔐 **Admin Controls** — Hide feeds, disable auto-process, manage visibility
-- 🦄 **Beautiful UI** — Pastel unicorn theme with light/dark mode
-- 📱 **Mobile Optimized** — Fully responsive design for phones and tablets
-- 🔒 **Self-Hosted** — Your data stays on your server
+This is a fork of [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podcasts) with significant UI/UX improvements and new features.
 
 <div align="center">
-  <img src="frontend/public/images/dashboard.png" alt="Podly Unicorn Dashboard" width="700" />
+  <img src="frontend/public/images/screenshots/dashboard-desktop.png" alt="Podly Unicorn Dashboard" width="700" />
   <p><em>Dashboard showing podcast statistics and ad removal progress</em></p>
 </div>
+
+<div align="center">
+  <img src="frontend/public/images/screenshots/podcasts-desktop.png" alt="Podcasts Page" width="700" />
+  <p><em>Podcasts page with episode management</em></p>
+</div>
+
+<div align="center">
+  <table>
+    <tr>
+      <td><img src="frontend/public/images/screenshots/podcasts-mobile.png" alt="Mobile View" width="300" /></td>
+      <td><img src="frontend/public/images/screenshots/processed mobile.png" alt="Processed Episode" width="300" /></td>
+    </tr>
+    <tr>
+      <td align="center"><em>Mobile podcasts view</em></td>
+      <td align="center"><em>Processed episode details</em></td>
+    </tr>
+  </table>
+</div>
+
+---
+
+## Updates from Original App
+
+### 🎨 Completely Redesigned UI
+- Pastel unicorn theme with purple/pink gradients (light & dark mode)
+
+### 👥 Multi-User Authentication System
+- Per-user feed subscriptions - each user sees only their podcasts
+- Private subscriptions - hide your podcasts from other users
+- Browse Podcasts on Server - discover feeds other users have added (unless made private)
+
+### 🎛️ Prompt Presets System
+- 3 built-in presets: Conservative, Balanced, Aggressive
+- Custom presets - create your own ad detection prompts
+- Per-show preset overrides - different presets for different podcasts
+- Preset tracking - see which preset was used for each episode
+
+### 📊 Enhanced Statistics & Monitoring
+- Per-user statistics (admin) - episodes processed, downloads, ad time removed
+- Processing progress indicators on episode cards
+
+### ⚙️ Admin Controls
+- Feed visibility controls - hide sensitive feeds from browse page
+- Disable auto-process for all users on a feed
+- Feed status badges - Public, Private, Hidden, Auto indicators
+- User management - view all subscriptions and usage
+
+### 🔄 Auto-Process New Episodes
+- Per-feed toggle to automatically process new episodes
+- Shared across users - if anyone enables it, new episodes auto-process
+- Visual indicators showing which feeds have auto-process enabled
+
+### 📱 Mobile Optimizations
+- Fully responsive design for phones and tablets
+- Touch-friendly controls and modals
+- Optimized layouts for small screens
 
 ---
 
@@ -110,23 +157,6 @@ OPENAI_BASE_URL=https://api.x.ai/v1
 |------|--------|-------|
 | **Groq** | `WHISPER_TYPE=groq` | Fast, cheap, recommended |
 | **Local** | `WHISPER_TYPE=local` | Free, requires RAM |
-
-### Ad Detection Presets
-
-| Preset | Description |
-|--------|-------------|
-| **Conservative** | Only obvious ads — sponsor reads, "brought to you by" |
-| **Balanced** | Default — typical ads while preserving content |
-| **Aggressive** | All promotional content including self-promotion |
-
-### Admin Features
-
-Admins have additional controls in the **Subscriptions** page (`/subscriptions`):
-
-- **Feed visibility badges** — See which feeds are Public, Private Only, or Hidden
-- **Auto-process indicator** — See which feeds have auto-process enabled
-- **Hide from Browse** — Hide sensitive feeds from the public browse page
-- **Disable auto-process** — Turn off auto-process for all users on a feed
 
 ---
 
