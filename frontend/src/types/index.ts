@@ -124,6 +124,20 @@ export interface AppConfigUI {
   automatically_whitelist_new_episodes: boolean;
   post_cleanup_retention_days: number | null;
   number_of_episodes_to_whitelist_from_archive_of_new_feed: number;
+  allow_signup: boolean;
+}
+
+export interface EmailConfigUI {
+  smtp_host?: string | null;
+  smtp_port?: number | null;
+  smtp_username?: string | null;
+  smtp_password?: string | null;
+  smtp_password_preview?: string | null;
+  smtp_use_tls?: boolean;
+  smtp_use_ssl?: boolean;
+  from_email?: string | null;
+  admin_notify_email?: string | null;
+  app_base_url?: string | null;
 }
 
 export interface CombinedConfig {
@@ -132,6 +146,7 @@ export interface CombinedConfig {
   processing: ProcessingConfigUI;
   output: OutputConfigUI;
   app: AppConfigUI;
+  email?: EmailConfigUI;
 }
 
 export interface EnvOverrideEntry {
@@ -160,12 +175,14 @@ export interface PodcastSearchResult {
 export interface AuthUser {
   id: number;
   username: string;
+  email?: string | null;
   role: 'admin' | 'user' | string;
 }
 
 export interface ManagedUser extends AuthUser {
   created_at: string;
   updated_at: string;
+  account_status?: string;
 }
 
 // ----- Preset Types -----

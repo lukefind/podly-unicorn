@@ -8,6 +8,7 @@ from app.background import add_background_job, schedule_cleanup_job
 from app.extensions import db, scheduler
 from app.models import (
     AppSettings,
+    EmailSettings,
     LLMSettings,
     OutputSettings,
     ProcessingSettings,
@@ -128,6 +129,15 @@ def ensure_defaults() -> None:
             "automatically_whitelist_new_episodes": DEFAULTS.APP_AUTOMATICALLY_WHITELIST_NEW_EPISODES,
             "post_cleanup_retention_days": DEFAULTS.APP_POST_CLEANUP_RETENTION_DAYS,
             "number_of_episodes_to_whitelist_from_archive_of_new_feed": DEFAULTS.APP_NUM_EPISODES_TO_WHITELIST_FROM_ARCHIVE_OF_NEW_FEED,
+            "allow_signup": DEFAULTS.APP_ALLOW_SIGNUP,
+        },
+    )
+
+    _ensure_row(
+        EmailSettings,
+        {
+            "smtp_use_tls": True,
+            "smtp_use_ssl": False,
         },
     )
 
@@ -352,8 +362,9 @@ def _apply_env_overrides_to_db_first_boot() -> None:
     processing = ProcessingSettings.query.get(1)
     output = OutputSettings.query.get(1)
     app_s = AppSettings.query.get(1)
+    email_s = EmailSettings.query.get(1)
 
-    assert llm and whisper and processing and output and app_s
+    assert llm and whisper and processing and output and app_s and email_s
 
     changed = False
     changed = _apply_llm_env_overrides_to_db(llm) or changed
@@ -373,8 +384,9 @@ def read_combined() -> Dict[str, Any]:
     processing = ProcessingSettings.query.get(1)
     output = OutputSettings.query.get(1)
     app_s = AppSettings.query.get(1)
+    email_s = EmailSettings.query.get(1)
 
-    assert llm and whisper and processing and output and app_s
+    assert llm and whisper and processing and output and app_s and email_s
 
     whisper_payload: Dict[str, Any] = {"whisper_type": whisper.whisper_type}
     if whisper.whisper_type == "local":
@@ -430,8 +442,42 @@ def read_combined() -> Dict[str, Any]:
             "automatically_whitelist_new_episodes": app_s.automatically_whitelist_new_episodes,
             "post_cleanup_retention_days": app_s.post_cleanup_retention_days,
             "number_of_episodes_to_whitelist_from_archive_of_new_feed": app_s.number_of_episodes_to_whitelist_from_archive_of_new_feed,
+            "allow_signup": app_s.allow_signup,
+        },
+        "email": {
+            "smtp_host": email_s.smtp_host,
+            "smtp_port": email_s.smtp_port,
+            "smtp_username": email_s.smtp_username,
+            "smtp_password": email_s.smtp_password,
+            "smtp_use_tls": email_s.smtp_use_tls,
+            "smtp_use_ssl": email_s.smtp_use_ssl,
+            "from_email": email_s.from_email,
+            "admin_notify_email": email_s.admin_notify_email,
+            "app_base_url": email_s.app_base_url,
         },
     }
+
+
+def _update_section_email(data: Dict[str, Any]) -> None:
+    row = EmailSettings.query.get(1)
+    assert row is not None
+    for key in [
+        "smtp_host",
+        "smtp_port",
+        "smtp_username",
+        "smtp_password",
+        "smtp_use_tls",
+        "smtp_use_ssl",
+        "from_email",
+        "admin_notify_email",
+        "app_base_url",
+    ]:
+        if key in data:
+            new_val = data[key]
+            if key == "smtp_password" and _is_empty(new_val):
+                continue
+            setattr(row, key, new_val)
+    db.session.commit()
 
 
 def _update_section_llm(data: Dict[str, Any]) -> None:
@@ -539,6 +585,7 @@ def _update_section_app(data: Dict[str, Any]) -> Tuple[Optional[int], Optional[i
         "automatically_whitelist_new_episodes",
         "post_cleanup_retention_days",
         "number_of_episodes_to_whitelist_from_archive_of_new_feed",
+        "allow_signup",
     ]:
         if key in data:
             setattr(row, key, data[key])
@@ -570,6 +617,9 @@ def update_combined(payload: Dict[str, Any]) -> Dict[str, Any]:
                     add_background_job(int(app_s.background_update_interval_minute))
             if old_retention != app_s.post_cleanup_retention_days:
                 schedule_cleanup_job(app_s.post_cleanup_retention_days)
+
+    if "email" in payload:
+        _update_section_email(payload["email"] or {})
 
     return read_combined()
 

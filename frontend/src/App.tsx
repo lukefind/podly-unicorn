@@ -12,6 +12,9 @@ import JobsPage from './pages/JobsPage';
 import PresetsPage from './pages/PresetsPage';
 import ConfigPage from './pages/ConfigPage';
 import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
 import AudioPlayer from './components/AudioPlayer';
 import './App.css';
@@ -45,7 +48,15 @@ function AppShell() {
   }
 
   if (requireAuth && !isAuthenticated) {
-    return <LoginPage />;
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
   }
 
   const showSettingsRoute = !requireAuth || user?.role === 'admin';
@@ -102,6 +113,10 @@ function AppShell() {
             {showSettingsRoute && <Route path="/subscriptions" element={<SubscriptionsPage />} />}
             {showSettingsRoute && <Route path="/presets" element={<PresetsPage />} />}
             {showSettingsRoute && <Route path="/settings" element={<ConfigPage />} />}
+            {!requireAuth && <Route path="/login" element={<LoginPage />} />}
+            {!requireAuth && <Route path="/signup" element={<SignupPage />} />}
+            {!requireAuth && <Route path="/forgot-password" element={<ForgotPasswordPage />} />}
+            {!requireAuth && <Route path="/reset-password" element={<ResetPasswordPage />} />}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

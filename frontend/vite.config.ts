@@ -17,7 +17,8 @@ export default defineConfig({
       '/api': {
         target: BACKEND_TARGET,
         changeOrigin: true,
-        secure: false
+        secure: false,
+        cookieDomainRewrite: 'localhost'
       },
       // Proxy feed endpoints for backwards compatibility
       '/feed': {

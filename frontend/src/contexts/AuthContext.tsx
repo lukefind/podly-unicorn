@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     const trimmedUsername = username.trim();
     if (!trimmedUsername) {
-      throw new Error('Username is required.');
+      throw new Error('Email is required.');
     }
 
     const response = await authApi.login(trimmedUsername, password);

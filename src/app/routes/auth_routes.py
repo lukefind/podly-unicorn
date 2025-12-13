@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import logging
+import secrets
+from datetime import datetime, timedelta
 from typing import cast
 
 from flask import Blueprint, Response, current_app, g, jsonify, request, session
@@ -13,6 +16,7 @@ from app.auth.service import (
     PasswordValidationError,
     authenticate,
     change_password,
+    create_pending_user,
     create_user,
     delete_user,
     list_users,
@@ -20,7 +24,19 @@ from app.auth.service import (
     update_password,
 )
 from app.auth.state import failure_rate_limiter
-from app.models import Feed, Post, ProcessingJob, ProcessingStatistics, User, UserDownload
+from app.email_sender import EmailSendError, send_email
+from app.extensions import db
+from app.models import (
+    AppSettings,
+    EmailSettings,
+    Feed,
+    PasswordResetToken,
+    Post,
+    ProcessingJob,
+    ProcessingStatistics,
+    User,
+    UserDownload,
+)
 
 logger = logging.getLogger("global_logger")
 
@@ -48,11 +64,11 @@ def login() -> RouteResult:
         return jsonify({"error": "Authentication is disabled."}), 404
 
     payload = request.get_json(silent=True) or {}
-    username = (payload.get("username") or "").strip()
+    username = (payload.get("email") or payload.get("username") or "").strip()
     password = payload.get("password") or ""
 
     if not username or not password:
-        return jsonify({"error": "Username and password are required."}), 400
+        return jsonify({"error": "Email and password are required."}), 400
 
     client_identifier = request.remote_addr or "unknown"
     retry_after = failure_rate_limiter.retry_after(client_identifier)
@@ -62,6 +78,14 @@ def login() -> RouteResult:
             429,
             {"Retry-After": str(retry_after)},
         )
+
+    # Provide a more explicit message if the account exists but is not active.
+    candidate = User.query.filter_by(email=username.strip().lower()).first()
+    if candidate is not None and getattr(candidate, "account_status", "active") != "active":
+        status = getattr(candidate, "account_status", "pending")
+        if status == "pending":
+            return jsonify({"error": "Your account is pending admin approval."}), 403
+        return jsonify({"error": "Your account is not active."}), 403
 
     authenticated = authenticate(username, password)
     if authenticated is None:
@@ -87,6 +111,250 @@ def login() -> RouteResult:
             }
         }
     )
+
+
+@auth_bp.route("/api/auth/signup", methods=["POST"])
+def signup() -> RouteResult:
+    if not _auth_enabled():
+        return jsonify({"error": "Authentication is disabled."}), 404
+
+    app_settings = db.session.get(AppSettings, 1)
+    if app_settings is None or not getattr(app_settings, "allow_signup", False):
+        return jsonify({"error": "Signup is disabled."}), 403
+
+    payload = request.get_json(silent=True) or {}
+    email = (payload.get("email") or "").strip().lower()
+    password = payload.get("password") or ""
+
+    if not email or not password:
+        return jsonify({"error": "Email and password are required."}), 400
+    if "@" not in email:
+        return jsonify({"error": "Please enter a valid email address."}), 400
+
+    try:
+        user = create_pending_user(email, password)
+    except (PasswordValidationError, DuplicateUserError, AuthServiceError) as exc:
+        status = 409 if isinstance(exc, DuplicateUserError) else 400
+        return jsonify({"error": str(exc)}), status
+
+    # Email the user and notify admin.
+    try:
+        email_settings = db.session.get(EmailSettings, 1)
+        base_url = None
+        if email_settings and email_settings.app_base_url:
+            base_url = email_settings.app_base_url.rstrip("/")
+        if base_url is None:
+            base_url = request.host_url.rstrip("/")
+
+        send_email(
+            to_email=user.email or email,
+            subject="Podly Unicorn: Signup received",
+            body=(
+                "Thanks for signing up!\n\n"
+                "Your account is pending admin approval. You'll receive another email once approved.\n"
+                f"\nServer: {base_url}\n"
+            ),
+        )
+
+        if email_settings and email_settings.admin_notify_email:
+            send_email(
+                to_email=email_settings.admin_notify_email,
+                subject="Podly Unicorn: New signup pending approval",
+                body=(
+                    "A new user has requested access:\n\n"
+                    f"Email: {email}\n"
+                    f"Created: {user.created_at.isoformat() if user.created_at else 'unknown'}\n"
+                ),
+            )
+    except EmailSendError:
+        # Non-fatal: account is still created.
+        pass
+
+    return jsonify({"status": "ok"}), 201
+
+
+@auth_bp.route("/api/auth/password-reset/request", methods=["POST"])
+def password_reset_request() -> RouteResult:
+    if not _auth_enabled():
+        return jsonify({"error": "Authentication is disabled."}), 404
+
+    payload = request.get_json(silent=True) or {}
+    email = (payload.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        return jsonify({"error": "Please enter a valid email address."}), 400
+
+    # Always return ok to avoid user enumeration.
+    user = User.query.filter_by(email=email).first()
+    if user is None or getattr(user, "account_status", "active") != "active":
+        return jsonify({"status": "ok"})
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+    reset = PasswordResetToken(
+        user_id=user.id,
+        token_hash=token_hash,
+        expires_at=datetime.utcnow() + timedelta(hours=1),
+    )
+    db.session.add(reset)
+    db.session.commit()
+
+    email_settings = db.session.get(EmailSettings, 1)
+    base_url = None
+    if email_settings and email_settings.app_base_url:
+        base_url = email_settings.app_base_url.rstrip("/")
+    if base_url is None:
+        base_url = request.host_url.rstrip("/")
+
+    reset_link = f"{base_url}/reset-password?token={raw_token}"
+
+    try:
+        send_email(
+            to_email=email,
+            subject="Podly Unicorn: Password reset",
+            body=(
+                "A password reset was requested for your account.\n\n"
+                f"Reset link (valid for 1 hour):\n{reset_link}\n\n"
+                "If you did not request this, you can ignore this email.\n"
+            ),
+        )
+    except EmailSendError:
+        pass
+
+    return jsonify({"status": "ok"})
+
+
+@auth_bp.route("/api/auth/password-reset/confirm", methods=["POST"])
+def password_reset_confirm() -> RouteResult:
+    if not _auth_enabled():
+        return jsonify({"error": "Authentication is disabled."}), 404
+
+    payload = request.get_json(silent=True) or {}
+    token = (payload.get("token") or "").strip()
+    new_password = payload.get("new_password") or ""
+    if not token or not new_password:
+        return jsonify({"error": "Token and new password are required."}), 400
+
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    reset = PasswordResetToken.query.filter_by(token_hash=token_hash).first()
+    if reset is None or reset.used_at is not None or reset.expires_at < datetime.utcnow():
+        return jsonify({"error": "Invalid or expired token."}), 400
+
+    user = User.query.get(reset.user_id)
+    if user is None:
+        return jsonify({"error": "Invalid token."}), 400
+
+    try:
+        update_password(user, new_password)
+    except PasswordValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    reset.used_at = datetime.utcnow()
+    db.session.add(reset)
+    db.session.commit()
+    return jsonify({"status": "ok"})
+
+
+@auth_bp.route("/api/admin/users/pending", methods=["GET"])
+def list_pending_users() -> RouteResult:
+    if not _auth_enabled():
+        return jsonify({"error": "Authentication is disabled."}), 404
+
+    user = _require_authenticated_user()
+    if user is None:
+        return _unauthorized_response()
+    if user.role != "admin":
+        return jsonify({"error": "Admin privileges required."}), 403
+
+    pending_users = User.query.filter_by(account_status="pending").order_by(User.created_at.asc()).all()
+    return jsonify({
+        "users": [
+            {
+                "id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "role": u.role,
+                "created_at": u.created_at.isoformat(),
+            }
+            for u in pending_users
+        ]
+    })
+
+
+@auth_bp.route("/api/admin/users/pending/count", methods=["GET"])
+def pending_users_count() -> RouteResult:
+    if not _auth_enabled():
+        return jsonify({"error": "Authentication is disabled."}), 404
+
+    user = _require_authenticated_user()
+    if user is None:
+        return _unauthorized_response()
+    if user.role != "admin":
+        return jsonify({"error": "Admin privileges required."}), 403
+
+    count = User.query.filter_by(account_status="pending").count()
+    return jsonify({"count": count})
+
+
+@auth_bp.route("/api/admin/users/<int:user_id>/approve", methods=["POST"])
+def approve_user(user_id: int) -> RouteResult:
+    if not _auth_enabled():
+        return jsonify({"error": "Authentication is disabled."}), 404
+
+    acting = _require_authenticated_user()
+    if acting is None:
+        return _unauthorized_response()
+    if acting.role != "admin":
+        return jsonify({"error": "Admin privileges required."}), 403
+
+    target = User.query.get(user_id)
+    if target is None:
+        return jsonify({"error": "User not found."}), 404
+    if getattr(target, "account_status", "active") != "pending":
+        return jsonify({"error": "User is not pending."}), 400
+
+    target.account_status = "active"
+    target.approved_at = datetime.utcnow()
+    target.approved_by_user_id = acting.id
+    db.session.add(target)
+    db.session.commit()
+
+    try:
+        if target.email:
+            send_email(
+                to_email=target.email,
+                subject="Podly Unicorn: Account approved",
+                body=(
+                    "Your account has been approved. You can now log in.\n"
+                ),
+            )
+    except EmailSendError:
+        pass
+
+    return jsonify({"status": "ok"})
+
+
+@auth_bp.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
+def delete_user_by_id(user_id: int) -> RouteResult:
+    if not _auth_enabled():
+        return jsonify({"error": "Authentication is disabled."}), 404
+
+    acting = _require_authenticated_user()
+    if acting is None:
+        return _unauthorized_response()
+    if acting.role != "admin":
+        return jsonify({"error": "Admin privileges required."}), 403
+
+    target = User.query.get(user_id)
+    if target is None:
+        return jsonify({"error": "User not found."}), 404
+
+    try:
+        delete_user(target)
+    except LastAdminRemovalError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    return jsonify({"status": "ok"})
 
 
 @auth_bp.route("/api/auth/logout", methods=["POST"])
@@ -275,6 +543,34 @@ def delete_user_route(username: str) -> RouteResult:
     except LastAdminRemovalError as exc:
         return jsonify({"error": str(exc)}), 400
 
+    return jsonify({"status": "ok"})
+
+
+@auth_bp.route("/api/auth/me", methods=["DELETE"])
+def delete_own_account() -> RouteResult:
+    """Allow a user to delete their own account."""
+    if not _auth_enabled():
+        return jsonify({"error": "Authentication is disabled."}), 404
+
+    user = _require_authenticated_user()
+    if user is None:
+        return _unauthorized_response()
+
+    # Require password confirmation
+    data = request.get_json() or {}
+    password = data.get("password", "")
+    if not password:
+        return jsonify({"error": "Password confirmation required."}), 400
+
+    if not user.verify_password(password):
+        return jsonify({"error": "Incorrect password."}), 401
+
+    try:
+        delete_user(user)
+    except LastAdminRemovalError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    session.clear()
     return jsonify({"status": "ok"})
 
 

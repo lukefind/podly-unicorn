@@ -230,7 +230,9 @@ def _configure_scheduler(app: Flask) -> None:
 
 
 def _configure_database(app: Flask) -> None:
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///sqlite3.db?timeout=90"
+    project_root = Path(__file__).resolve().parents[2]
+    db_path = (project_root / "src" / "instance" / "sqlite3.db").resolve()
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}?timeout=90"
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "connect_args": {
             "timeout": 90,
