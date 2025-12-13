@@ -41,13 +41,51 @@ def _normalize_username(username: str) -> str:
     return username.strip().lower()
 
 
-def authenticate(username: str, password: str) -> AuthenticatedUser | None:
-    user = User.query.filter_by(username=_normalize_username(username)).first()
+def _normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def authenticate(email: str, password: str) -> AuthenticatedUser | None:
+    """Authenticate using email.
+
+    Backwards-compatibility: if no email match exists, fall back to username only
+    for existing accounts that do not yet have an email set.
+    """
+
+    normalized_email = _normalize_email(email)
+    user = User.query.filter_by(email=normalized_email).first()
     if user is None:
-        return None
+        # Legacy fallback: allow username login only when the account has no email set.
+        legacy = User.query.filter_by(username=_normalize_username(email)).first()
+        if legacy is None or legacy.email is not None:
+            return None
+        user = legacy
+
     if not user.verify_password(password):
         return None
+
+    if getattr(user, "account_status", "active") != "active":
+        return None
+
     return AuthenticatedUser(id=user.id, username=user.username, role=user.role)
+
+
+def create_pending_user(email: str, password: str) -> User:
+    normalized_email = _normalize_email(email)
+    if not normalized_email:
+        raise AuthServiceError("Email is required.")
+
+    if User.query.filter_by(email=normalized_email).first():
+        raise DuplicateUserError("A user with that email already exists.")
+
+    # Use the email as the username for uniqueness and simplicity.
+    user = User(username=normalized_email, email=normalized_email, role="user")
+    user.set_password(password)
+    user.account_status = "pending"
+
+    db.session.add(user)
+    db.session.commit()
+    return user
 
 
 def list_users() -> Sequence[User]:

@@ -62,6 +62,7 @@ def _sanitize_config_for_client(cfg: Dict[str, Any]) -> Dict[str, Any]:
         data: Dict[str, Any] = dict(cfg)
         llm: Dict[str, Any] = dict(data.get("llm", {}))
         whisper: Dict[str, Any] = dict(data.get("whisper", {}))
+        email: Dict[str, Any] = dict(data.get("email", {}))
 
         llm_api_key = llm.pop("llm_api_key", None)
         if llm_api_key:
@@ -71,8 +72,13 @@ def _sanitize_config_for_client(cfg: Dict[str, Any]) -> Dict[str, Any]:
         if whisper_api_key:
             whisper["api_key_preview"] = _mask_secret(whisper_api_key)
 
+        smtp_password = email.pop("smtp_password", None)
+        if smtp_password:
+            email["smtp_password_preview"] = _mask_secret(smtp_password)
+
         data["llm"] = llm
         data["whisper"] = whisper
+        data["email"] = email
         return data
     except Exception:
         return {}
@@ -417,6 +423,10 @@ def api_put_config() -> flask.Response:
     whisper_payload = payload.get("whisper")
     if isinstance(whisper_payload, dict):
         whisper_payload.pop("api_key_preview", None)
+
+    email_payload = payload.get("email")
+    if isinstance(email_payload, dict):
+        email_payload.pop("smtp_password_preview", None)
 
     try:
         data = update_combined(payload)

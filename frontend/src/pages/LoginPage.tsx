@@ -7,7 +7,7 @@ import { useTheme } from '../contexts/ThemeContext';
 export default function LoginPage() {
   const { login } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,8 +18,8 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      await login(username, password);
-      setUsername('');
+      await login(email, password);
+      setEmail('');
       setPassword('');
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -149,18 +149,18 @@ export default function LoginPage() {
 
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">
-                Username
+              <label htmlFor="email" className="block text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">
+                Email or username
               </label>
               <input
-                id="username"
-                name="username"
+                id="email"
+                name="email"
                 type="text"
                 autoComplete="username"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 className="block w-full rounded-xl border border-purple-200 dark:border-purple-700 bg-white/50 dark:bg-slate-700/50 px-4 py-3 shadow-sm focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-400/20 transition-all dark:text-white dark:placeholder-purple-300/50"
-                placeholder="Enter your username"
+                placeholder="Email or username"
                 disabled={submitting}
                 required
               />
@@ -202,6 +202,21 @@ export default function LoginPage() {
               {submitting ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
+
+          <div className="mt-4 flex items-center justify-between text-sm">
+            <a
+              href="/forgot-password"
+              className="text-purple-700 dark:text-purple-200 font-medium hover:underline"
+            >
+              Forgot password?
+            </a>
+            <a
+              href="/signup"
+              className="text-purple-700 dark:text-purple-200 font-medium hover:underline"
+            >
+              Request access
+            </a>
+          </div>
 
           <div className="mt-6 pt-6 border-t border-purple-100 dark:border-purple-800">
             <div className="flex items-center justify-center gap-4 text-xs text-purple-400 dark:text-purple-500">

@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import HelpModal from '../HelpModal';
+import UserProfileModal from '../UserProfileModal';
+import { authApi } from '../../services/api';
 
 interface NavItem {
   path: string;
@@ -84,6 +87,14 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
   const { requireAuth, user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const { data: pendingCount } = useQuery<{ count: number }>({
+    queryKey: ['pending-users-count'],
+    queryFn: authApi.getPendingUsersCount,
+    enabled: requireAuth && user?.role === 'admin',
+    refetchInterval: 30_000,
+  });
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -145,7 +156,16 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
             title={collapsed && !isMobile ? item.label : undefined}
           >
             {item.icon}
-            {(!collapsed || isMobile) && <span className="font-medium">{item.label}</span>}
+            {(!collapsed || isMobile) && (
+              <div className="flex items-center justify-between flex-1 min-w-0">
+                <span className="font-medium">{item.label}</span>
+                {item.path === '/settings' && (pendingCount?.count ?? 0) > 0 && (
+                  <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-pink-500 text-white">
+                    {pendingCount?.count}
+                  </span>
+                )}
+              </div>
+            )}
           </Link>
         ))}
       </nav>
@@ -189,18 +209,29 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
       {/* Help Modal */}
       <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
 
+      {/* User Profile Modal */}
+      <UserProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
+
       {/* User section */}
       {requireAuth && user && (
         <div className="p-4 border-t border-purple-800/30">
           <div className={`flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'}`}>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 via-purple-400 to-cyan-400 flex items-center justify-center text-sm font-bold shadow-lg">
+            <button
+              onClick={() => setProfileOpen(true)}
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 via-purple-400 to-cyan-400 flex items-center justify-center text-sm font-bold shadow-lg hover:scale-110 transition-transform cursor-pointer"
+              title="Account settings"
+            >
               {user.username.charAt(0).toUpperCase()}
-            </div>
+            </button>
             {(!collapsed || isMobile) && (
-              <div className="flex-1 min-w-0">
+              <button
+                onClick={() => setProfileOpen(true)}
+                className="flex-1 min-w-0 text-left hover:bg-purple-800/20 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                title="Account settings"
+              >
                 <p className="text-sm font-medium truncate">{user.username}</p>
                 <p className="text-xs text-purple-300 capitalize">{user.role}</p>
-              </div>
+              </button>
             )}
             {(!collapsed || isMobile) && (
               <button

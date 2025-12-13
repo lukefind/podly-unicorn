@@ -21,12 +21,18 @@ _PUBLIC_PATHS: set[str] = {
     "/manifest.json",
     "/favicon.ico",
     "/api/auth/login",
+    "/api/auth/signup",
+    "/api/auth/password-reset/request",
+    "/api/auth/password-reset/confirm",
     "/api/auth/status",
     # Frontend shell routes - serve SPA, let React handle auth
     "/settings",
     "/presets",
     "/podcasts",
     "/login",
+    "/signup",
+    "/forgot-password",
+    "/reset-password",
 }
 
 _PUBLIC_PREFIXES: tuple[str, ...] = (

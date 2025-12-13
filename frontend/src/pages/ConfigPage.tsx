@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { configApi, authApi } from '../services/api';
 import { toast } from 'react-hot-toast';
@@ -109,6 +109,43 @@ export default function ConfigPage() {
       return response.users;
     },
     enabled: showSecurityControls && user.role === 'admin',
+  });
+
+  const queryClient = useQueryClient();
+
+  const {
+    data: pendingUsers,
+    refetch: refetchPendingUsers,
+  } = useQuery({
+    queryKey: ['pending-users'],
+    queryFn: authApi.listPendingUsers,
+    enabled: showSecurityControls && user.role === 'admin',
+  });
+
+  const approvePendingMutation = useMutation({
+    mutationFn: async (userId: number) => authApi.approvePendingUser(userId),
+    onSuccess: async () => {
+      toast.success('User approved.');
+      await refetchPendingUsers();
+      await refetchUsers();
+      await queryClient.invalidateQueries({ queryKey: ['pending-users-count'] });
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, 'Failed to approve user.'));
+    },
+  });
+
+  const deletePendingMutation = useMutation({
+    mutationFn: async (userId: number) => authApi.deleteUserById(userId),
+    onSuccess: async () => {
+      toast.success('User deleted.');
+      await refetchPendingUsers();
+      await refetchUsers();
+      await queryClient.invalidateQueries({ queryKey: ['pending-users-count'] });
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, 'Failed to delete user.'));
+    },
   });
 
   const [pending, setPending] = useState<CombinedConfig | null>(null);
@@ -651,6 +688,50 @@ export default function ConfigPage() {
           </div>
         )}
       </div>
+
+      {/* Pending Signups - Show at top for admins when there are pending users */}
+      {showSecurityControls && user?.role === 'admin' && pendingUsers?.users && pendingUsers.users.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/30 backdrop-blur-sm rounded-xl border-2 border-amber-300 dark:border-amber-600 shadow-sm">
+          <div className="px-4 py-3 border-b border-amber-200 dark:border-amber-700 bg-gradient-to-r from-amber-100/50 to-orange-100/50 dark:from-amber-900/50 dark:to-orange-900/50">
+            <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100 flex items-center gap-2">
+              ⚠️ Pending Signups ({pendingUsers.users.length})
+            </h3>
+          </div>
+          <div className="p-4 space-y-2">
+            {pendingUsers.users.map((u) => (
+              <div key={u.id} className="border border-gray-200 dark:border-purple-700 rounded-lg p-3 bg-white dark:bg-slate-800/60 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-900 dark:text-purple-100 truncate">{u.email || u.username}</div>
+                  <div className="text-xs text-gray-500 dark:text-purple-400">Requested {new Date(u.created_at).toLocaleString()}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm hover:from-purple-700 hover:to-pink-600 disabled:opacity-50"
+                    onClick={() => approvePendingMutation.mutate(u.id)}
+                    disabled={approvePendingMutation.isPending}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded border border-red-300 text-red-600 dark:text-red-400 text-sm hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
+                    onClick={() => {
+                      const confirmed = window.confirm(`Reject and delete '${u.email || u.username}'?`);
+                      if (confirmed) {
+                        deletePendingMutation.mutate(u.id);
+                      }
+                    }}
+                    disabled={deletePendingMutation.isPending}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Section title="Connection Status">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1494,6 +1575,110 @@ export default function ConfigPage() {
               </Field>
             </div>
           </Section>
+
+          {showSecurityControls && user?.role === 'admin' && (
+            <Section title="User Signups & Email">
+              <div className="space-y-4">
+                <div className="p-4 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded-lg">
+                  <h4 className="text-sm font-semibold text-purple-900 dark:text-purple-100 mb-3">Signup Settings</h4>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="allow-signup"
+                      checked={!!pending?.app?.allow_signup}
+                      onChange={(e) => setField(['app', 'allow_signup'], e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    <label htmlFor="allow-signup" className="text-sm text-gray-700 dark:text-purple-200">
+                      Allow new user signups (closed beta - requires admin approval)
+                    </label>
+                  </div>
+                </div>
+                
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-purple-100">Email (SMTP) Configuration</h4>
+                <p className="text-xs text-gray-600 dark:text-purple-300 -mt-2">Configure SMTP to send approval notifications and password reset emails</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <Field label="SMTP Host">
+                    <input
+                      className="input"
+                      type="text"
+                      value={pending?.email?.smtp_host ?? ''}
+                      onChange={(e) => setField(['email', 'smtp_host'], e.target.value)}
+                      placeholder="smtp.example.com"
+                    />
+                  </Field>
+                  <Field label="SMTP Port">
+                    <input
+                      className="input"
+                      type="number"
+                      value={pending?.email?.smtp_port ?? ''}
+                      onChange={(e) => setField(['email', 'smtp_port'], e.target.value === '' ? null : Number(e.target.value))}
+                      placeholder="587"
+                    />
+                  </Field>
+                  <Field label="SMTP Username">
+                    <input
+                      className="input"
+                      type="text"
+                      value={pending?.email?.smtp_username ?? ''}
+                      onChange={(e) => setField(['email', 'smtp_username'], e.target.value)}
+                    />
+                  </Field>
+                  <Field label="SMTP Password">
+                    <input
+                      className="input"
+                      type="password"
+                      placeholder={pending?.email?.smtp_password_preview ?? ''}
+                      value={pending?.email?.smtp_password ?? ''}
+                      onChange={(e) => setField(['email', 'smtp_password'], e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Use TLS">
+                    <input
+                      type="checkbox"
+                      checked={!!pending?.email?.smtp_use_tls}
+                      onChange={(e) => setField(['email', 'smtp_use_tls'], e.target.checked)}
+                    />
+                  </Field>
+                  <Field label="Use SSL">
+                    <input
+                      type="checkbox"
+                      checked={!!pending?.email?.smtp_use_ssl}
+                      onChange={(e) => setField(['email', 'smtp_use_ssl'], e.target.checked)}
+                    />
+                  </Field>
+                  <Field label="From Email">
+                    <input
+                      className="input"
+                      type="email"
+                      value={pending?.email?.from_email ?? ''}
+                      onChange={(e) => setField(['email', 'from_email'], e.target.value)}
+                      placeholder="no-reply@yourdomain.com"
+                    />
+                  </Field>
+                  <Field label="Admin Notify Email">
+                    <input
+                      className="input"
+                      type="email"
+                      value={pending?.email?.admin_notify_email ?? ''}
+                      onChange={(e) => setField(['email', 'admin_notify_email'], e.target.value)}
+                      placeholder="admin@yourdomain.com"
+                    />
+                  </Field>
+                  <Field label="App Base URL">
+                    <input
+                      className="input"
+                      type="text"
+                      value={pending?.email?.app_base_url ?? ''}
+                      onChange={(e) => setField(['email', 'app_base_url'], e.target.value)}
+                      placeholder="https://podly.yourdomain.com"
+                    />
+                  </Field>
+                </div>
+              </div>
+            </Section>
+          )}
+
           {renderSaveButton()}
         </div>
 

@@ -141,8 +141,12 @@ class User(db.Model):  # type: ignore[name-defined, misc]
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(255), unique=True, nullable=True, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), nullable=False, default="user")
+    account_status = db.Column(db.String(50), nullable=False, default="active")
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approved_by_user_id = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
@@ -152,6 +156,14 @@ class User(db.Model):  # type: ignore[name-defined, misc]
     def _normalize_username(self, key: str, value: str) -> str:
         del key
         return value.strip().lower()
+
+    @validates("email")
+    def _normalize_email(self, key: str, value: str | None) -> str | None:
+        del key
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        return normalized or None
 
     def set_password(self, password: str) -> None:
         self.password_hash = hash_password(password)
@@ -379,6 +391,37 @@ class LLMSettings(db.Model):  # type: ignore[name-defined, misc]
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
+class EmailSettings(db.Model):  # type: ignore[name-defined, misc]
+    __tablename__ = "email_settings"
+
+    id = db.Column(db.Integer, primary_key=True, default=1)
+    smtp_host = db.Column(db.String(255), nullable=True)
+    smtp_port = db.Column(db.Integer, nullable=True)
+    smtp_username = db.Column(db.String(255), nullable=True)
+    smtp_password = db.Column(db.String(255), nullable=True)
+    smtp_use_tls = db.Column(db.Boolean, nullable=False, default=True)
+    smtp_use_ssl = db.Column(db.Boolean, nullable=False, default=False)
+    from_email = db.Column(db.String(255), nullable=True)
+    admin_notify_email = db.Column(db.String(255), nullable=True)
+    app_base_url = db.Column(db.String(255), nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+class PasswordResetToken(db.Model):  # type: ignore[name-defined, misc]
+    __tablename__ = "password_reset_token"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    user = db.relationship("User", backref=db.backref("password_reset_tokens", lazy="dynamic"))
+
+
 class WhisperSettings(db.Model):  # type: ignore[name-defined, misc]
     __tablename__ = "whisper_settings"
 
@@ -489,6 +532,11 @@ class AppSettings(db.Model):  # type: ignore[name-defined, misc]
         db.Integer,
         nullable=False,
         default=DEFAULTS.APP_NUM_EPISODES_TO_WHITELIST_FROM_ARCHIVE_OF_NEW_FEED,
+    )
+    allow_signup = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=DEFAULTS.APP_ALLOW_SIGNUP,
     )
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)

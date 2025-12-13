@@ -466,8 +466,43 @@ export const authApi = {
     return response.data;
   },
 
-  login: async (username: string, password: string): Promise<{ user: { id: number; username: string; role: string } }> => {
-    const response = await api.post('/api/auth/login', { username, password });
+  login: async (email: string, password: string): Promise<{ user: { id: number; username: string; role: string } }> => {
+    const response = await api.post('/api/auth/login', { email, password });
+    return response.data;
+  },
+
+  signup: async (email: string, password: string): Promise<{ status: string }> => {
+    const response = await api.post('/api/auth/signup', { email, password });
+    return response.data;
+  },
+
+  requestPasswordReset: async (email: string): Promise<{ status: string }> => {
+    const response = await api.post('/api/auth/password-reset/request', { email });
+    return response.data;
+  },
+
+  confirmPasswordReset: async (token: string, newPassword: string): Promise<{ status: string }> => {
+    const response = await api.post('/api/auth/password-reset/confirm', { token, new_password: newPassword });
+    return response.data;
+  },
+
+  getPendingUsersCount: async (): Promise<{ count: number }> => {
+    const response = await api.get('/api/admin/users/pending/count');
+    return response.data;
+  },
+
+  listPendingUsers: async (): Promise<{ users: Array<{ id: number; username: string; email: string | null; role: string; created_at: string }> }> => {
+    const response = await api.get('/api/admin/users/pending');
+    return response.data;
+  },
+
+  approvePendingUser: async (userId: number): Promise<{ status: string }> => {
+    const response = await api.post(`/api/admin/users/${userId}/approve`);
+    return response.data;
+  },
+
+  deleteUserById: async (userId: number): Promise<{ status: string }> => {
+    const response = await api.delete(`/api/admin/users/${userId}`);
     return response.data;
   },
 
@@ -482,6 +517,11 @@ export const authApi = {
 
   changePassword: async (payload: { current_password: string; new_password: string }): Promise<{ status: string }> => {
     const response = await api.post('/api/auth/change-password', payload);
+    return response.data;
+  },
+
+  deleteOwnAccount: async (password: string): Promise<{ status: string }> => {
+    const response = await api.delete('/api/auth/me', { data: { password } });
     return response.data;
   },
 
