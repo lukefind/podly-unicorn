@@ -329,7 +329,7 @@ def generate_feed_xml(feed: Feed) -> Any:
     base_url = _get_base_url()
     link = _append_feed_token_params(f"{base_url}/feed/{feed.id}")
 
-    last_build_date = format_datetime(datetime.datetime.now(datetime.timezone.utc))
+    last_build_date = datetime.datetime.now(datetime.timezone.utc)
 
     rss_feed = ITunesRSS2(
         title="[podly] " + feed.title,
