@@ -1072,6 +1072,7 @@ export default function ConfigPage() {
                 }
               }}
               adminCount={managedUsers?.filter(u => u.role === 'admin').length ?? 1}
+              currentUsername={user?.username}
             />
           </div>
         </Section>
