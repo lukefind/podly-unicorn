@@ -57,7 +57,11 @@ class ITunesRSSItem(PyRSS2Gen.RSSItem):
             else:
                 self.guid.publish(handler)
         if self.pubDate is not None:
-            PyRSS2Gen._element(handler, "pubDate", PyRSS2Gen._format_date(self.pubDate))
+            # pubDate may already be a formatted string from _format_pub_date
+            if isinstance(self.pubDate, str):
+                PyRSS2Gen._element(handler, "pubDate", self.pubDate)
+            else:
+                PyRSS2Gen._element(handler, "pubDate", PyRSS2Gen._format_date(self.pubDate))
         if self.source is not None:
             self.source.publish(handler)
 
