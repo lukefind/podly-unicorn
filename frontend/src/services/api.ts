@@ -175,6 +175,8 @@ export const feedsApi = {
     }>;
     total_feeds: number;
     total_subscriptions: number;
+    total_processed_episodes: number;
+    total_storage_bytes: number;
   }> => {
     const response = await api.get('/api/admin/feed-subscriptions');
     return response.data;
