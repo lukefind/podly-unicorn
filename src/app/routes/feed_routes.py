@@ -964,9 +964,12 @@ def api_admin_feed_subscriptions() -> ResponseReturnValue:
     # Sort by subscriber count descending
     feeds_data.sort(key=lambda x: x["subscriber_count"], reverse=True)
     
-    # Calculate total processed episodes and storage size
+    # Calculate total processed episodes and storage size (server-wide, not just subscribed feeds)
     from pathlib import Path
-    total_processed_episodes = sum(processed_counts.values())
+    total_processed_episodes = Post.query.filter(
+        Post.processed_audio_path.isnot(None),
+        Post.processed_audio_path != ""
+    ).count()
     
     # Calculate total storage used by processed files
     total_storage_bytes = 0
