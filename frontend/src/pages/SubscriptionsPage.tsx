@@ -55,6 +55,14 @@ export default function SubscriptionsPage() {
     return `${hours}h ${remainingMins}m`;
   };
 
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  };
+
   // Redirect non-admins
   if (requireAuth && user && user.role !== 'admin') {
     return <Navigate to="/podcasts" replace />;
@@ -94,6 +102,12 @@ export default function SubscriptionsPage() {
           </div>
           <div className="bg-cyan-100 text-cyan-700 px-2.5 py-1 rounded-lg font-medium">
             {data?.total_subscriptions || 0} subscriptions
+          </div>
+          <div className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-lg font-medium">
+            {data?.total_processed_episodes || 0} processed
+          </div>
+          <div className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-lg font-medium">
+            {formatBytes(data?.total_storage_bytes || 0)} stored
           </div>
         </div>
       </div>

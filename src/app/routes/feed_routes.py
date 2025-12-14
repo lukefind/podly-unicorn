@@ -964,10 +964,29 @@ def api_admin_feed_subscriptions() -> ResponseReturnValue:
     # Sort by subscriber count descending
     feeds_data.sort(key=lambda x: x["subscriber_count"], reverse=True)
     
+    # Calculate total processed episodes and storage size
+    from pathlib import Path
+    total_processed_episodes = sum(processed_counts.values())
+    
+    # Calculate total storage used by processed files
+    total_storage_bytes = 0
+    for post in Post.query.filter(
+        Post.processed_audio_path.isnot(None),
+        Post.processed_audio_path != ""
+    ).all():
+        try:
+            path = Path(post.processed_audio_path)
+            if path.exists():
+                total_storage_bytes += path.stat().st_size
+        except Exception:
+            pass
+    
     return jsonify({
         "feeds": feeds_data,
         "total_feeds": len(feeds_data),
         "total_subscriptions": len(all_subscriptions),
+        "total_processed_episodes": total_processed_episodes,
+        "total_storage_bytes": total_storage_bytes,
     })
 
 
