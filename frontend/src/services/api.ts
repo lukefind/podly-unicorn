@@ -461,7 +461,7 @@ export const feedsApi = {
 };
 
 export const authApi = {
-  getStatus: async (): Promise<{ require_auth: boolean }> => {
+  getStatus: async (): Promise<{ require_auth: boolean; allow_signup: boolean }> => {
     const response = await api.get('/api/auth/status');
     return response.data;
   },

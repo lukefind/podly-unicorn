@@ -55,7 +55,9 @@ def _auth_enabled() -> bool:
 
 @auth_bp.route("/api/auth/status", methods=["GET"])
 def auth_status() -> Response:
-    return jsonify({"require_auth": _auth_enabled()})
+    app_settings = db.session.get(AppSettings, 1)
+    allow_signup = bool(app_settings and getattr(app_settings, "allow_signup", False))
+    return jsonify({"require_auth": _auth_enabled(), "allow_signup": allow_signup})
 
 
 @auth_bp.route("/api/auth/login", methods=["POST"])
