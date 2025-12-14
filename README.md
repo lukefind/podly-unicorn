@@ -45,11 +45,20 @@ This is a fork of [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podc
 
 ### 🎨 Completely Redesigned UI
 - Pastel unicorn theme with purple/pink gradients (light & dark mode)
+- Episode-specific thumbnails in RSS feeds (when available from source)
+
+### 🆕 First-Time User Onboarding
+- Interactive tutorial on first login
+- Step-by-step guide: find podcasts, enable episodes, subscribe in your app
+- Explains auto-enable, auto-process, and on-demand processing
+- "Replay Tutorial" option in Help modal
 
 ### 👥 Multi-User Authentication System
 - Per-user feed subscriptions - each user sees only their podcasts
 - Private subscriptions - hide your podcasts from other users
 - Browse Podcasts on Server - discover feeds other users have added (unless made private)
+- User-specific dashboard stats - see your own episodes processed and ad time saved
+- Request access / signup flow with admin approval
 
 ### 🎛️ Prompt Presets System
 - 3 built-in presets: Conservative, Balanced, Aggressive
@@ -66,6 +75,8 @@ This is a fork of [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podc
 - Disable auto-process for all users on a feed
 - Feed status badges - Public, Private, Hidden, Auto indicators
 - User management - view all subscriptions and usage
+- Database maintenance tools - repair processed paths after migrations
+- Signup controls - enable/disable user registration
 
 ### 🔄 Auto-Process New Episodes
 - Per-feed toggle to automatically process new episodes
