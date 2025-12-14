@@ -1187,14 +1187,12 @@ export default function ConfigPage() {
                 </div>
               )}
             </div>
+            {/* User Statistics - inline */}
+            <div className="border-t border-gray-200 dark:border-purple-700 pt-4 mt-4">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-purple-100 mb-3">User Statistics</h4>
+              <AdminUserStats />
+            </div>
           </div>
-        </Section>
-      )}
-
-      {/* User Statistics - Admin only */}
-      {showSecurityControls && user?.role === 'admin' && (
-        <Section title="User Statistics">
-          <AdminUserStats />
         </Section>
       )}
 
