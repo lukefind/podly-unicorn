@@ -971,6 +971,73 @@ def api_admin_feed_subscriptions() -> ResponseReturnValue:
     })
 
 
+@feed_bp.route("/api/admin/diagnose-processed-paths", methods=["GET"])
+def api_admin_diagnose_processed_paths() -> ResponseReturnValue:
+    """Admin endpoint: Diagnose processed audio path issues."""
+    import re
+    from pathlib import Path
+    from shared.processing_paths import get_srv_root
+    
+    settings = current_app.config.get("AUTH_SETTINGS")
+    if not settings or not settings.require_auth:
+        return jsonify({"error": "Authentication is disabled."}), 404
+    
+    current = getattr(g, "current_user", None)
+    if current is None:
+        return jsonify({"error": "Authentication required."}), 401
+    
+    user = User.query.get(current.id)
+    if not user or user.role != "admin":
+        return jsonify({"error": "Admin privileges required."}), 403
+    
+    srv_root = get_srv_root()
+    
+    # Get stats
+    total_posts = Post.query.count()
+    posts_with_path = Post.query.filter(
+        Post.processed_audio_path.isnot(None),
+        Post.processed_audio_path != ""
+    ).count()
+    posts_without_path = total_posts - posts_with_path
+    
+    # Check which paths actually exist on disk
+    posts_with_valid_path = 0
+    posts_with_invalid_path = 0
+    invalid_paths = []
+    
+    for post in Post.query.filter(Post.processed_audio_path.isnot(None), Post.processed_audio_path != "").limit(100).all():
+        if Path(post.processed_audio_path).exists():
+            posts_with_valid_path += 1
+        else:
+            posts_with_invalid_path += 1
+            if len(invalid_paths) < 5:
+                invalid_paths.append({
+                    "post_id": post.id,
+                    "title": post.title[:50],
+                    "path": post.processed_audio_path
+                })
+    
+    # List directories in srv_root
+    srv_dirs = []
+    if srv_root.exists():
+        for d in srv_root.iterdir():
+            if d.is_dir():
+                file_count = len(list(d.glob("*.mp3")))
+                srv_dirs.append({"name": d.name, "mp3_count": file_count})
+    
+    return jsonify({
+        "srv_root": str(srv_root),
+        "srv_root_exists": srv_root.exists(),
+        "total_posts": total_posts,
+        "posts_with_path_in_db": posts_with_path,
+        "posts_without_path_in_db": posts_without_path,
+        "posts_with_valid_path_on_disk": posts_with_valid_path,
+        "posts_with_invalid_path": posts_with_invalid_path,
+        "sample_invalid_paths": invalid_paths,
+        "srv_directories": srv_dirs[:20],
+    })
+
+
 @feed_bp.route("/api/admin/repair-processed-paths", methods=["POST"])
 def api_admin_repair_processed_paths() -> ResponseReturnValue:
     """Admin endpoint: Scan for existing processed audio files and update database records.
