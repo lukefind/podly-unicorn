@@ -8,9 +8,10 @@ interface AdminUserStatsProps {
   onDeleteUser?: (username: string) => Promise<void>;
   onResetPassword?: (username: string, password: string) => Promise<void>;
   adminCount?: number;
+  currentUsername?: string;
 }
 
-export default function AdminUserStats({ onRoleChange, onDeleteUser, onResetPassword, adminCount = 1 }: AdminUserStatsProps) {
+export default function AdminUserStats({ onRoleChange, onDeleteUser, onResetPassword, adminCount = 1, currentUsername }: AdminUserStatsProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-user-stats'],
     queryFn: authApi.getUserStats,
@@ -58,6 +59,7 @@ export default function AdminUserStats({ onRoleChange, onDeleteUser, onResetPass
             onDeleteUser={onDeleteUser}
             onResetPassword={onResetPassword}
             adminCount={adminCount}
+            isCurrentUser={user.username === currentUsername}
           />
         ))}
       </div>
@@ -71,9 +73,10 @@ interface UserStatCardProps {
   onDeleteUser?: (username: string) => Promise<void>;
   onResetPassword?: (username: string, password: string) => Promise<void>;
   adminCount: number;
+  isCurrentUser?: boolean;
 }
 
-function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, adminCount }: UserStatCardProps) {
+function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, adminCount, isCurrentUser }: UserStatCardProps) {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -173,7 +176,8 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
                     void onRoleChange(user.username, e.target.value);
                   }
                 }}
-                disabled={user.role === 'admin' && adminCount <= 1}
+                disabled={(user.role === 'admin' && adminCount <= 1) || isCurrentUser}
+                title={isCurrentUser ? "You cannot change your own role" : undefined}
               >
                 <option value="user">user</option>
                 <option value="admin">admin</option>
