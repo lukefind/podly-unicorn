@@ -90,9 +90,6 @@ export default function ConfigPage() {
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
 
   const [newUser, setNewUser] = useState({ username: '', password: '', confirm: '', role: 'user' });
-  const [activeResetUser, setActiveResetUser] = useState<string | null>(null);
-  const [resetPassword, setResetPassword] = useState('');
-  const [resetConfirm, setResetConfirm] = useState('');
   const [envWarningPaths, setEnvWarningPaths] = useState<string[]>([]);
   const [showEnvWarning, setShowEnvWarning] = useState(false);
 
@@ -100,7 +97,6 @@ export default function ConfigPage() {
 
   const {
     data: managedUsers,
-    isLoading: usersLoading,
     refetch: refetchUsers,
   } = useQuery<ManagedUser[]>({
     queryKey: ['auth-users'],
@@ -233,27 +229,7 @@ export default function ConfigPage() {
     }
   };
 
-  const handleResetPassword = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!activeResetUser) {
-      return;
-    }
-    if (resetPassword !== resetConfirm) {
-      toast.error('Passwords do not match.');
-      return;
-    }
-
-    try {
-      await authApi.updateUser(activeResetUser, { password: resetPassword });
-      toast.success(`Password updated for ${activeResetUser}.`);
-      setActiveResetUser(null);
-      setResetPassword('');
-      setResetConfirm('');
-      await refetchUsers();
-    } catch (error) {
-      toast.error(getErrorMessage(error, 'Failed to update password.'));
-    }
-  };
+  // handleResetPassword is now handled inline in AdminUserStats component
 
   const handleDeleteUser = async (username: string) => {
     const confirmed = window.confirm(`Delete user '${username}'? This action cannot be undone.`);
@@ -1083,115 +1059,20 @@ export default function ConfigPage() {
               </div>
             </form>
 
-            <div className="space-y-3">
-              {usersLoading && <div className="text-sm text-gray-600 dark:text-purple-300">Loading users…</div>}
-              {!usersLoading && (!managedUsers || managedUsers.length === 0) && (
-                <div className="text-sm text-gray-600 dark:text-purple-300">No additional users configured.</div>
-              )}
-              {!usersLoading && managedUsers && managedUsers.length > 0 && (
-                <div className="space-y-3">
-                  {managedUsers.map((managed) => {
-                    const adminCount = managedUsers.filter((u) => u.role === 'admin').length;
-                    const disableDemotion = managed.role === 'admin' && adminCount <= 1;
-                    const disableDelete = disableDemotion;
-                    const isActive = activeResetUser === managed.username;
-
-                    return (
-                      <div key={managed.id} className="border border-gray-200 dark:border-purple-700 rounded-lg p-3 space-y-3 bg-white dark:bg-slate-800/60">
-                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <div className="text-sm font-semibold text-gray-900 dark:text-purple-100">{managed.username}</div>
-                            <div className="text-xs text-gray-500 dark:text-purple-400">
-                              Added {new Date(managed.created_at).toLocaleString()} • Role {managed.role}
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <select
-                              className="input text-sm"
-                              value={managed.role}
-                              onChange={(event) => {
-                                const nextRole = event.target.value;
-                                if (nextRole !== managed.role) {
-                                  void handleRoleChange(managed.username, nextRole);
-                                }
-                              }}
-                              disabled={disableDemotion && managed.role === 'admin'}
-                            >
-                              <option value="user">user</option>
-                              <option value="admin">admin</option>
-                            </select>
-                            <button
-                              type="button"
-                              className="px-3 py-1 border border-gray-300 dark:border-purple-600 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-purple-800 dark:text-purple-200"
-                              onClick={() => {
-                                if (isActive) {
-                                  setActiveResetUser(null);
-                                  setResetPassword('');
-                                  setResetConfirm('');
-                                } else {
-                                  setActiveResetUser(managed.username);
-                                  setResetPassword('');
-                                  setResetConfirm('');
-                                }
-                              }}
-                            >
-                              {isActive ? 'Cancel' : 'Set password'}
-                            </button>
-                            <button
-                              type="button"
-                              className="px-3 py-1 border border-red-300 text-red-600 rounded-md text-sm hover:bg-red-50 disabled:opacity-50"
-                              onClick={() => void handleDeleteUser(managed.username)}
-                              disabled={disableDelete}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-
-                        {isActive && (
-                          <form className="grid gap-2 md:grid-cols-3" onSubmit={handleResetPassword}>
-                            <div className="md:col-span-1">
-                              <label className="block text-xs font-medium text-gray-600 dark:text-purple-300 mb-1">New password</label>
-                              <input
-                                className="input"
-                                type="password"
-                                value={resetPassword}
-                                onChange={(event) => setResetPassword(event.target.value)}
-                                required
-                              />
-                            </div>
-                            <div className="md:col-span-1">
-                              <label className="block text-xs font-medium text-gray-600 dark:text-purple-300 mb-1">Confirm password</label>
-                              <input
-                                className="input"
-                                type="password"
-                                value={resetConfirm}
-                                onChange={(event) => setResetConfirm(event.target.value)}
-                                required
-                              />
-                            </div>
-                            <div className="md:col-span-1 flex items-end gap-2">
-                              <button
-                                type="submit"
-                                className="px-4 py-2 rounded bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm hover:from-purple-700 hover:to-pink-600"
-                              >
-                                Update
-                              </button>
-                              <p className="text-xs text-gray-500 dark:text-purple-400">Share new credentials securely.</p>
-                            </div>
-                          </form>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            {/* User Statistics - inline */}
-            <div className="border-t border-gray-200 dark:border-purple-700 pt-4 mt-4">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-purple-100 mb-3">User Statistics</h4>
-              <AdminUserStats />
-            </div>
+            {/* User Statistics with integrated controls */}
+            <AdminUserStats 
+              onRoleChange={handleRoleChange}
+              onDeleteUser={handleDeleteUser}
+              onResetPassword={async (username, password) => {
+                try {
+                  await authApi.updateUser(username, { password });
+                  toast.success(`Password updated for ${username}`);
+                } catch {
+                  toast.error('Failed to reset password');
+                }
+              }}
+              adminCount={managedUsers?.filter(u => u.role === 'admin').length ?? 1}
+            />
           </div>
         </Section>
       )}

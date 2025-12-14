@@ -1,8 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { authApi } from '../services/api';
 import type { UserStats } from '../services/api';
+import { useState } from 'react';
 
-export default function AdminUserStats() {
+interface AdminUserStatsProps {
+  onRoleChange?: (username: string, newRole: string) => Promise<void>;
+  onDeleteUser?: (username: string) => Promise<void>;
+  onResetPassword?: (username: string, password: string) => Promise<void>;
+  adminCount?: number;
+}
+
+export default function AdminUserStats({ onRoleChange, onDeleteUser, onResetPassword, adminCount = 1 }: AdminUserStatsProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-user-stats'],
     queryFn: authApi.getUserStats,
@@ -43,14 +51,32 @@ export default function AdminUserStats() {
       {/* User Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {data.users.map((user) => (
-          <UserStatCard key={user.id} user={user} />
+          <UserStatCard 
+            key={user.id} 
+            user={user}
+            onRoleChange={onRoleChange}
+            onDeleteUser={onDeleteUser}
+            onResetPassword={onResetPassword}
+            adminCount={adminCount}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function UserStatCard({ user }: { user: UserStats }) {
+interface UserStatCardProps {
+  user: UserStats;
+  onRoleChange?: (username: string, newRole: string) => Promise<void>;
+  onDeleteUser?: (username: string) => Promise<void>;
+  onResetPassword?: (username: string, password: string) => Promise<void>;
+  adminCount: number;
+}
+
+function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, adminCount }: UserStatCardProps) {
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Never';
     const date = new Date(dateStr);
@@ -131,6 +157,86 @@ function UserStatCard({ user }: { user: UserStats }) {
       {user.recent_downloads.length === 0 && (
         <div className="text-xs text-purple-300 text-center py-2">
           No downloads yet
+        </div>
+      )}
+
+      {/* User Controls */}
+      {(onRoleChange || onDeleteUser || onResetPassword) && (
+        <div className="border-t border-purple-200/50 pt-3 mt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {onRoleChange && (
+              <select
+                className="text-xs px-2 py-1 rounded border border-purple-200 bg-white dark:bg-slate-800 dark:border-purple-600 dark:text-purple-200"
+                value={user.role}
+                onChange={(e) => {
+                  if (e.target.value !== user.role) {
+                    void onRoleChange(user.username, e.target.value);
+                  }
+                }}
+                disabled={user.role === 'admin' && adminCount <= 1}
+              >
+                <option value="user">user</option>
+                <option value="admin">admin</option>
+              </select>
+            )}
+            {onResetPassword && (
+              <button
+                type="button"
+                className="text-xs px-2 py-1 border border-purple-200 dark:border-purple-600 rounded hover:bg-purple-50 dark:hover:bg-purple-800 dark:text-purple-200"
+                onClick={() => setShowPasswordForm(!showPasswordForm)}
+              >
+                {showPasswordForm ? 'Cancel' : 'Set password'}
+              </button>
+            )}
+            {onDeleteUser && (
+              <button
+                type="button"
+                className="text-xs px-2 py-1 border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50"
+                onClick={() => void onDeleteUser(user.username)}
+                disabled={user.role === 'admin' && adminCount <= 1}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+
+          {showPasswordForm && onResetPassword && (
+            <form 
+              className="mt-2 flex flex-wrap gap-2 items-end"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (newPassword && newPassword === confirmPassword) {
+                  void onResetPassword(user.username, newPassword);
+                  setNewPassword('');
+                  setConfirmPassword('');
+                  setShowPasswordForm(false);
+                }
+              }}
+            >
+              <input
+                type="password"
+                placeholder="New password"
+                className="text-xs px-2 py-1 rounded border border-purple-200 dark:bg-slate-800 dark:border-purple-600 w-24"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+              <input
+                type="password"
+                placeholder="Confirm"
+                className="text-xs px-2 py-1 rounded border border-purple-200 dark:bg-slate-800 dark:border-purple-600 w-24"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+              <button
+                type="submit"
+                className="text-xs px-2 py-1 rounded bg-purple-600 text-white hover:bg-purple-700"
+              >
+                Update
+              </button>
+            </form>
+          )}
         </div>
       )}
     </div>
