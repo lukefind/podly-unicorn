@@ -246,7 +246,12 @@ def add_or_refresh_feed(url: str) -> Feed:
         logger.error("Invalid feed URL")
         raise ValueError(f"Invalid feed URL: {url}")
 
+    # Check for existing feed by both the submitted URL and the final URL after redirects
+    # This handles cases where the same feed is accessed via different URLs
     feed = Feed.query.filter_by(rss_url=url).first()
+    if not feed and feed_data.href != url:
+        feed = Feed.query.filter_by(rss_url=feed_data.href).first()
+    
     if feed:
         refresh_feed(feed)
     else:
