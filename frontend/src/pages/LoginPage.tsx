@@ -1,8 +1,9 @@
 import type { FormEvent } from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { authApi } from '../services/api';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -11,6 +12,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [allowSignup, setAllowSignup] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    authApi.getStatus().then((status) => {
+      setAllowSignup(status.allow_signup);
+    }).catch(() => {
+      setAllowSignup(false);
+    });
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -210,12 +220,14 @@ export default function LoginPage() {
             >
               Forgot password?
             </a>
-            <a
-              href="/signup"
-              className="text-purple-700 dark:text-purple-200 font-medium hover:underline"
-            >
-              Request access
-            </a>
+            {allowSignup && (
+              <a
+                href="/signup"
+                className="text-purple-700 dark:text-purple-200 font-medium hover:underline"
+              >
+                Request access
+              </a>
+            )}
           </div>
 
           <div className="mt-6 pt-6 border-t border-purple-100 dark:border-purple-800">

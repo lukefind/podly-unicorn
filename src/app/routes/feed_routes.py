@@ -830,14 +830,26 @@ def api_all_feeds() -> Response:
         func.count(Post.id).label('posts_count')
     ).outerjoin(Post, Feed.id == Post.feed_id).group_by(Feed.id).all()
     
+    # Check if current user is admin
+    is_admin = False
+    if current:
+        user = User.query.get(current.id)
+        is_admin = user is not None and user.role == "admin"
+
     feeds_data = []
     for feed, posts_count in results:
         # Show feed if:
         # 1. User is already subscribed to it (so they can manage their subscription), OR
         # 2. Feed has at least one public subscriber (so it's "discoverable")
+        # 3. AND feed is not hidden (unless user is admin or already subscribed)
         is_user_subscribed = feed.id in user_subscriptions
         has_public_subscriber = feed.id in feeds_with_public_subs
-        
+        feed_is_hidden = getattr(feed, 'is_hidden', False)
+
+        # Hidden feeds are only visible to admins or users already subscribed
+        if feed_is_hidden and not is_admin and not is_user_subscribed:
+            continue
+
         if is_user_subscribed or has_public_subscriber:
             feeds_data.append({
                 "id": feed.id,
@@ -849,6 +861,7 @@ def api_all_feeds() -> Response:
                 "posts_count": posts_count,
                 "is_subscribed": is_user_subscribed,
                 "is_private": user_subscriptions.get(feed.id, False),
+                "is_hidden": feed_is_hidden,
             })
     
     return jsonify(feeds_data)

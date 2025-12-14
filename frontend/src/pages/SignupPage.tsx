@@ -1,18 +1,40 @@
 import type { FormEvent } from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../services/api';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function SignupPage() {
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    authApi.getStatus().then((status) => {
+      if (!status.allow_signup) {
+        navigate('/login', { replace: true });
+      } else {
+        setLoading(false);
+      }
+    }).catch(() => {
+      navigate('/login', { replace: true });
+    });
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 via-purple-50 to-cyan-50 dark:from-slate-900 dark:via-purple-950 dark:to-slate-900">
+        <div className="animate-spin h-8 w-8 border-4 border-purple-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

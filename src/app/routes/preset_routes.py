@@ -4,7 +4,7 @@ from flask import Blueprint, current_app, g, jsonify, make_response, request
 from sqlalchemy import func
 
 from app.extensions import db
-from app.models import Post, ProcessingStatistics, PromptPreset, User
+from app.models import Post, ProcessingStatistics, PromptPreset, User, UserDownload, UserFeedSubscription
 
 preset_bp = Blueprint("preset", __name__, url_prefix="/api/presets")
 
@@ -244,26 +244,64 @@ def delete_preset(preset_id: int):
 stats_bp = Blueprint("stats", __name__, url_prefix="/api/statistics")
 
 
+def _get_current_user() -> User | None:
+    """Get the current authenticated user, if any."""
+    settings = current_app.config.get("AUTH_SETTINGS")
+    if not settings or not settings.require_auth:
+        return None
+    current = getattr(g, "current_user", None)
+    if current is None:
+        return None
+    return User.query.get(current.id)
+
+
+def _is_admin_user(user: User | None) -> bool:
+    """Check if the user is an admin."""
+    return user is not None and user.role == "admin"
+
+
 @stats_bp.route("/summary", methods=["GET"])
 def get_summary_statistics():
-    """Get overall statistics across all processed episodes."""
-    # Get aggregate statistics
-    total_stats = db.session.query(
-        func.count(ProcessingStatistics.id).label("total_episodes"),
-        func.sum(ProcessingStatistics.total_ad_segments_removed).label(
-            "total_segments_removed"
-        ),
-        func.sum(ProcessingStatistics.total_duration_removed_seconds).label(
-            "total_time_saved_seconds"
-        ),
-        func.avg(ProcessingStatistics.percentage_removed).label("avg_percentage_removed"),
-    ).first()
-    
+    """Get statistics - server-wide for admins, user-specific for regular users."""
+    current_user = _get_current_user()
+    is_admin = _is_admin_user(current_user)
+
+    if is_admin or current_user is None:
+        # Admin or no auth: show server-wide stats
+        total_stats = db.session.query(
+            func.count(ProcessingStatistics.id).label("total_episodes"),
+            func.sum(ProcessingStatistics.total_ad_segments_removed).label(
+                "total_segments_removed"
+            ),
+            func.sum(ProcessingStatistics.total_duration_removed_seconds).label(
+                "total_time_saved_seconds"
+            ),
+            func.avg(ProcessingStatistics.percentage_removed).label("avg_percentage_removed"),
+        ).first()
+    else:
+        # Regular user: show stats for episodes they've downloaded
+        downloaded_post_ids = (
+            db.session.query(UserDownload.post_id)
+            .filter(UserDownload.user_id == current_user.id)
+            .distinct()
+            .subquery()
+        )
+        total_stats = db.session.query(
+            func.count(ProcessingStatistics.id).label("total_episodes"),
+            func.sum(ProcessingStatistics.total_ad_segments_removed).label(
+                "total_segments_removed"
+            ),
+            func.sum(ProcessingStatistics.total_duration_removed_seconds).label(
+                "total_time_saved_seconds"
+            ),
+            func.avg(ProcessingStatistics.percentage_removed).label("avg_percentage_removed"),
+        ).filter(ProcessingStatistics.post_id.in_(downloaded_post_ids)).first()
+
     # Convert time saved to hours and minutes
     total_time_saved_seconds = total_stats.total_time_saved_seconds or 0
     hours = int(total_time_saved_seconds // 3600)
     minutes = int((total_time_saved_seconds % 3600) // 60)
-    
+
     return jsonify(
         {
             "total_episodes_processed": total_stats.total_episodes or 0,
@@ -271,6 +309,7 @@ def get_summary_statistics():
             "total_time_saved_seconds": round(total_time_saved_seconds, 1),
             "total_time_saved_formatted": f"{hours}h {minutes}m",
             "average_percentage_removed": round(total_stats.avg_percentage_removed or 0, 2),
+            "is_user_specific": not is_admin and current_user is not None,
         }
     )
 
