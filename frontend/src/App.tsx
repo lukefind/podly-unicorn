@@ -6,6 +6,7 @@ import { AudioPlayerProvider } from './contexts/AudioPlayerContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Sidebar from './components/layout/Sidebar';
+import OnboardingModal, { useOnboarding } from './components/OnboardingModal';
 import DashboardPage from './pages/DashboardPage';
 import PodcastsPage from './pages/PodcastsPage';
 import JobsPage from './pages/JobsPage';
@@ -35,6 +36,7 @@ function AppShell() {
   const { status, requireAuth, isAuthenticated, user } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { showOnboarding, completeOnboarding } = useOnboarding();
 
   if (status === 'loading') {
     return (
@@ -123,6 +125,11 @@ function AppShell() {
 
         <AudioPlayer />
       </div>
+
+      {/* Onboarding Modal for first-time users */}
+      {showOnboarding && isAuthenticated && (
+        <OnboardingModal onClose={completeOnboarding} />
+      )}
 
       <Toaster 
         position="top-center" 

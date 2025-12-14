@@ -7,6 +7,8 @@ import HelpModal from '../HelpModal';
 import UserProfileModal from '../UserProfileModal';
 import { authApi } from '../../services/api';
 
+const ONBOARDING_STORAGE_KEY = 'podly_onboarding_completed';
+
 interface NavItem {
   path: string;
   label: string;
@@ -207,7 +209,14 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
       </div>
 
       {/* Help Modal */}
-      <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+      <HelpModal 
+        isOpen={helpOpen} 
+        onClose={() => setHelpOpen(false)} 
+        onReplayTutorial={() => {
+          localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+          window.location.reload();
+        }}
+      />
 
       {/* User Profile Modal */}
       <UserProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
