@@ -913,24 +913,32 @@ def api_admin_feed_subscriptions() -> ResponseReturnValue:
         if not sub.is_private:
             has_public_subscriber[sub.feed_id] = True
     
-    # Get processing stats per feed
+    # Get processing stats per feed - use efficient batch queries
+    # Get processed counts for all feeds in one query
+    processed_counts = dict(
+        db.session.query(
+            Post.feed_id,
+            func.count(Post.id)
+        ).filter(
+            Post.processed_audio_path.isnot(None),
+            Post.processed_audio_path != ""
+        ).group_by(Post.feed_id).all()
+    )
+    
+    # Get total ad time removed for all feeds in one query
+    ad_time_by_feed = dict(
+        db.session.query(
+            Post.feed_id,
+            func.sum(ProcessingStatistics.total_duration_removed_seconds)
+        ).join(Post, ProcessingStatistics.post_id == Post.id
+        ).group_by(Post.feed_id).all()
+    )
+    
     feed_stats: dict = {}
     for feed, _ in feeds_with_counts:
-        processed_count = Post.query.filter(
-            Post.feed_id == feed.id,
-            Post.processed_audio_path.isnot(None)
-        ).count()
-        
-        # Sum ad time removed for this feed
-        total_ad_time = db.session.query(
-            func.sum(ProcessingStatistics.total_duration_removed_seconds)
-        ).join(Post, ProcessingStatistics.post_id == Post.id).filter(
-            Post.feed_id == feed.id
-        ).scalar() or 0.0
-        
         feed_stats[feed.id] = {
-            "processed_count": processed_count,
-            "total_ad_time_removed": round(total_ad_time, 1),
+            "processed_count": processed_counts.get(feed.id, 0),
+            "total_ad_time_removed": round(ad_time_by_feed.get(feed.id) or 0.0, 1),
         }
     
     feeds_data = [
