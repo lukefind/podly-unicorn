@@ -192,6 +192,12 @@ export const feedsApi = {
     return response.data;
   },
 
+  // Admin: Repair processed audio paths
+  repairProcessedPaths: async (): Promise<{ checked: number; repaired: number; errors: string[]; total_errors: number }> => {
+    const response = await api.post('/api/admin/repair-processed-paths');
+    return response.data;
+  },
+
   // New post processing methods
   processPost: async (guid: string): Promise<{ status: string; job_id?: string; message: string; download_url?: string }> => {
     const response = await api.post(`/api/posts/${guid}/process`);
