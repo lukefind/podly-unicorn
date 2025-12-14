@@ -969,3 +969,77 @@ def api_admin_feed_subscriptions() -> ResponseReturnValue:
         "total_feeds": len(feeds_data),
         "total_subscriptions": len(all_subscriptions),
     })
+
+
+@feed_bp.route("/api/admin/repair-processed-paths", methods=["POST"])
+def api_admin_repair_processed_paths() -> ResponseReturnValue:
+    """Admin endpoint: Scan for existing processed audio files and update database records.
+    
+    This fixes issues where the database doesn't have processed_audio_path set but the files exist on disk.
+    """
+    import re
+    from pathlib import Path
+    from shared.processing_paths import get_srv_root
+    
+    settings = current_app.config.get("AUTH_SETTINGS")
+    if not settings or not settings.require_auth:
+        return jsonify({"error": "Authentication is disabled."}), 404
+    
+    current = getattr(g, "current_user", None)
+    if current is None:
+        return jsonify({"error": "Authentication required."}), 401
+    
+    user = User.query.get(current.id)
+    if not user or user.role != "admin":
+        return jsonify({"error": "Admin privileges required."}), 403
+    
+    srv_root = get_srv_root()
+    repaired_count = 0
+    checked_count = 0
+    errors = []
+    
+    # Get all posts that don't have processed_audio_path set
+    posts_without_path = Post.query.filter(
+        (Post.processed_audio_path.is_(None)) | (Post.processed_audio_path == "")
+    ).all()
+    
+    for post in posts_without_path:
+        checked_count += 1
+        try:
+            feed = Feed.query.get(post.feed_id)
+            if not feed:
+                continue
+            
+            # Calculate expected processed path based on feed title
+            sanitized_feed_title = re.sub(r"[^a-zA-Z0-9\s_.-]", "", feed.title).strip()
+            sanitized_feed_title = sanitized_feed_title.rstrip(".")
+            sanitized_feed_title = re.sub(r"\s+", "_", sanitized_feed_title)
+            
+            # Try to find the processed file
+            feed_dir = srv_root / sanitized_feed_title
+            if not feed_dir.exists():
+                continue
+            
+            # Look for any mp3 file that might match this post
+            # The filename is typically based on the original download filename
+            for audio_file in feed_dir.glob("*.mp3"):
+                # Check if this file might belong to this post
+                # We can match by checking if the post has an unprocessed path with same filename
+                if post.unprocessed_audio_path:
+                    expected_filename = Path(post.unprocessed_audio_path).name
+                    if audio_file.name == expected_filename:
+                        post.processed_audio_path = str(audio_file)
+                        db.session.commit()
+                        repaired_count += 1
+                        logger.info(f"Repaired processed_audio_path for post {post.id}: {audio_file}")
+                        break
+        except Exception as e:
+            errors.append(f"Error processing post {post.id}: {str(e)}")
+            logger.error(f"Error repairing post {post.id}: {e}")
+    
+    return jsonify({
+        "checked": checked_count,
+        "repaired": repaired_count,
+        "errors": errors[:10] if errors else [],  # Limit errors in response
+        "total_errors": len(errors),
+    })
