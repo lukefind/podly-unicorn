@@ -22,6 +22,52 @@ class ITunesImage:
         handler.endElement("itunes:image")
 
 
+class ITunesRSSItem(PyRSS2Gen.RSSItem):
+    """Extended RSSItem that supports iTunes image for episode artwork."""
+
+    def __init__(self, itunes_image_url: Optional[str] = None, **kwargs: Any):
+        super().__init__(**kwargs)
+        self.itunes_image_url = itunes_image_url
+
+    def publish(self, handler: Any) -> None:
+        handler.startElement("item", {})
+
+        if self.title is not None:
+            PyRSS2Gen._element(handler, "title", self.title)
+        if self.link is not None:
+            PyRSS2Gen._element(handler, "link", self.link)
+        if self.description is not None:
+            handler.startElement("description", {})
+            handler.characters(self.description)
+            handler.endElement("description")
+        if self.author is not None:
+            PyRSS2Gen._element(handler, "author", self.author)
+        for category in self.categories:
+            if isinstance(category, str):
+                PyRSS2Gen._element(handler, "category", category)
+            else:
+                category.publish(handler)
+        if self.comments is not None:
+            PyRSS2Gen._element(handler, "comments", self.comments)
+        if self.enclosure is not None:
+            self.enclosure.publish(handler)
+        if self.guid is not None:
+            if isinstance(self.guid, str):
+                PyRSS2Gen._element(handler, "guid", self.guid)
+            else:
+                self.guid.publish(handler)
+        if self.pubDate is not None:
+            PyRSS2Gen._element(handler, "pubDate", PyRSS2Gen._format_date(self.pubDate))
+        if self.source is not None:
+            self.source.publish(handler)
+
+        # Add iTunes image if available
+        if self.itunes_image_url:
+            ITunesImage(self.itunes_image_url).publish(handler)
+
+        handler.endElement("item")
+
+
 class ITunesRSS2(PyRSS2Gen.RSS2):
     """Extended RSS2 class that includes iTunes namespace for podcast support."""
 
@@ -260,12 +306,7 @@ def feed_item(post: Post) -> PyRSS2Gen.RSSItem:
         f'{post.description}\n<p><a href="{post_details_url}">Podly Post Page</a></p>'
     )
 
-    # Build extensions list for episode-specific elements
-    extensions: list[Any] = []
-    if post.image_url:
-        extensions.append(ITunesImage(post.image_url))
-
-    item = PyRSS2Gen.RSSItem(
+    item = ITunesRSSItem(
         title=post.title,
         enclosure=PyRSS2Gen.Enclosure(
             url=audio_url,
@@ -275,7 +316,7 @@ def feed_item(post: Post) -> PyRSS2Gen.RSSItem:
         description=description,
         guid=post.guid,
         pubDate=_format_pub_date(post.release_date),
-        extensions=extensions if extensions else None,
+        itunes_image_url=post.image_url,
     )
 
     return item
