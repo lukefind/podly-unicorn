@@ -1038,6 +1038,80 @@ def api_admin_diagnose_processed_paths() -> ResponseReturnValue:
     })
 
 
+@feed_bp.route("/api/admin/fix-invalid-paths", methods=["POST"])
+def api_admin_fix_invalid_paths() -> ResponseReturnValue:
+    """Admin endpoint: Fix posts with invalid processed_audio_path by finding similar files on disk."""
+    from pathlib import Path
+    from difflib import SequenceMatcher
+    
+    settings = current_app.config.get("AUTH_SETTINGS")
+    if not settings or not settings.require_auth:
+        return jsonify({"error": "Authentication is disabled."}), 404
+    
+    current = getattr(g, "current_user", None)
+    if current is None:
+        return jsonify({"error": "Authentication required."}), 401
+    
+    user = User.query.get(current.id)
+    if not user or user.role != "admin":
+        return jsonify({"error": "Admin privileges required."}), 403
+    
+    fixed_count = 0
+    cleared_count = 0
+    details = []
+    
+    # Get posts with paths that don't exist on disk
+    posts_with_paths = Post.query.filter(
+        Post.processed_audio_path.isnot(None),
+        Post.processed_audio_path != ""
+    ).all()
+    
+    for post in posts_with_paths:
+        path = Path(post.processed_audio_path)
+        if path.exists():
+            continue  # Path is valid, skip
+        
+        # Path doesn't exist - try to find a similar file in the same directory
+        parent_dir = path.parent
+        if not parent_dir.exists():
+            # Directory doesn't exist - clear the path
+            post.processed_audio_path = None
+            db.session.commit()
+            cleared_count += 1
+            details.append(f"Cleared (no dir): {post.title[:40]}...")
+            continue
+        
+        # Look for similar filename in the directory
+        expected_name = path.name
+        best_match = None
+        best_ratio = 0.0
+        
+        for audio_file in parent_dir.glob("*.mp3"):
+            # Calculate similarity ratio
+            ratio = SequenceMatcher(None, expected_name.lower(), audio_file.name.lower()).ratio()
+            if ratio > best_ratio and ratio > 0.7:  # At least 70% similar
+                best_ratio = ratio
+                best_match = audio_file
+        
+        if best_match:
+            post.processed_audio_path = str(best_match)
+            db.session.commit()
+            fixed_count += 1
+            details.append(f"Fixed ({best_ratio:.0%}): {post.title[:30]}... -> {best_match.name[:30]}")
+        else:
+            # No similar file found - clear the invalid path
+            post.processed_audio_path = None
+            db.session.commit()
+            cleared_count += 1
+            details.append(f"Cleared (no match): {post.title[:40]}...")
+    
+    return jsonify({
+        "fixed": fixed_count,
+        "cleared": cleared_count,
+        "details": details,
+    })
+
+
 @feed_bp.route("/api/admin/repair-processed-paths", methods=["POST"])
 def api_admin_repair_processed_paths() -> ResponseReturnValue:
     """Admin endpoint: Scan for existing processed audio files and update database records.
