@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { configApi, authApi } from '../services/api';
+import { configApi, authApi, feedsApi } from '../services/api';
 import { toast } from 'react-hot-toast';
 import type {
   CombinedConfig,
@@ -1195,6 +1195,41 @@ export default function ConfigPage() {
       {showSecurityControls && user?.role === 'admin' && (
         <Section title="User Statistics">
           <AdminUserStats />
+        </Section>
+      )}
+
+      {/* Database Maintenance - Admin only */}
+      {showSecurityControls && user?.role === 'admin' && (
+        <Section title="Database Maintenance">
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 dark:text-purple-100">Repair Processed Audio Paths</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Scan for processed audio files on disk and update database records where the path is missing.
+                  Useful after database migrations or server moves.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    toast.loading('Scanning for processed files...', { id: 'repair-paths' });
+                    const result = await feedsApi.repairProcessedPaths();
+                    toast.success(
+                      `Repaired ${result.repaired} of ${result.checked} posts checked${result.total_errors > 0 ? ` (${result.total_errors} errors)` : ''}`,
+                      { id: 'repair-paths', duration: 5000 }
+                    );
+                  } catch (err) {
+                    toast.error('Failed to repair paths', { id: 'repair-paths' });
+                  }
+                }}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+              >
+                Repair Paths
+              </button>
+            </div>
+          </div>
         </Section>
       )}
 
