@@ -1,6 +1,7 @@
 import datetime
 import logging
 import uuid
+import xml.dom.minidom
 from email.utils import format_datetime, parsedate_to_datetime
 from typing import Any, Optional
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -8,6 +9,77 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import feedparser  # type: ignore[import-untyped]
 import PyRSS2Gen  # type: ignore[import-untyped]
 from flask import current_app, g, request
+
+
+class ITunesImage:
+    """Custom element for iTunes image tag in RSS items."""
+
+    def __init__(self, href: str):
+        self.href = href
+
+    def publish(self, handler: Any) -> None:
+        handler.startElement("itunes:image", {"href": self.href})
+        handler.endElement("itunes:image")
+
+
+class ITunesRSS2(PyRSS2Gen.RSS2):
+    """Extended RSS2 class that includes iTunes namespace for podcast support."""
+
+    rss_attrs = {
+        "version": "2.0",
+        "xmlns:itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd",
+    }
+
+    def publish(self, handler: Any) -> None:
+        handler.startElement("rss", self.rss_attrs)
+        handler.startElement("channel", {})
+        PyRSS2Gen._element(handler, "title", self.title)
+        PyRSS2Gen._element(handler, "link", self.link)
+        PyRSS2Gen._element(handler, "description", self.description)
+
+        self.publish_extensions(handler)
+
+        if self.language is not None:
+            PyRSS2Gen._element(handler, "language", self.language)
+        if self.copyright is not None:
+            PyRSS2Gen._element(handler, "copyright", self.copyright)
+        if self.managingEditor is not None:
+            PyRSS2Gen._element(handler, "managingEditor", self.managingEditor)
+        if self.webMaster is not None:
+            PyRSS2Gen._element(handler, "webMaster", self.webMaster)
+        if self.pubDate is not None:
+            PyRSS2Gen._element(handler, "pubDate", PyRSS2Gen._format_date(self.pubDate))
+        if self.lastBuildDate is not None:
+            PyRSS2Gen._element(handler, "lastBuildDate", PyRSS2Gen._format_date(self.lastBuildDate))
+        for category in self.categories:
+            if isinstance(category, str):
+                PyRSS2Gen._element(handler, "category", category)
+            else:
+                category.publish(handler)
+        if self.generator is not None:
+            PyRSS2Gen._element(handler, "generator", self.generator)
+        if self.docs is not None:
+            PyRSS2Gen._element(handler, "docs", self.docs)
+        if self.cloud is not None:
+            self.cloud.publish(handler)
+        if self.ttl is not None:
+            PyRSS2Gen._element(handler, "ttl", str(self.ttl))
+        if self.image is not None:
+            self.image.publish(handler)
+        if self.rating is not None:
+            PyRSS2Gen._element(handler, "rating", self.rating)
+        if self.textInput is not None:
+            self.textInput.publish(handler)
+        if self.skipHours is not None:
+            self.skipHours.publish(handler)
+        if self.skipDays is not None:
+            self.skipDays.publish(handler)
+
+        for item in self.items:
+            item.publish(handler)
+
+        handler.endElement("channel")
+        handler.endElement("rss")
 
 from app.extensions import db
 from app.models import Feed, Post, UserFeedSubscription
@@ -188,6 +260,11 @@ def feed_item(post: Post) -> PyRSS2Gen.RSSItem:
         f'{post.description}\n<p><a href="{post_details_url}">Podly Post Page</a></p>'
     )
 
+    # Build extensions list for episode-specific elements
+    extensions: list[Any] = []
+    if post.image_url:
+        extensions.append(ITunesImage(post.image_url))
+
     item = PyRSS2Gen.RSSItem(
         title=post.title,
         enclosure=PyRSS2Gen.Enclosure(
@@ -198,6 +275,7 @@ def feed_item(post: Post) -> PyRSS2Gen.RSSItem:
         description=description,
         guid=post.guid,
         pubDate=_format_pub_date(post.release_date),
+        extensions=extensions if extensions else None,
     )
 
     return item
@@ -212,7 +290,7 @@ def generate_feed_xml(feed: Feed) -> Any:
 
     last_build_date = format_datetime(datetime.datetime.now(datetime.timezone.utc))
 
-    rss_feed = PyRSS2Gen.RSS2(
+    rss_feed = ITunesRSS2(
         title="[podly] " + feed.title,
         link=link,
         description=feed.description,
