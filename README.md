@@ -22,11 +22,6 @@ This is a fork of [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podc
 </div>
 
 <div align="center">
-  <img src="frontend/public/images/screenshots/podcasts-desktop.png" alt="Podcasts Page" width="700" />
-  <p><em>Podcasts page with episode management</em></p>
-</div>
-
-<div align="center">
   <table>
     <tr>
       <td><img src="frontend/public/images/screenshots/podcasts-mobile.png" alt="Mobile View" width="300" /></td>
