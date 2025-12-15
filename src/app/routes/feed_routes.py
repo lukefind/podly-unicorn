@@ -24,7 +24,7 @@ from flask.typing import ResponseReturnValue
 
 from app.auth.feed_tokens import create_feed_access_token
 from app.extensions import db
-from app.feeds import add_or_refresh_feed, generate_feed_xml, refresh_feed
+from app.feeds import add_or_refresh_feed, generate_feed_xml, generate_combined_feed_xml, refresh_feed
 from app.jobs_manager import get_jobs_manager
 from app.models import (
     Feed,
@@ -153,6 +153,43 @@ def create_feed_share_link(feed_id: int) -> ResponseReturnValue:
     )
 
 
+@feed_bp.route("/api/feeds/combined/share-link", methods=["POST"])
+def create_combined_feed_share_link() -> ResponseReturnValue:
+    """Create a shareable link for the user's combined feed with all subscribed podcasts."""
+    settings = current_app.config.get("AUTH_SETTINGS")
+    if not settings or not settings.require_auth:
+        return jsonify({"error": "Authentication is disabled."}), 404
+
+    current = getattr(g, "current_user", None)
+    if current is None:
+        return jsonify({"error": "Authentication required."}), 401
+
+    user = User.query.get(current.id)
+    if user is None:
+        return jsonify({"error": "User not found."}), 404
+
+    # Create a feed token for the combined feed (use feed_id=None or a special marker)
+    token_id, secret = create_feed_access_token(user, feed=None)
+
+    parsed = urlparse(request.host_url)
+    netloc = parsed.netloc
+    scheme = parsed.scheme
+    path = "/feed/combined"
+    query = urlencode({"feed_token": token_id, "feed_secret": secret})
+    prefilled_url = urlunparse((scheme, netloc, path, "", query, ""))
+
+    return (
+        jsonify(
+            {
+                "url": prefilled_url,
+                "feed_token": token_id,
+                "feed_secret": secret,
+            }
+        ),
+        201,
+    )
+
+
 @feed_bp.route("/api/feeds/search", methods=["GET"])
 def search_feeds() -> ResponseReturnValue:
     term = (request.args.get("term") or "").strip()
@@ -216,6 +253,36 @@ def search_feeds() -> ResponseReturnValue:
             "total": total,
         }
     )
+
+
+@feed_bp.route("/feed/combined", methods=["GET"])
+def get_combined_feed() -> Response:
+    """Get a combined RSS feed with all episodes from user's subscribed podcasts.
+    
+    The feed uses the Podly Unicorn logo as the show image, but each episode
+    retains its original podcast's artwork.
+    """
+    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
+    
+    settings = current_app.config.get("AUTH_SETTINGS")
+    current = getattr(g, "current_user", None)
+    
+    if not settings or not settings.require_auth:
+        return make_response(("Combined feed requires authentication to be enabled", 400))
+    
+    if not current:
+        return make_response(("Authentication required", 401))
+    
+    user = User.query.get(current.id)
+    if not user:
+        return make_response(("User not found", 404))
+    
+    # Generate the combined XML
+    xml_content = generate_combined_feed_xml(user.id, user.username)
+    
+    response = make_response(xml_content)
+    response.headers["Content-Type"] = "application/rss+xml"
+    return response
 
 
 @feed_bp.route("/feed/<int:f_id>", methods=["GET"])

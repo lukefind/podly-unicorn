@@ -352,6 +352,64 @@ def generate_feed_xml(feed: Feed) -> Any:
     return rss_feed.to_xml("utf-8")
 
 
+def generate_combined_feed_xml(user_id: int, username: str) -> Any:
+    """Generate a combined RSS feed with all episodes from a user's subscribed podcasts."""
+    from typing import List
+    
+    logger.info(f"Generating combined feed for user {user_id}")
+    
+    # Get all feeds the user is subscribed to
+    subscriptions = UserFeedSubscription.query.filter_by(user_id=user_id).all()
+    feed_ids = [sub.feed_id for sub in subscriptions]
+    
+    if not feed_ids:
+        # Return empty feed if no subscriptions
+        base_url = _get_base_url()
+        link = _append_feed_token_params(f"{base_url}/feed/combined")
+        rss_feed = ITunesRSS2(
+            title=f"Podly Unicorn - {username}'s Podcasts",
+            link=link,
+            description="All your ad-free podcasts in one feed. Subscribe to podcasts in Podly to see episodes here.",
+            lastBuildDate=datetime.datetime.now(datetime.timezone.utc),
+            image=PyRSS2Gen.Image(
+                url=f"{base_url}/images/logos/unicorn-logo.png",
+                title=f"Podly Unicorn - {username}'s Podcasts",
+                link=link
+            ),
+            items=[],
+        )
+        return rss_feed.to_xml("utf-8")
+    
+    # Get all posts from subscribed feeds, sorted by release date (newest first)
+    posts: List[Post] = Post.query.filter(
+        Post.feed_id.in_(feed_ids)
+    ).order_by(Post.release_date.desc()).limit(200).all()
+    
+    # Generate feed items with episode images from original podcasts
+    items = [feed_item(post) for post in posts]
+    
+    base_url = _get_base_url()
+    link = _append_feed_token_params(f"{base_url}/feed/combined")
+    
+    last_build_date = datetime.datetime.now(datetime.timezone.utc)
+    
+    # Use Podly Unicorn logo for the feed image
+    rss_feed = ITunesRSS2(
+        title=f"Podly Unicorn - {username}'s Podcasts",
+        link=link,
+        description=f"All your ad-free podcasts in one feed. Currently subscribed to {len(feed_ids)} shows.",
+        lastBuildDate=last_build_date,
+        image=PyRSS2Gen.Image(
+            url=f"{base_url}/images/logos/unicorn-logo.png",
+            title=f"Podly Unicorn - {username}'s Podcasts",
+            link=link
+        ),
+        items=items,
+    )
+    logger.info(f"Combined feed generated for user {user_id} with {len(items)} episodes from {len(feed_ids)} feeds")
+    return rss_feed.to_xml("utf-8")
+
+
 def _append_feed_token_params(url: str) -> str:
     if not current_app.config.get("REQUIRE_AUTH"):
         return url

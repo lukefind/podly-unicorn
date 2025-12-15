@@ -177,15 +177,37 @@ export default function PodcastsPage() {
         </div>
         
         {requireAuth && (
-          <button
-            onClick={() => setShowSubscriptions(true)}
-            className="w-full mb-4 px-3 py-2 bg-purple-50 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 flex items-center justify-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            Browse Podcasts on Server
-          </button>
+          <div className="space-y-2 mb-4">
+            <button
+              onClick={() => setShowSubscriptions(true)}
+              className="w-full px-3 py-2 bg-purple-50 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-100 transition-colors border border-purple-200 flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Browse Podcasts on Server
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const result = await feedsApi.getCombinedFeedShareLink();
+                  await copyTextToClipboard(result.url);
+                  toast.success('Combined feed URL copied! Add this to your podcast app to get all your shows in one feed.');
+                } catch (err) {
+                  console.error('Failed to get combined feed link:', err);
+                  toast.error('Failed to generate combined feed link');
+                }
+              }}
+              className="w-full px-3 py-2 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 text-white text-sm font-medium rounded-lg hover:from-pink-600 hover:via-purple-600 hover:to-cyan-600 transition-colors flex items-center justify-center gap-2"
+              title="Get one RSS feed with all episodes from all your subscribed podcasts"
+            >
+              <img src="/images/logos/unicorn-logo.png" alt="" className="w-5 h-5" />
+              All-in-One Podly RSS
+            </button>
+            <p className="text-xs text-gray-500 text-center">
+              One feed with all your podcasts combined
+            </p>
+          </div>
         )}
 
       {showShowSettingsModal && selectedFeed && createPortal(
