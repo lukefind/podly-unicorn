@@ -87,21 +87,15 @@ def add_feed() -> ResponseReturnValue:
         # Auto-subscribe the user who added the feed
         settings = current_app.config.get("AUTH_SETTINGS")
         current = getattr(g, "current_user", None)
-        logger.info(f"Add feed: settings={settings}, require_auth={settings.require_auth if settings else None}, current={current}, feed={feed}")
         if settings and settings.require_auth and current and feed:
             existing_sub = UserFeedSubscription.query.filter_by(
                 user_id=current.id, feed_id=feed.id
             ).first()
-            logger.info(f"Checking subscription: user_id={current.id}, feed_id={feed.id}, existing_sub={existing_sub}")
             if not existing_sub:
                 subscription = UserFeedSubscription(user_id=current.id, feed_id=feed.id)
                 db.session.add(subscription)
                 db.session.commit()
                 logger.info(f"Auto-subscribed user {current.id} to feed {feed.id}")
-            else:
-                logger.info(f"User {current.id} already subscribed to feed {feed.id}")
-        else:
-            logger.warning(f"Skipping auto-subscribe: settings={bool(settings)}, require_auth={settings.require_auth if settings else None}, current={bool(current)}, feed={bool(feed)}")
         
         app = cast(Any, current_app)._get_current_object()
         Thread(
