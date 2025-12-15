@@ -23,9 +23,17 @@ def _hash_token(secret: str) -> str:
     return hashlib.sha256(secret.encode("utf-8")).hexdigest()
 
 
-def create_feed_access_token(user: User, feed: Feed) -> tuple[str, str]:
+def create_feed_access_token(user: User, feed: Optional[Feed] = None) -> tuple[str, str]:
+    """Create or retrieve a feed access token.
+    
+    Args:
+        user: The user to create the token for
+        feed: The specific feed, or None for combined feed access
+    """
+    feed_id = feed.id if feed else None
+    
     existing = FeedAccessToken.query.filter_by(
-        user_id=user.id, feed_id=feed.id, revoked=False
+        user_id=user.id, feed_id=feed_id, revoked=False
     ).first()
     if existing is not None:
         if existing.token_secret:
@@ -44,7 +52,7 @@ def create_feed_access_token(user: User, feed: Feed) -> tuple[str, str]:
         token_id=token_id,
         token_hash=_hash_token(secret),
         token_secret=secret,
-        feed_id=feed.id,
+        feed_id=feed_id,
         user_id=user.id,
     )
     db.session.add(token)
@@ -67,9 +75,18 @@ def authenticate_feed_token(
     if not secrets.compare_digest(token.token_hash, expected_hash):
         return None
 
-    feed_id = _resolve_feed_id(path)
-    if feed_id is None or feed_id != token.feed_id:
-        return None
+    # Check if this is a combined feed request (token.feed_id is None)
+    is_combined_feed = path.startswith("/feed/combined")
+    
+    if is_combined_feed:
+        # Combined feed tokens have feed_id=None
+        if token.feed_id is not None:
+            return None
+    else:
+        # Regular feed - verify feed_id matches
+        feed_id = _resolve_feed_id(path)
+        if feed_id is None or feed_id != token.feed_id:
+            return None
 
     user = User.query.get(token.user_id)
     if user is None:

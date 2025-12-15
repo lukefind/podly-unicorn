@@ -66,6 +66,15 @@ export const feedsApi = {
     return response.data;
   },
 
+  getCombinedFeedShareLink: async (): Promise<{
+    url: string;
+    feed_token: string;
+    feed_secret: string;
+  }> => {
+    const response = await api.post('/api/feeds/combined/share-link');
+    return response.data;
+  },
+
   refreshFeed: async (
     feedId: number
   ): Promise<{ status: string; message?: string }> => {
