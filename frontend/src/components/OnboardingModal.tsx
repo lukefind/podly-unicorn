@@ -52,8 +52,12 @@ const ONBOARDING_STEPS = [
     icon: '📱',
     content: (
       <div className="space-y-3">
-        <p>Click <strong>"Podly RSS"</strong> on a podcast to copy the ad-free feed URL.</p>
-        <p>Paste this URL into your favorite podcast app (Apple Podcasts, Overcast, Pocket Casts, etc.).</p>
+        <p>You have two options to add feeds to your podcast app:</p>
+        <ul className="list-disc list-inside space-y-1.5 ml-2 text-sm">
+          <li><strong>Per-show:</strong> Click "Podly RSS" on each podcast for individual feeds</li>
+          <li><strong>All-in-One:</strong> Click "All-in-One Podly RSS" to get ONE feed with ALL your shows combined!</li>
+        </ul>
+        <p className="text-sm">Paste the URL into your favorite podcast app (Apple Podcasts, Overcast, Pocket Casts, etc.).</p>
         <div className="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-3 text-sm border border-amber-200 dark:border-amber-800">
           <strong>Important:</strong> When your app first requests an episode, it triggers processing. The first download may fail - just wait ~1 minute and try again. After that, it's ready!
         </div>

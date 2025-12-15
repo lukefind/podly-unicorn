@@ -1038,6 +1038,19 @@ export default function PodcastsPage() {
                   <strong>Note:</strong> The first download attempt in your podcast app may fail while processing. Wait 1-2 minutes and try again - the episode should be ready.
                 </p>
               </div>
+
+              <div className="mt-4 p-4 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50 rounded-xl border border-purple-200 space-y-2">
+                <h3 className="font-semibold text-purple-900 flex items-center gap-2">
+                  <img src="/images/logos/unicorn-logo.png" alt="" className="w-5 h-5" />
+                  All-in-One Podly RSS
+                </h3>
+                <p className="text-sm text-purple-700">
+                  Get all your subscribed podcasts in a single RSS feed! Click the <strong>"All-in-One Podly RSS"</strong> button on the Podcasts page to copy a combined feed URL. Add it to your podcast app and all your ad-free shows will appear in one place.
+                </p>
+                <p className="text-sm text-purple-600">
+                  The feed uses the Podly Unicorn logo as the show artwork, but each episode keeps its original podcast's image.
+                </p>
+              </div>
             </div>
 
             {/* Footer */}
