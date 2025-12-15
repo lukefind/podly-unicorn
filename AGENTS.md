@@ -65,6 +65,45 @@ def downgrade():
     pass
 ```
 
+### Manual SQL Migrations in Docker
+
+The Docker container does NOT have `sqlite3` CLI installed. For manual SQL migrations, use Python:
+
+```bash
+sudo docker exec podly-pure-podcasts python -c "
+import sqlite3
+conn = sqlite3.connect('/app/src/instance/sqlite3.db')
+cursor = conn.cursor()
+cursor.execute('YOUR SQL HERE')
+conn.commit()
+conn.close()
+print('Done!')
+"
+```
+
+**Example: Making a column nullable in SQLite** (requires table recreation):
+```bash
+sudo docker exec podly-pure-podcasts python -c "
+import sqlite3
+conn = sqlite3.connect('/app/src/instance/sqlite3.db')
+cursor = conn.cursor()
+
+# SQLite doesn't support ALTER COLUMN, must recreate table
+cursor.execute('''CREATE TABLE tablename_new (
+    id INTEGER PRIMARY KEY,
+    column_to_change INTEGER,  -- removed NOT NULL
+    other_column TEXT NOT NULL
+)''')
+cursor.execute('INSERT INTO tablename_new SELECT * FROM tablename')
+cursor.execute('DROP TABLE tablename')
+cursor.execute('ALTER TABLE tablename_new RENAME TO tablename')
+
+conn.commit()
+conn.close()
+print('Migration complete!')
+"
+```
+
 ---
 
 ## Prompt Presets
