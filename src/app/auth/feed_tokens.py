@@ -75,15 +75,31 @@ def authenticate_feed_token(
     if not secrets.compare_digest(token.token_hash, expected_hash):
         return None
 
-    # Check if this is a combined feed request (token.feed_id is None)
-    is_combined_feed = path.startswith("/feed/combined")
+    # Check if this is a combined feed token (feed_id is None)
+    is_combined_feed_token = token.feed_id is None
     
-    if is_combined_feed:
-        # Combined feed tokens have feed_id=None
-        if token.feed_id is not None:
+    if is_combined_feed_token:
+        # Combined feed tokens can access:
+        # 1. The combined feed itself
+        # 2. Any post from feeds the user is subscribed to
+        if path.startswith("/feed/combined"):
+            pass  # Allow access to combined feed
+        elif path.startswith("/api/posts/") or path.startswith("/post/"):
+            # Check if the post belongs to a feed the user is subscribed to
+            from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
+            post_feed_id = _resolve_feed_id(path)
+            if post_feed_id is None:
+                return None
+            # Verify user is subscribed to this feed
+            subscription = UserFeedSubscription.query.filter_by(
+                user_id=token.user_id, feed_id=post_feed_id
+            ).first()
+            if subscription is None:
+                return None
+        else:
             return None
     else:
-        # Regular feed - verify feed_id matches
+        # Regular feed token - verify feed_id matches exactly
         feed_id = _resolve_feed_id(path)
         if feed_id is None or feed_id != token.feed_id:
             return None
