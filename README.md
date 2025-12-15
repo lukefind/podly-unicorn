@@ -60,6 +60,12 @@ This is a fork of [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podc
 - User-specific dashboard stats - see your own episodes processed and ad time saved
 - Request access / signup flow with admin approval
 
+### 📻 All-in-One Combined Feed
+- Single RSS feed with all your subscribed podcasts combined
+- Add one feed URL to your podcast app, get all your ad-free shows
+- Feed uses Podly Unicorn logo, episodes keep their original artwork
+- Click "All-in-One Podly RSS" button on Podcasts page to copy the URL
+
 ### 🎛️ Prompt Presets System
 - 3 built-in presets: Conservative, Balanced, Aggressive
 - Custom presets - create your own ad detection prompts
