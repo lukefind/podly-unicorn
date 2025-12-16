@@ -283,6 +283,7 @@ def get_summary_statistics():
         downloaded_post_ids = (
             db.session.query(UserDownload.post_id)
             .filter(UserDownload.user_id == current_user.id)
+            .filter(UserDownload.is_processed.is_(True))
             .distinct()
             .subquery()
         )

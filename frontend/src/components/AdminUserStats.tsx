@@ -129,6 +129,7 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-2 text-center">
           <div className="text-xl font-bold text-purple-600">{user.processed_downloads}</div>
           <div className="text-xs text-purple-500">Downloads</div>
+          <div className="text-[10px] text-purple-400">RSS: {user.rss_processed_downloads ?? 0}</div>
         </div>
         <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg p-2 text-center">
           <div className="text-sm font-bold text-cyan-600">{user.ad_time_removed_formatted || '0s'}</div>

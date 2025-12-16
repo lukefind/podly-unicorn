@@ -185,6 +185,7 @@ class UserDownload(db.Model):  # type: ignore[name-defined, misc]
     downloaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     file_size_bytes = db.Column(db.Integer, nullable=True)  # Size of downloaded file
     is_processed = db.Column(db.Boolean, default=True)  # Was it a processed (ad-free) version?
+    download_source = db.Column(db.String(20), nullable=False, default="web")
 
     # Relationships
     user = db.relationship("User", backref=db.backref("downloads", lazy="dynamic"))
