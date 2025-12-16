@@ -188,15 +188,25 @@ export default function PodcastsPage() {
               Browse Podcasts on Server
             </button>
             <button
-              onClick={async () => {
-                try {
-                  const result = await feedsApi.getCombinedFeedShareLink();
-                  await copyTextToClipboard(result.url);
-                  toast.success('Combined feed URL copied! Add this to your podcast app to get all your shows in one feed.');
-                } catch (err) {
-                  console.error('Failed to get combined feed link:', err);
-                  toast.error('Failed to generate combined feed link');
-                }
+              onClick={() => {
+                // Use promise chain instead of async/await for better iOS Safari compatibility
+                feedsApi.getCombinedFeedShareLink()
+                  .then((result) => {
+                    // For iOS, try navigator.clipboard first, fall back to prompt
+                    if (navigator.clipboard && window.isSecureContext) {
+                      return navigator.clipboard.writeText(result.url).then(() => {
+                        toast.success('Combined feed URL copied! Add this to your podcast app to get all your shows in one feed.');
+                      });
+                    } else {
+                      // Fallback: show the URL in a prompt for manual copy
+                      window.prompt('Copy this feed URL:', result.url);
+                      toast.success('Copy the URL from the dialog above');
+                    }
+                  })
+                  .catch((err) => {
+                    console.error('Failed to get combined feed link:', err);
+                    toast.error('Failed to generate combined feed link');
+                  });
               }}
               className="w-full px-3 py-2 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 text-white text-sm font-medium rounded-lg hover:from-pink-600 hover:via-purple-600 hover:to-cyan-600 transition-colors flex items-center justify-center gap-2"
               title="Get one RSS feed with all episodes from all your subscribed podcasts"
