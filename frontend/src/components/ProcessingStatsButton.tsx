@@ -91,7 +91,7 @@ export default function ProcessingStatsButton({
       {showModal && createPortal(
         <div 
           className="fixed inset-0 bg-purple-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4"
-          style={{ zIndex: 9999 }}
+          style={{ zIndex: 10001 }}
           onClick={() => setShowModal(false)}
         >
           <div 
