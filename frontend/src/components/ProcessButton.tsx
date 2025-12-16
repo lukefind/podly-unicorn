@@ -55,11 +55,11 @@ export default function ProcessButton({
   };
 
   return (
-    <div className={`${className}`}>
+    <>
       <button
         onClick={handleProcessClick}
         disabled={isProcessing}
-        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5 ${
+        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5 ${className} ${
           isProcessing
             ? 'bg-purple-500 text-white cursor-wait border-purple-500'
             : 'bg-white border-purple-200 text-purple-600 hover:bg-purple-50'
@@ -87,6 +87,6 @@ export default function ProcessButton({
           {error}
         </div>
       )}
-    </div>
+    </>
   );
 }

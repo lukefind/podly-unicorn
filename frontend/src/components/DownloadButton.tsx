@@ -215,10 +215,10 @@ export default function DownloadButton({
   // Show completed state with download button only
   if (status?.status === 'completed' && status.download_url) {
     return (
-      <div className={`${className}`}>
+      <>
         <button
           onClick={handleDownloadClick}
-          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all border bg-white border-teal-200 text-teal-600 hover:bg-teal-50 flex items-center gap-1.5"
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border bg-white border-teal-200 text-teal-600 hover:bg-teal-50 flex items-center gap-1.5 ${className}`}
           title="Download processed episode"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -231,7 +231,7 @@ export default function DownloadButton({
             {error}
           </div>
         )}
-      </div>
+      </>
     );
   }
 

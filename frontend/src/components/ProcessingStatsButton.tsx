@@ -8,12 +8,14 @@ interface ProcessingStatsButtonProps {
   episodeGuid: string;
   hasProcessedAudio: boolean;
   className?: string;
+  onOpen?: () => void;
 }
 
 export default function ProcessingStatsButton({
   episodeGuid,
   hasProcessedAudio,
-  className = ''
+  className = '',
+  onOpen
 }: ProcessingStatsButtonProps) {
   const [showModal, setShowModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'model-calls' | 'transcript' | 'identifications'>('overview');
@@ -73,7 +75,10 @@ export default function ProcessingStatsButton({
   return (
     <>
       <button
-        onClick={() => setShowModal(true)}
+        onClick={() => {
+          setShowModal(true);
+          onOpen?.();
+        }}
         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border bg-white border-purple-200 text-purple-600 hover:bg-purple-50 flex items-center gap-1.5 ${className}`}
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

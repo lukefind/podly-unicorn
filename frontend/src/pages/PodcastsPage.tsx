@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
@@ -15,6 +15,7 @@ import EpisodeProcessingStatus from '../components/EpisodeProcessingStatus';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { copyTextToClipboard } from '../services/clipboard';
+import { PullToRefresh } from '../components/PullToRefresh';
 
 export default function PodcastsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -26,6 +27,7 @@ export default function PodcastsPage() {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [copyUrlModal, setCopyUrlModal] = useState<string | null>(null);
   const [processingPollTriggers, setProcessingPollTriggers] = useState<Record<string, number>>({});
+  const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
   const { requireAuth, isAuthenticated, user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -37,6 +39,14 @@ export default function PodcastsPage() {
     queryKey: ['feeds'],
     queryFn: feedsApi.getFeeds,
   });
+
+
+  const handlePullRefresh = useCallback(async () => {
+    await refetchFeeds();
+    if (selectedFeedId) {
+      await queryClient.invalidateQueries({ queryKey: ['episodes', selectedFeedId] });
+    }
+  }, [refetchFeeds, selectedFeedId, queryClient]);
 
   const { data: presets } = useQuery({
     queryKey: ['presets'],
@@ -164,6 +174,7 @@ export default function PodcastsPage() {
   }
 
   return (
+    <PullToRefresh onRefresh={handlePullRefresh} className="min-h-full lg:h-full">
     <div className="min-h-full lg:h-full flex flex-col lg:flex-row gap-4 lg:gap-6">
       {/* Left Panel - Feed List - hidden on mobile when feed selected */}
       <div className={`lg:w-80 flex-shrink-0 flex-col ${selectedFeed ? 'hidden lg:flex' : 'flex w-full'}`}>
@@ -808,7 +819,12 @@ export default function PodcastsPage() {
                     {/* Top row: Title + Status badge */}
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-purple-900 line-clamp-2 leading-snug">{episode.title}</h3>
+                        <button
+                          onClick={() => setSelectedEpisode(episode)}
+                          className="text-left font-medium text-purple-900 line-clamp-2 leading-snug hover:text-purple-700 hover:underline cursor-pointer transition-colors"
+                        >
+                          {episode.title}
+                        </button>
                       </div>
                       {/* Status indicator */}
                       <div className="flex-shrink-0">
@@ -981,6 +997,178 @@ export default function PodcastsPage() {
         </div>
       )}
 
+      {/* Episode Details Modal */}
+      {selectedEpisode && createPortal(
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-start sm:items-center justify-center p-2 sm:p-4 pt-4 sm:pt-8 overflow-y-auto"
+          style={{ zIndex: 10000 }}
+          onClick={() => setSelectedEpisode(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-purple-200 max-h-[90vh] flex flex-col"
+            style={{ backgroundColor: '#ffffff' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 sm:p-6 border-b border-purple-100 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50 flex-shrink-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg sm:text-xl font-bold text-purple-900 leading-tight">{selectedEpisode.title}</h2>
+                  {selectedFeed && (
+                    <p className="text-sm text-purple-600 mt-1">{selectedFeed.title}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setSelectedEpisode(null)}
+                  className="p-2 text-purple-600 hover:text-purple-800 rounded-lg hover:bg-purple-100 bg-purple-100 flex-shrink-0"
+                  aria-label="Close"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-white">
+              {/* Episode Image & Metadata */}
+              <div className="flex gap-4 mb-4">
+                {selectedEpisode.image_url ? (
+                  <img 
+                    src={selectedEpisode.image_url} 
+                    alt={selectedEpisode.title}
+                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover flex-shrink-0 shadow-md"
+                  />
+                ) : selectedFeed?.image_url ? (
+                  <img 
+                    src={selectedFeed.image_url} 
+                    alt={selectedFeed.title}
+                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover flex-shrink-0 shadow-md opacity-60"
+                  />
+                ) : null}
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap gap-2 text-sm text-purple-600 mb-2">
+                    {selectedEpisode.release_date && (
+                      <span className="flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        {formatDate(selectedEpisode.release_date)}
+                      </span>
+                    )}
+                    {selectedEpisode.duration && (
+                      <span className="flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {formatDuration(selectedEpisode.duration)}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Status Badge */}
+                  <div className="mb-2">
+                    {selectedEpisode.has_processed_audio ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-lg">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        Processed & Ready
+                      </span>
+                    ) : selectedEpisode.whitelisted ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-lg">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
+                        </svg>
+                        Enabled for Processing
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-purple-100/50 text-purple-500 rounded-lg border border-dashed border-purple-300/50">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        Disabled
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Download count */}
+                  {selectedEpisode.download_count > 0 && (
+                    <p className="text-xs text-purple-400">
+                      Downloaded {selectedEpisode.download_count} time{selectedEpisode.download_count !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Description */}
+              {selectedEpisode.description && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold text-purple-900 mb-2">Description</h3>
+                  <div 
+                    className="text-sm text-purple-700 prose prose-sm prose-purple max-w-none [&_a]:text-blue-600 [&_a]:underline [&_a]:font-medium [&_a]:hover:text-blue-800"
+                    style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                    dangerouslySetInnerHTML={{ 
+                      __html: selectedEpisode.description
+                        .replace(/\n/g, '<br />')
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-4 sm:p-6 border-t border-purple-100 bg-purple-50 flex-shrink-0">
+              <div className="flex flex-wrap gap-2">
+                {selectedEpisode.has_processed_audio && (
+                  <>
+                    <PlayButton episode={selectedEpisode} />
+                    <DownloadButton 
+                      episodeGuid={selectedEpisode.guid}
+                      isWhitelisted={selectedEpisode.whitelisted}
+                      hasProcessedAudio={selectedEpisode.has_processed_audio}
+                      feedId={selectedFeed?.id}
+                    />
+                    <ProcessingStatsButton 
+                      episodeGuid={selectedEpisode.guid}
+                      hasProcessedAudio={selectedEpisode.has_processed_audio}
+                      onOpen={() => setSelectedEpisode(null)}
+                    />
+                  </>
+                )}
+                {!selectedEpisode.has_processed_audio && selectedEpisode.whitelisted && (
+                  <ProcessButton 
+                    episodeGuid={selectedEpisode.guid}
+                    feedId={selectedFeed?.id}
+                    onProcessStart={() => {
+                      setProcessingPollTriggers(prev => ({
+                        ...prev,
+                        [selectedEpisode.guid]: Date.now()
+                      }));
+                    }}
+                  />
+                )}
+                <button
+                  onClick={() => {
+                    whitelistMutation.mutate({ guid: selectedEpisode.guid, whitelisted: !selectedEpisode.whitelisted });
+                    setSelectedEpisode(null);
+                  }}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 border ${
+                    selectedEpisode.whitelisted
+                      ? 'bg-white border-red-200 text-red-600 hover:bg-red-50'
+                      : 'bg-white border-emerald-200 text-emerald-600 hover:bg-emerald-50'
+                  }`}
+                >
+                  {selectedEpisode.whitelisted ? 'Disable' : 'Enable'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Subscription Management Modal */}
       {showSubscriptions && createPortal(
         <SubscriptionModal 
@@ -1122,6 +1310,22 @@ export default function PodcastsPage() {
                   The feed uses the Podly Unicorn logo as the show artwork, but each episode keeps its original podcast's image.
                 </p>
               </div>
+
+              {/* Telegram Community */}
+              <a
+                href="https://t.me/+AV5-w_GSd2VjNjBk"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 flex items-center gap-3 p-4 bg-[#229ED9]/10 rounded-xl border border-[#229ED9]/30 hover:bg-[#229ED9]/20 transition-colors"
+              >
+                <svg className="w-8 h-8 text-[#229ED9] flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                </svg>
+                <div>
+                  <h3 className="font-semibold text-[#229ED9]">Join Our Community</h3>
+                  <p className="text-sm text-purple-600">Get help, share feedback, and connect with other Podly users on Telegram.</p>
+                </div>
+              </a>
             </div>
 
             {/* Footer */}
@@ -1138,6 +1342,7 @@ export default function PodcastsPage() {
         document.body
       )}
     </div>
+    </PullToRefresh>
   );
 }
 
