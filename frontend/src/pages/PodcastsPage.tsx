@@ -24,6 +24,7 @@ export default function PodcastsPage() {
   const [showShowSettingsModal, setShowShowSettingsModal] = useState(false);
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [copyUrlModal, setCopyUrlModal] = useState<string | null>(null);
   const [processingPollTriggers, setProcessingPollTriggers] = useState<Record<string, number>>({});
   const { requireAuth, isAuthenticated, user } = useAuth();
   const { theme } = useTheme();
@@ -192,17 +193,17 @@ export default function PodcastsPage() {
                 // Use promise chain instead of async/await for better iOS Safari compatibility
                 feedsApi.getCombinedFeedShareLink()
                   .then((result) => {
-                    // For iOS, try navigator.clipboard first, fall back to prompt
+                    // For iOS, try navigator.clipboard first, fall back to modal
                     if (navigator.clipboard && window.isSecureContext) {
                       return navigator.clipboard.writeText(result.url).then(() => {
                         toast.success('Combined feed URL copied! Add this to your podcast app to get all your shows in one feed.');
                       }).catch(() => {
-                        // Clipboard failed, show prompt
-                        window.prompt('Copy this feed URL:', result.url);
+                        // Clipboard failed, show modal for manual copy
+                        setCopyUrlModal(result.url);
                       });
                     } else {
-                      // Fallback: show the URL in a prompt for manual copy
-                      window.prompt('Copy this feed URL:', result.url);
+                      // Fallback: show modal for manual copy
+                      setCopyUrlModal(result.url);
                     }
                   })
                   .catch((err: unknown) => {
@@ -989,6 +990,55 @@ export default function PodcastsPage() {
       )}
 
       {/* Help Modal - How Processing Works */}
+      {/* Copy URL Modal for iOS fallback */}
+      {copyUrlModal && createPortal(
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
+          style={{ zIndex: 10000 }}
+          onClick={() => setCopyUrlModal(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-purple-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50">
+              <h2 className="text-xl font-bold text-purple-900 flex items-center gap-2">
+                <img src="/images/logos/unicorn-logo.png" alt="" className="w-6 h-6" />
+                Copy Feed URL
+              </h2>
+              <p className="text-sm text-purple-600 mt-1">Long-press to select, then tap Copy</p>
+            </div>
+            <div className="p-6">
+              <div className="bg-gray-100 rounded-lg p-3 break-all text-sm font-mono text-gray-800 select-all">
+                {copyUrlModal}
+              </div>
+              <div className="mt-4 flex gap-3">
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(copyUrlModal).then(() => {
+                      toast.success('URL copied!');
+                      setCopyUrlModal(null);
+                    }).catch(() => {
+                      toast.error('Please manually select and copy the URL above');
+                    });
+                  }}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 text-white font-medium rounded-lg hover:shadow-lg transition-all"
+                >
+                  Copy URL
+                </button>
+                <button
+                  onClick={() => setCopyUrlModal(null)}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {showHelpModal && createPortal(
         <div 
           className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
