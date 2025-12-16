@@ -5,6 +5,7 @@
   <p>
     <a href="https://github.com/lukefind/podly-unicorn"><img src="https://img.shields.io/badge/GitHub-podly--unicorn-purple?logo=github" alt="GitHub"></a>
     <a href="https://github.com/jdrbc/podly_pure_podcasts/blob/main/LICENCE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+    <a href="https://t.me/+AV5-w_GSd2VjNjBk"><img src="https://img.shields.io/badge/Telegram-Join%20Community-229ED9?logo=telegram" alt="Telegram"></a>
   </p>
 </div>
 
