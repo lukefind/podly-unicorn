@@ -949,25 +949,26 @@ export default function PodcastsPage() {
       {/* Add Feed Modal - Full screen on mobile */}
       {showAddForm && (
         <div
-          className="fixed inset-0 z-50 bg-white sm:bg-black/80 sm:flex sm:items-start sm:justify-center sm:p-4 sm:pt-8 sm:overflow-y-auto"
+          className="fixed inset-0 z-50 bg-gradient-to-br from-purple-50 via-pink-50 to-cyan-50 sm:bg-black/80 sm:flex sm:items-start sm:justify-center sm:p-4 sm:pt-8 sm:overflow-y-auto"
           onClick={() => setShowAddForm(false)}
         >
           <div
-            className="h-full sm:h-auto w-full sm:max-w-3xl bg-white sm:rounded-xl sm:shadow-2xl sm:border sm:border-gray-200 flex flex-col sm:max-h-[85vh]"
+            className="h-full sm:h-auto w-full sm:max-w-3xl bg-white/90 backdrop-blur-sm sm:bg-white sm:rounded-xl sm:shadow-2xl sm:border sm:border-gray-200 flex flex-col sm:max-h-[85vh]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 sm:px-4 sm:py-3">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Add a Podcast Feed</h2>
+            <div className="flex items-center justify-between border-b border-purple-200 px-3 py-2 sm:px-4 sm:py-3 flex-shrink-0 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50">
+              <h2 className="text-base sm:text-lg font-semibold text-purple-900">Add a Podcast Feed</h2>
               <button
                 onClick={() => setShowAddForm(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                className="p-2 text-purple-600 hover:text-purple-800 rounded-lg hover:bg-purple-100 bg-purple-100"
+                aria-label="Close"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div className="overflow-y-auto px-3 py-2 sm:px-4 sm:py-3 flex-1">
+            <div className="overflow-y-auto px-3 py-2 sm:px-4 sm:py-3 flex-1 bg-white/80">
               <AddFeedForm
                 onSuccess={() => {
                   setShowAddForm(false);

@@ -63,10 +63,15 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
   // Auto-focus search input when in search mode
   useEffect(() => {
     if (activeMode === 'search' && searchInputRef.current) {
-      // Small delay to ensure modal is rendered
+      // Longer delay for iOS to ensure modal is fully rendered
+      // iOS Safari needs the element to be visible before focus works
       setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 100);
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          // iOS workaround: scroll into view to help trigger keyboard
+          searchInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 300);
     }
   }, [activeMode]);
 
