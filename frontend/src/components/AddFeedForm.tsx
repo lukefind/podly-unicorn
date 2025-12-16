@@ -1,7 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { feedsApi } from '../services/api';
 import type { PodcastSearchResult } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+
+// Debounce hook for live search
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 interface AddFeedFormProps {
   onSuccess: () => void;
@@ -32,6 +49,9 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
   const [isSearching, setIsSearching] = useState(false);
   const [searchPage, setSearchPage] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
+  
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const debouncedSearchTerm = useDebounce(searchTerm, 400);
 
   const resetSearchState = () => {
     setSearchResults([]);
@@ -39,6 +59,26 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
     setSearchPage(1);
     setTotalResults(0);
   };
+
+  // Auto-focus search input when in search mode
+  useEffect(() => {
+    if (activeMode === 'search' && searchInputRef.current) {
+      // Small delay to ensure modal is rendered
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  }, [activeMode]);
+
+  // Live search as user types (debounced)
+  useEffect(() => {
+    if (debouncedSearchTerm.trim().length >= 2) {
+      performSearch();
+    } else if (debouncedSearchTerm.trim().length === 0) {
+      resetSearchState();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchTerm]);
 
   const handleSubmitManual = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,10 +140,6 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
     }
   };
 
-  const handleSearchSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await performSearch();
-  };
 
   const handleAddFromSearch = async (result: PodcastSearchResult, isPrivate: boolean = false) => {
     await addFeed(result.feedUrl, 'search', isPrivate);
@@ -123,23 +159,8 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
   );
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6">
-      <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Podcast Feed</h3>
-
-      <div className="flex flex-col sm:flex-row gap-2 mb-4">
-        <button
-          type="button"
-          onClick={() => {
-            setActiveMode('url');
-          }}
-          className={`flex-1 px-3 py-2 rounded-md border transition-colors ${
-            activeMode === 'url'
-              ? 'bg-blue-50 border-blue-500 text-blue-700'
-              : 'border-gray-200 text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          Enter RSS URL
-        </button>
+    <div className="flex flex-col h-full">
+      <div className="flex gap-2 mb-3">
         <button
           type="button"
           onClick={() => {
@@ -147,13 +168,26 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
             setError('');
             resetSearchState();
           }}
-          className={`flex-1 px-3 py-2 rounded-md border ${
+          className={`flex-1 px-2 py-1.5 text-sm rounded-md border ${
             activeMode === 'search'
               ? 'bg-blue-50 border-blue-500 text-blue-700'
               : 'border-gray-200 text-gray-600 hover:bg-gray-100'
           }`}
         >
-          Search Podcasts
+          Search
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveMode('url');
+          }}
+          className={`flex-1 px-2 py-1.5 text-sm rounded-md border transition-colors ${
+            activeMode === 'url'
+              ? 'bg-blue-50 border-blue-500 text-blue-700'
+              : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          RSS URL
         </button>
       </div>
 
@@ -191,32 +225,24 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
       )}
 
       {activeMode === 'search' && (
-        <div className="space-y-4">
-          <form onSubmit={handleSearchSubmit} className="flex flex-col md:flex-row gap-3">
-            <div className="flex-1">
-              <label htmlFor="search-term" className="block text-sm font-medium text-gray-700 mb-1">
-                Search keyword
-              </label>
-              <input
-                type="text"
-                id="search-term"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="e.g. history, space, entrepreneurship"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div className="flex items-end">
-              <button
-                type="submit"
-                disabled={isSearching}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md font-medium transition-colors w-full md:w-auto"
-              >
-                {isSearching ? 'Searching...' : 'Search'}
-              </button>
-            </div>
-          </form>
+        <div className="flex flex-col flex-1 min-h-0 gap-3">
+          <div className="flex gap-2">
+            <input
+              ref={searchInputRef}
+              type="text"
+              id="search-term"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search podcasts..."
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoComplete="off"
+            />
+            {isSearching && (
+              <div className="flex items-center px-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+              </div>
+            )}
+          </div>
 
           {searchError && (
             <div className="text-red-600 text-sm">{searchError}</div>
@@ -231,7 +257,7 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
           )}
 
           {searchResults.length > 0 && (
-            <div className="space-y-3">
+            <div className="flex flex-col flex-1 min-h-0">
               <div className="flex justify-between items-center text-sm text-gray-500">
                 <span>
                   Showing {startIndex}-{endIndex} of {totalResults} results
@@ -260,7 +286,7 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
                 </div>
               </div>
 
-              <ul className="space-y-3 max-h-[45vh] sm:max-h-80 overflow-y-auto pr-2">
+              <ul className="space-y-3 flex-1 overflow-y-auto pr-2">
                 {displayedResults.map((result) => (
                   <li
                     key={result.feedUrl}
