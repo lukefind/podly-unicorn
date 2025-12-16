@@ -578,6 +578,8 @@ export interface UserStats {
   ad_time_removed_formatted: string;
   total_downloads: number;
   processed_downloads: number;
+  rss_downloads: number;
+  rss_processed_downloads: number;
   subscriptions_count: number;
   last_activity: string | null;
   recent_downloads: Array<{

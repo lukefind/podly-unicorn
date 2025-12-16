@@ -29,6 +29,7 @@ from app.extensions import db
 from app.models import (
     AppSettings,
     EmailSettings,
+    FeedAccessToken,
     Feed,
     PasswordResetToken,
     Post,
@@ -624,6 +625,14 @@ def admin_user_stats() -> RouteResult:
         downloads = UserDownload.query.filter_by(user_id=u.id).all()
         total_downloads = len(downloads)
         processed_downloads = len([d for d in downloads if d.is_processed])
+        rss_downloads = len([d for d in downloads if getattr(d, "download_source", "web") == "rss"])
+        rss_processed_downloads = len(
+            [
+                d
+                for d in downloads
+                if getattr(d, "download_source", "web") == "rss" and d.is_processed
+            ]
+        )
 
         # Total ad time removed from processed downloads by this user
         # This counts ad time saved for episodes the user actually downloaded
@@ -647,15 +656,22 @@ def admin_user_stats() -> RouteResult:
             .order_by(ProcessingJob.created_at.desc())
             .first()
         )
+
+        last_token_use = (
+            db.session.query(func.max(FeedAccessToken.last_used_at))
+            .filter(FeedAccessToken.user_id == u.id)
+            .filter(FeedAccessToken.revoked.is_(False))
+            .scalar()
+        )
         last_activity = None
-        if last_download and last_job:
-            last_activity = max(
-                last_download.downloaded_at, last_job.created_at
-            ).isoformat()
-        elif last_download:
-            last_activity = last_download.downloaded_at.isoformat()
-        elif last_job:
-            last_activity = last_job.created_at.isoformat()
+        candidates = [
+            last_download.downloaded_at if last_download else None,
+            last_job.created_at if last_job else None,
+            last_token_use,
+        ]
+        candidates = [c for c in candidates if c is not None]
+        if candidates:
+            last_activity = max(candidates).isoformat()
 
         # Recent downloads (last 10)
         recent_downloads = (
@@ -679,6 +695,8 @@ def admin_user_stats() -> RouteResult:
             "ad_time_removed_formatted": _format_duration(ad_time_removed),
             "total_downloads": total_downloads,
             "processed_downloads": processed_downloads,
+            "rss_downloads": rss_downloads,
+            "rss_processed_downloads": rss_processed_downloads,
             "subscriptions_count": subscriptions_count,
             "last_activity": last_activity,
             "recent_downloads": [

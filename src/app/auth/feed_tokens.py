@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import hashlib
 import secrets
 import uuid
@@ -10,6 +11,8 @@ from typing import Optional
 from app.auth.service import AuthenticatedUser
 from app.extensions import db
 from app.models import Feed, FeedAccessToken, Post, User
+
+logger = logging.getLogger("global_logger")
 
 
 @dataclass(slots=True)
@@ -112,7 +115,11 @@ def authenticate_feed_token(
     if token.token_secret is None:
         token.token_secret = secret
     db.session.add(token)
-    # Defer commit to request teardown
+    try:
+        db.session.commit()
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error("Failed to persist feed token last_used_at: %s", exc)
+        db.session.rollback()
 
     return FeedTokenAuthResult(
         user=AuthenticatedUser(id=user.id, username=user.username, role=user.role),

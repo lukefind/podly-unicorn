@@ -42,6 +42,7 @@ def _track_user_download(post: Post, is_processed: bool = True) -> None:
         current_user = getattr(g, "current_user", None)
         if not current_user:
             return  # No user to track
+        download_source = "rss" if getattr(g, "feed_token", None) is not None else "web"
         
         # Get file size if available
         file_size = None
@@ -54,6 +55,7 @@ def _track_user_download(post: Post, is_processed: bool = True) -> None:
             post_id=post.id,
             is_processed=is_processed,
             file_size_bytes=file_size,
+            download_source=download_source,
         )
         db.session.add(download)
         db.session.commit()
