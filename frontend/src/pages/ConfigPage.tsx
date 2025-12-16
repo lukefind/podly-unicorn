@@ -240,6 +240,7 @@ export default function ConfigPage() {
       await authApi.deleteUser(username);
       toast.success(`Deleted user '${username}'.`);
       await refetchUsers();
+      await queryClient.invalidateQueries({ queryKey: ['admin-user-stats'] });
       if (user && user.username === username) {
         logout();
       }
