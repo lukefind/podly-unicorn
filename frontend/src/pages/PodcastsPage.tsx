@@ -196,16 +196,26 @@ export default function PodcastsPage() {
                     if (navigator.clipboard && window.isSecureContext) {
                       return navigator.clipboard.writeText(result.url).then(() => {
                         toast.success('Combined feed URL copied! Add this to your podcast app to get all your shows in one feed.');
+                      }).catch(() => {
+                        // Clipboard failed, show prompt
+                        window.prompt('Copy this feed URL:', result.url);
                       });
                     } else {
                       // Fallback: show the URL in a prompt for manual copy
                       window.prompt('Copy this feed URL:', result.url);
-                      toast.success('Copy the URL from the dialog above');
                     }
                   })
-                  .catch((err) => {
+                  .catch((err: unknown) => {
                     console.error('Failed to get combined feed link:', err);
-                    toast.error('Failed to generate combined feed link');
+                    // Show more specific error message
+                    const axiosErr = err as { response?: { status?: number; data?: { error?: string } } };
+                    if (axiosErr.response?.status === 401) {
+                      toast.error('Please log in again to generate feed link');
+                    } else if (axiosErr.response?.data?.error) {
+                      toast.error(axiosErr.response.data.error);
+                    } else {
+                      toast.error('Failed to generate combined feed link');
+                    }
                   });
               }}
               className="w-full px-3 py-2 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 text-white text-sm font-medium rounded-lg hover:from-pink-600 hover:via-purple-600 hover:to-cyan-600 transition-colors flex items-center justify-center gap-2"
