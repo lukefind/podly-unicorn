@@ -1133,7 +1133,6 @@ export default function PodcastsPage() {
                     <ProcessingStatsButton 
                       episodeGuid={selectedEpisode.guid}
                       hasProcessedAudio={selectedEpisode.has_processed_audio}
-                      onOpen={() => setSelectedEpisode(null)}
                     />
                   </>
                 )}
