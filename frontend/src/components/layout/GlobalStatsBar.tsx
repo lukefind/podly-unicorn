@@ -9,8 +9,8 @@ export default function GlobalStatsBar() {
   });
 
   const { data: statsSummary } = useQuery({
-    queryKey: ['stats-summary'],
-    queryFn: presetsApi.getStatsSummary,
+    queryKey: ['stats-summary', 'global'],
+    queryFn: () => presetsApi.getStatsSummary({ scope: 'global' }),
   });
 
   const activePreset = presets?.find((p: PromptPreset) => p.is_active);
