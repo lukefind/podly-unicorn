@@ -691,8 +691,10 @@ export const presetsApi = {
     return response.data;
   },
 
-  getStatsSummary: async (): Promise<ProcessingStatsSummary> => {
-    const response = await api.get('/api/statistics/summary');
+  getStatsSummary: async (params?: { scope?: 'user' | 'global' }): Promise<ProcessingStatsSummary> => {
+    const response = await api.get('/api/statistics/summary', {
+      params: params?.scope ? { scope: params.scope } : undefined,
+    });
     return response.data;
   },
 };

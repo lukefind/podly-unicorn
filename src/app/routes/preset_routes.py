@@ -266,8 +266,24 @@ def get_summary_statistics():
     current_user = _get_current_user()
     is_admin = _is_admin_user(current_user)
 
-    if is_admin or current_user is None:
-        # Admin or no auth: show server-wide stats
+    scope = request.args.get("scope")
+    force_user_scope = scope == "user"
+    force_global_scope = scope == "global"
+
+    if current_user is None:
+        # No auth context: show server-wide stats
+        total_stats = db.session.query(
+            func.count(ProcessingStatistics.id).label("total_episodes"),
+            func.sum(ProcessingStatistics.total_ad_segments_removed).label(
+                "total_segments_removed"
+            ),
+            func.sum(ProcessingStatistics.total_duration_removed_seconds).label(
+                "total_time_saved_seconds"
+            ),
+            func.avg(ProcessingStatistics.percentage_removed).label("avg_percentage_removed"),
+        ).first()
+    elif (is_admin and not force_user_scope) or (force_global_scope and is_admin):
+        # Admin (default) or explicit global scope: show server-wide stats
         total_stats = db.session.query(
             func.count(ProcessingStatistics.id).label("total_episodes"),
             func.sum(ProcessingStatistics.total_ad_segments_removed).label(
@@ -310,7 +326,7 @@ def get_summary_statistics():
             "total_time_saved_seconds": round(total_time_saved_seconds, 1),
             "total_time_saved_formatted": f"{hours}h {minutes}m",
             "average_percentage_removed": round(total_stats.avg_percentage_removed or 0, 2),
-            "is_user_specific": not is_admin and current_user is not None,
+            "is_user_specific": current_user is not None and (force_user_scope or not is_admin),
         }
     )
 

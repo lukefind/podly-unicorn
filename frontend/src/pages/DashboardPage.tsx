@@ -18,8 +18,8 @@ export default function DashboardPage() {
   });
 
   const { data: statsSummary } = useQuery({
-    queryKey: ['stats-summary'],
-    queryFn: presetsApi.getStatsSummary,
+    queryKey: ['stats-summary', 'user'],
+    queryFn: () => presetsApi.getStatsSummary({ scope: 'user' }),
   });
 
   const { data: jobs } = useQuery({

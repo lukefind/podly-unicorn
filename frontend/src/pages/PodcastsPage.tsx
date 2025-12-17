@@ -15,7 +15,6 @@ import EpisodeProcessingStatus from '../components/EpisodeProcessingStatus';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { copyTextToClipboard } from '../services/clipboard';
-import { PullToRefresh } from '../components/PullToRefresh';
 
 export default function PodcastsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -39,14 +38,6 @@ export default function PodcastsPage() {
     queryKey: ['feeds'],
     queryFn: feedsApi.getFeeds,
   });
-
-
-  const handlePullRefresh = useCallback(async () => {
-    await refetchFeeds();
-    if (selectedFeedId) {
-      await queryClient.invalidateQueries({ queryKey: ['episodes', selectedFeedId] });
-    }
-  }, [refetchFeeds, selectedFeedId, queryClient]);
 
   const { data: presets } = useQuery({
     queryKey: ['presets'],
@@ -174,7 +165,6 @@ export default function PodcastsPage() {
   }
 
   return (
-    <PullToRefresh onRefresh={handlePullRefresh} className="min-h-full lg:h-full">
     <div className="min-h-full lg:h-full flex flex-col lg:flex-row gap-4 lg:gap-6">
       {/* Left Panel - Feed List - hidden on mobile when feed selected */}
       <div className={`lg:w-80 flex-shrink-0 flex-col ${selectedFeed ? 'hidden lg:flex' : 'flex w-full'}`}>
@@ -1341,7 +1331,6 @@ export default function PodcastsPage() {
         document.body
       )}
     </div>
-    </PullToRefresh>
   );
 }
 
