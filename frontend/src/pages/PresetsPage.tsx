@@ -24,8 +24,8 @@ export default function PresetsPage() {
   });
 
   const { data: statsSummary } = useQuery({
-    queryKey: ['stats-summary'],
-    queryFn: presetsApi.getStatsSummary,
+    queryKey: ['stats-summary', 'global'],
+    queryFn: () => presetsApi.getStatsSummary({ scope: 'global' }),
   });
 
   const activatePresetMutation = useMutation({
