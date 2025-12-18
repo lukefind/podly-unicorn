@@ -367,13 +367,13 @@ def generate_combined_feed_xml(user_id: int, username: str) -> Any:
         base_url = _get_base_url()
         link = _append_feed_token_params(f"{base_url}/feed/combined")
         rss_feed = ITunesRSS2(
-            title=f"Podly Unicorn - {username}'s Podcasts",
+            title="Podly Unicorn",
             link=link,
             description="All your ad-free podcasts in one feed. Subscribe to podcasts in Podly to see episodes here.",
             lastBuildDate=datetime.datetime.now(datetime.timezone.utc),
             image=PyRSS2Gen.Image(
                 url=f"{base_url}/images/logos/unicorn-logo.png",
-                title=f"Podly Unicorn - {username}'s Podcasts",
+                title="Podly Unicorn",
                 link=link
             ),
             items=[],
@@ -395,13 +395,13 @@ def generate_combined_feed_xml(user_id: int, username: str) -> Any:
     
     # Use Podly Unicorn logo for the feed image
     rss_feed = ITunesRSS2(
-        title=f"Podly Unicorn - {username}'s Podcasts",
+        title="Podly Unicorn",
         link=link,
         description=f"All your ad-free podcasts in one feed. Currently subscribed to {len(feed_ids)} shows.",
         lastBuildDate=last_build_date,
         image=PyRSS2Gen.Image(
             url=f"{base_url}/images/logos/unicorn-logo.png",
-            title=f"Podly Unicorn - {username}'s Podcasts",
+            title="Podly Unicorn",
             link=link
         ),
         items=items,
