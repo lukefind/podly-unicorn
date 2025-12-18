@@ -318,11 +318,9 @@ def feed_item(post: Post, include_show_name: bool = False) -> PyRSS2Gen.RSSItem:
 
     # Generate URLs that will be proxied by the frontend to the backend
     audio_url = _append_feed_token_params(f"{base_url}/api/posts/{post.guid}/download")
-    post_details_url = _append_feed_token_params(f"{base_url}/api/posts/{post.guid}")
 
-    description = (
-        f'{post.description}\n<p><a href="{post_details_url}">Podly Post Page</a></p>'
-    )
+    # Use the original episode description as-is (no Podly link - it doesn't exist)
+    description = post.description or ""
 
     # Get the original show name if requested (for combined feeds)
     itunes_author = None
