@@ -23,11 +23,12 @@ class ITunesImage:
 
 
 class ITunesRSSItem(PyRSS2Gen.RSSItem):
-    """Extended RSSItem that supports iTunes image for episode artwork."""
+    """Extended RSSItem that supports iTunes image and author for episode artwork."""
 
-    def __init__(self, itunes_image_url: Optional[str] = None, **kwargs: Any):
+    def __init__(self, itunes_image_url: Optional[str] = None, itunes_author: Optional[str] = None, **kwargs: Any):
         super().__init__(**kwargs)
         self.itunes_image_url = itunes_image_url
+        self.itunes_author = itunes_author
 
     def publish(self, handler: Any) -> None:
         handler.startElement("item", {})
@@ -68,6 +69,10 @@ class ITunesRSSItem(PyRSS2Gen.RSSItem):
         # Add iTunes image if available
         if self.itunes_image_url:
             ITunesImage(self.itunes_image_url).publish(handler)
+        
+        # Add iTunes author (show name) if available
+        if self.itunes_author:
+            PyRSS2Gen._element(handler, "itunes:author", self.itunes_author)
 
         handler.endElement("item")
 
@@ -299,10 +304,14 @@ def add_feed(feed_data: feedparser.FeedParserDict) -> Feed:
         raise e
 
 
-def feed_item(post: Post) -> PyRSS2Gen.RSSItem:
+def feed_item(post: Post, include_show_name: bool = False) -> PyRSS2Gen.RSSItem:
     """
     Given a post, return the corresponding RSS item. Reference:
     https://github.com/Podcast-Standards-Project/PSP-1-Podcast-RSS-Specification?tab=readme-ov-file#required-item-elements
+    
+    Args:
+        post: The post to create an RSS item for
+        include_show_name: If True, include the original show name as itunes:author (for combined feeds)
     """
 
     base_url = _get_base_url()
@@ -315,6 +324,13 @@ def feed_item(post: Post) -> PyRSS2Gen.RSSItem:
         f'{post.description}\n<p><a href="{post_details_url}">Podly Post Page</a></p>'
     )
 
+    # Get the original show name if requested (for combined feeds)
+    itunes_author = None
+    if include_show_name and post.feed_id:
+        feed = Feed.query.get(post.feed_id)
+        if feed:
+            itunes_author = feed.title
+
     item = ITunesRSSItem(
         title=post.title,
         enclosure=PyRSS2Gen.Enclosure(
@@ -326,6 +342,7 @@ def feed_item(post: Post) -> PyRSS2Gen.RSSItem:
         guid=post.guid,
         pubDate=_format_pub_date(post.release_date),
         itunes_image_url=post.image_url,
+        itunes_author=itunes_author,
     )
 
     return item
@@ -386,7 +403,8 @@ def generate_combined_feed_xml(user_id: int, username: str) -> Any:
     ).order_by(Post.release_date.desc()).limit(200).all()
     
     # Generate feed items with episode images from original podcasts
-    items = [feed_item(post) for post in posts]
+    # Include show name as itunes:author for combined feed
+    items = [feed_item(post, include_show_name=True) for post in posts]
     
     base_url = _get_base_url()
     link = _append_feed_token_params(f"{base_url}/feed/combined")
