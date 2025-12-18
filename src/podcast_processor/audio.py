@@ -29,10 +29,15 @@ def clip_segments_with_fade(
     assert audio_duration_ms is not None
 
     # Try the complex filter approach first, fall back to simple if it fails
+    # Catch both ffmpeg.Error (runtime) and ValueError/Exception (filter graph construction)
     try:
         _clip_segments_complex(ad_segments_ms, fade_ms, in_path, out_path, audio_duration_ms)
     except ffmpeg.Error as e:
-        print(f"Complex filter failed, trying simple approach: {e.stderr.decode() if e.stderr else str(e)}")
+        print(f"Complex filter failed (ffmpeg error), trying simple approach: {e.stderr.decode() if e.stderr else str(e)}")
+        _clip_segments_simple(ad_segments_ms, in_path, out_path, audio_duration_ms)
+    except Exception as e:
+        # Catches filter graph construction errors like "multiple outgoing edges"
+        print(f"Complex filter failed (graph error), trying simple approach: {str(e)}")
         _clip_segments_simple(ad_segments_ms, in_path, out_path, audio_duration_ms)
 
 
