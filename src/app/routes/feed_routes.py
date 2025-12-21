@@ -1315,3 +1315,126 @@ def api_admin_repair_processed_paths() -> ResponseReturnValue:
         "errors": errors[:10] if errors else [],
         "total_errors": len(errors),
     })
+
+
+@feed_bp.route("/api/admin/feeds/<int:feed_id>/unsubscribe-all", methods=["POST"])
+def admin_unsubscribe_all(feed_id: int) -> ResponseReturnValue:
+    """Admin-only: Unsubscribe all users from a feed."""
+    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
+    
+    settings = current_app.config.get("AUTH_SETTINGS")
+    current = getattr(g, "current_user", None)
+    
+    if not settings or not settings.require_auth:
+        return jsonify({"error": "Authentication is disabled."}), 400
+    
+    if current is None:
+        return jsonify({"error": "Authentication required."}), 401
+    
+    user = User.query.get(current.id)
+    if not user or user.role != "admin":
+        return jsonify({"error": "Admin access required."}), 403
+    
+    feed = Feed.query.get_or_404(feed_id)
+    
+    # Count and delete all subscriptions
+    count = UserFeedSubscription.query.filter_by(feed_id=feed_id).count()
+    UserFeedSubscription.query.filter_by(feed_id=feed_id).delete()
+    db.session.commit()
+    
+    logger.info(f"Admin {user.username} unsubscribed all {count} users from feed {feed.title}")
+    
+    return jsonify({
+        "message": f"Unsubscribed {count} user(s) from {feed.title}",
+        "unsubscribed_count": count,
+    })
+
+
+@feed_bp.route("/api/admin/feeds/<int:feed_id>/delete", methods=["DELETE"])
+def admin_delete_feed(feed_id: int) -> ResponseReturnValue:
+    """Admin-only: Force delete a feed and all its episodes, regardless of subscribers."""
+    from app.models import UserFeedSubscription, FeedAccessToken  # pylint: disable=import-outside-toplevel
+    from sqlalchemy import text  # pylint: disable=import-outside-toplevel
+    
+    settings = current_app.config.get("AUTH_SETTINGS")
+    current = getattr(g, "current_user", None)
+    
+    if not settings or not settings.require_auth:
+        return jsonify({"error": "Authentication is disabled."}), 400
+    
+    if current is None:
+        return jsonify({"error": "Authentication required."}), 401
+    
+    user = User.query.get(current.id)
+    if not user or user.role != "admin":
+        return jsonify({"error": "Admin access required."}), 403
+    
+    feed = Feed.query.get_or_404(feed_id)
+    feed_title = feed.title
+    
+    # Get post info for file cleanup
+    posts_info = [(post.id, post.guid, post.unprocessed_audio_path, post.processed_audio_path) 
+                  for post in feed.posts]
+    post_ids = [p[0] for p in posts_info]
+    post_guids = [p[1] for p in posts_info]
+    
+    # Delete audio files
+    for _, _, unprocessed_path, processed_path in posts_info:
+        if unprocessed_path and Path(unprocessed_path).exists():
+            try:
+                Path(unprocessed_path).unlink()
+                logger.info(f"Deleted unprocessed audio: {unprocessed_path}")
+            except Exception as e:
+                logger.error(f"Error deleting unprocessed audio {unprocessed_path}: {e}")
+        
+        if processed_path and Path(processed_path).exists():
+            try:
+                Path(processed_path).unlink()
+                logger.info(f"Deleted processed audio: {processed_path}")
+            except Exception as e:
+                logger.error(f"Error deleting processed audio {processed_path}: {e}")
+    
+    # Clean up directory structures
+    _cleanup_feed_directories(feed)
+    
+    # Rollback any pending changes and use raw SQL
+    db.session.rollback()
+    
+    # Delete all related records using raw SQL
+    if post_ids:
+        post_ids_str = ','.join(str(pid) for pid in post_ids)
+        
+        # Get transcript segment IDs
+        segment_ids_result = db.session.execute(
+            text(f"SELECT id FROM transcript_segment WHERE post_id IN ({post_ids_str})")
+        ).fetchall()
+        segment_ids = [r[0] for r in segment_ids_result]
+        
+        if segment_ids:
+            segment_ids_str = ','.join(str(sid) for sid in segment_ids)
+            db.session.execute(
+                text(f"DELETE FROM identification WHERE transcript_segment_id IN ({segment_ids_str})")
+            )
+        
+        db.session.execute(text(f"DELETE FROM transcript_segment WHERE post_id IN ({post_ids_str})"))
+        db.session.execute(text(f"DELETE FROM model_call WHERE post_id IN ({post_ids_str})"))
+        db.session.execute(text(f"DELETE FROM processing_statistics WHERE post_id IN ({post_ids_str})"))
+        db.session.execute(text(f"DELETE FROM user_download WHERE post_id IN ({post_ids_str})"))
+    
+    if post_guids:
+        guids_str = ','.join(f"'{g}'" for g in post_guids)
+        db.session.execute(text(f"DELETE FROM processing_job WHERE post_guid IN ({guids_str})"))
+    
+    db.session.execute(text(f"DELETE FROM post WHERE feed_id = {feed_id}"))
+    db.session.execute(text(f"DELETE FROM user_feed_subscription WHERE feed_id = {feed_id}"))
+    db.session.execute(text(f"DELETE FROM feed_access_token WHERE feed_id = {feed_id}"))
+    db.session.execute(text(f"DELETE FROM feed WHERE id = {feed_id}"))
+    
+    db.session.commit()
+    
+    logger.info(f"Admin {user.username} deleted feed: {feed_title} (ID: {feed_id}) with {len(post_ids)} posts")
+    
+    return jsonify({
+        "message": f"Deleted feed '{feed_title}' and {len(post_ids)} episodes",
+        "deleted_episodes": len(post_ids),
+    })

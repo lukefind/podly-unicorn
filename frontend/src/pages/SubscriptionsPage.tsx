@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -9,7 +9,9 @@ export default function SubscriptionsPage() {
   const { user, requireAuth } = useAuth();
   const [expandedSubscribers, setExpandedSubscribers] = useState<Record<number, boolean>>({});
   const [settingsModalFeedId, setSettingsModalFeedId] = useState<number | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'unsubscribe-all' | 'delete'; feedId: number; feedTitle: string } | null>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-feed-subscriptions'],
@@ -43,6 +45,34 @@ export default function SubscriptionsPage() {
     },
     onError: () => {
       toast.error('Failed to disable auto-process');
+    },
+  });
+
+  const unsubscribeAllMutation = useMutation({
+    mutationFn: (feedId: number) => feedsApi.adminUnsubscribeAll(feedId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-feed-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      toast.success(data.message);
+      setConfirmAction(null);
+      setSettingsModalFeedId(null);
+    },
+    onError: () => {
+      toast.error('Failed to unsubscribe users');
+    },
+  });
+
+  const deleteFeedMutation = useMutation({
+    mutationFn: (feedId: number) => feedsApi.adminDeleteFeed(feedId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-feed-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      toast.success(data.message);
+      setConfirmAction(null);
+      setSettingsModalFeedId(null);
+    },
+    onError: () => {
+      toast.error('Failed to delete feed');
     },
   });
 
@@ -139,7 +169,12 @@ export default function SubscriptionsPage() {
                 {/* Feed Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <h3 className="font-semibold text-gray-900 dark:text-purple-100 text-sm sm:text-base leading-snug truncate">{feed.title}</h3>
+                    <button
+                      onClick={() => navigate(`/podcasts?feed=${feed.id}`)}
+                      className="font-semibold text-gray-900 dark:text-purple-100 text-sm sm:text-base leading-snug truncate hover:text-purple-600 dark:hover:text-purple-300 transition-colors text-left"
+                    >
+                      {feed.title}
+                    </button>
                     {feed.auto_process_enabled && (
                       <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" title="Auto-process enabled">
                         Auto
@@ -340,12 +375,88 @@ export default function SubscriptionsPage() {
               </div>
             </div>
 
+            {/* Danger Zone */}
+            <div className="p-4 border-t border-gray-100">
+              <div className="text-xs font-medium text-red-600 mb-3">Danger Zone</div>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setConfirmAction({ type: 'unsubscribe-all', feedId: selectedFeed.id, feedTitle: selectedFeed.title })}
+                  disabled={unsubscribeAllMutation.isPending || selectedFeed.subscriber_count === 0}
+                  className="w-full px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Unsubscribe All Users ({selectedFeed.subscriber_count})
+                </button>
+                <button
+                  onClick={() => setConfirmAction({ type: 'delete', feedId: selectedFeed.id, feedTitle: selectedFeed.title })}
+                  disabled={deleteFeedMutation.isPending}
+                  className="w-full px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                >
+                  Delete Feed & All Episodes
+                </button>
+              </div>
+            </div>
+
             <div className="p-4 border-t border-gray-100 bg-gray-50">
               <button
                 onClick={() => setSettingsModalFeedId(null)}
                 className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmAction && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
+          onClick={() => setConfirmAction(null)}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-100 bg-red-50">
+              <h3 className="font-semibold text-red-900">
+                {confirmAction.type === 'delete' ? 'Delete Feed?' : 'Unsubscribe All Users?'}
+              </h3>
+            </div>
+            <div className="p-4">
+              <p className="text-sm text-gray-600">
+                {confirmAction.type === 'delete' 
+                  ? `This will permanently delete "${confirmAction.feedTitle}" and all its episodes, transcripts, and processing data. This cannot be undone.`
+                  : `This will unsubscribe all users from "${confirmAction.feedTitle}". The feed and episodes will remain on the server.`
+                }
+              </p>
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex gap-2">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (confirmAction.type === 'delete') {
+                    deleteFeedMutation.mutate(confirmAction.feedId);
+                  } else {
+                    unsubscribeAllMutation.mutate(confirmAction.feedId);
+                  }
+                }}
+                disabled={deleteFeedMutation.isPending || unsubscribeAllMutation.isPending}
+                className={`flex-1 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 ${
+                  confirmAction.type === 'delete' 
+                    ? 'bg-red-600 hover:bg-red-700' 
+                    : 'bg-amber-600 hover:bg-amber-700'
+                }`}
+              >
+                {(deleteFeedMutation.isPending || unsubscribeAllMutation.isPending) 
+                  ? 'Processing...' 
+                  : confirmAction.type === 'delete' ? 'Delete' : 'Unsubscribe All'
+                }
               </button>
             </div>
           </div>

@@ -209,6 +209,18 @@ export const feedsApi = {
     return response.data;
   },
 
+  // Admin: Unsubscribe all users from a feed
+  adminUnsubscribeAll: async (feedId: number): Promise<{ message: string; unsubscribed_count: number }> => {
+    const response = await api.post(`/api/admin/feeds/${feedId}/unsubscribe-all`);
+    return response.data;
+  },
+
+  // Admin: Force delete a feed and all episodes
+  adminDeleteFeed: async (feedId: number): Promise<{ message: string; deleted_episodes: number }> => {
+    const response = await api.delete(`/api/admin/feeds/${feedId}/delete`);
+    return response.data;
+  },
+
   // New post processing methods
   processPost: async (guid: string): Promise<{ status: string; job_id?: string; message: string; download_url?: string }> => {
     const response = await api.post(`/api/posts/${guid}/process`);
