@@ -22,7 +22,7 @@ services:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:--1}
-      - SERVER_THREADS=${SERVER_THREADS:-1}
+      - SERVER_THREADS=${SERVER_THREADS:-4}
     restart: unless-stopped
     healthcheck:
       test:
