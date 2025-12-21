@@ -22,6 +22,8 @@ def main() -> None:
         host="0.0.0.0",
         port=port,
         threads=threads,
+        connection_limit=200,  # Increase from default 100
+        channel_timeout=120,   # Increase timeout for large file downloads
     )
 
 
