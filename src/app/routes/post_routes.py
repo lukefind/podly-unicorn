@@ -361,6 +361,25 @@ def api_post_stats(p_guid: str) -> flask.Response:
                 "min_confidence": preset.min_confidence,
             }
 
+    # Get the most recent completed processing job for this post
+    from app.models import ProcessingJob, User
+    last_job = (
+        ProcessingJob.query.filter_by(post_guid=post.guid, status="completed")
+        .order_by(ProcessingJob.completed_at.desc())
+        .first()
+    )
+    job_info = None
+    if last_job:
+        triggered_by_user = User.query.get(last_job.triggered_by_user_id) if last_job.triggered_by_user_id else None
+        job_info = {
+            "job_id": last_job.id,
+            "trigger_source": last_job.trigger_source,
+            "triggered_by_user_id": last_job.triggered_by_user_id,
+            "triggered_by_username": triggered_by_user.username if triggered_by_user else None,
+            "started_at": last_job.started_at.isoformat() if last_job.started_at else None,
+            "completed_at": last_job.completed_at.isoformat() if last_job.completed_at else None,
+        }
+
     stats_data = {
         "post": {
             "guid": post.guid,
@@ -387,6 +406,7 @@ def api_post_stats(p_guid: str) -> flask.Response:
         "model_calls": model_call_details,
         "transcript_segments": transcript_segments_data,
         "identifications": identifications_data,
+        "job_info": job_info,
     }
 
     return flask.jsonify(stats_data)

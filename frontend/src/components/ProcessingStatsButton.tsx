@@ -90,16 +90,17 @@ export default function ProcessingStatsButton({
       {/* Modal - rendered via portal to document.body */}
       {showModal && createPortal(
         <div 
-          className="fixed inset-0 bg-purple-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4"
+          className="fixed inset-0 bg-purple-900/60 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 pt-8 sm:pt-12 overflow-y-auto"
           style={{ zIndex: 10001 }}
           onClick={() => setShowModal(false)}
         >
           <div 
-            className="modal-content rounded-xl sm:rounded-2xl max-w-6xl w-full overflow-hidden shadow-2xl border flex flex-col"
+            className="modal-content rounded-xl sm:rounded-2xl max-w-6xl w-full overflow-hidden shadow-2xl border flex flex-col my-auto"
             style={{ 
               backgroundColor: isDark ? '#1a0f2e' : '#ffffff',
               borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(196, 181, 253, 0.5)',
-              maxHeight: 'calc(100vh - 1rem)',
+              maxHeight: 'calc(100vh - 4rem)',
+              minHeight: '400px',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -412,6 +413,47 @@ export default function ProcessingStatsButton({
                           </p>
                         </div>
                       )}
+
+                      {/* Processing Job Info */}
+                      <div 
+                        className="rounded-xl p-4 sm:p-5 shadow-sm border"
+                        style={{ 
+                          backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
+                          borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
+                        }}
+                      >
+                        <h4 className="font-semibold mb-3 text-left text-sm sm:text-base" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Processing Details</h4>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <div style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Triggered By</div>
+                            <div className="font-medium" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                              {stats.job_info?.triggered_by_username || (stats.job_info?.trigger_source === 'auto_feed_refresh' ? 'System' : '—')}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Trigger Source</div>
+                            <div className="font-medium" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                              {stats.job_info?.trigger_source === 'manual_ui' && 'Manual (UI)'}
+                              {stats.job_info?.trigger_source === 'manual_reprocess' && 'Reprocess'}
+                              {stats.job_info?.trigger_source === 'auto_feed_refresh' && 'Auto-download'}
+                              {stats.job_info?.trigger_source === 'on_demand_rss' && 'RSS Request'}
+                              {!stats.job_info?.trigger_source && '—'}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Started</div>
+                            <div className="font-medium" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                              {stats.job_info?.started_at ? formatTimestamp(stats.job_info.started_at) : '—'}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Completed</div>
+                            <div className="font-medium" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                              {stats.job_info?.completed_at ? formatTimestamp(stats.job_info.completed_at) : '—'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
 
