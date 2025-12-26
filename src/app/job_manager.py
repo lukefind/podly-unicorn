@@ -19,12 +19,14 @@ class JobManager:
         logger_obj: logging.Logger,
         run_id: Optional[str],
         triggered_by_user_id: Optional[int] = None,
+        trigger_source: Optional[str] = None,
     ) -> None:
         self.post_guid = post_guid
         self._status_manager = status_manager
         self._logger = logger_obj
         self._run_id = run_id
         self._triggered_by_user_id = triggered_by_user_id
+        self._trigger_source = trigger_source
         self.job: Optional[ProcessingJob] = None
 
     @property
@@ -58,6 +60,7 @@ class JobManager:
             job_id,
             self._run_id,
             triggered_by_user_id=self._triggered_by_user_id,
+            trigger_source=self._trigger_source,
         )
         self.job = job
         return job

@@ -330,7 +330,10 @@ class ProcessingJob(db.Model):  # type: ignore[name-defined, misc]
     post_guid = db.Column(db.String(255), nullable=False, index=True)
     triggered_by_user_id = db.Column(
         db.Integer, db.ForeignKey("users.id"), nullable=True, index=True
-    )  # User who triggered this job (None if triggered by RSS request or system)
+    )  # User who triggered this job
+    trigger_source = db.Column(
+        db.String(50), nullable=True, index=True
+    )  # manual_ui, manual_reprocess, auto_feed_refresh, on_demand_rss
     status = db.Column(
         db.String(50), nullable=False
     )  # pending, running, completed, failed, cancelled, skipped

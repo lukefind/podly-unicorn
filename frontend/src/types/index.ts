@@ -45,6 +45,9 @@ export interface Job {
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
+  trigger_source: 'manual_ui' | 'manual_reprocess' | 'auto_feed_refresh' | 'on_demand_rss' | string | null;
+  triggered_by_user_id: number | null;
+  triggered_by_username: string | null;
 }
 
 export interface JobManagerRun {

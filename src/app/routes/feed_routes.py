@@ -462,7 +462,10 @@ def _refresh_feed_background(app: Flask, feed_id: int) -> None:
             if auto_process_post_guids:
                 manager = get_jobs_manager()
                 for post_guid in auto_process_post_guids:
-                    manager.start_post_processing(post_guid, priority="background")
+                    manager.start_post_processing(
+                        post_guid, priority="background",
+                        trigger_source="auto_feed_refresh"
+                    )
 
             get_jobs_manager().enqueue_pending_jobs(
                 trigger="feed_refresh", context={"feed_id": feed_id}

@@ -29,6 +29,7 @@ class ProcessingStatusManager:
         job_id: str,
         run_id: Optional[str] = None,
         triggered_by_user_id: Optional[int] = None,
+        trigger_source: Optional[str] = None,
     ) -> ProcessingJob:
         """Create a new pending job record for the provided post."""
         # Create new job
@@ -37,6 +38,7 @@ class ProcessingStatusManager:
             jobs_manager_run_id=run_id,
             post_guid=post_guid,
             triggered_by_user_id=triggered_by_user_id,
+            trigger_source=trigger_source,
             status="pending",
             current_step=0,
             total_steps=4,
