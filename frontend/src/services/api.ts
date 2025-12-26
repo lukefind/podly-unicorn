@@ -366,6 +366,14 @@ export const feedsApi = {
       segment_end_time: number;
       segment_text: string;
     }>;
+    job_info: {
+      job_id: string;
+      trigger_source: string | null;
+      triggered_by_user_id: number | null;
+      triggered_by_username: string | null;
+      started_at: string | null;
+      completed_at: string | null;
+    } | null;
   }> => {
     const response = await api.get(`/api/posts/${guid}/stats`);
     return response.data;
