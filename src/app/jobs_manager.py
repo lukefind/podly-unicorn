@@ -73,9 +73,16 @@ class JobsManager:
         post_guid: str,
         priority: str = "interactive",
         triggered_by_user_id: Optional[int] = None,
+        trigger_source: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Idempotently start processing for a post. If an active job exists, return it.
+        
+        trigger_source values:
+        - manual_ui: User clicked Process in web UI
+        - manual_reprocess: User clicked Reprocess
+        - auto_feed_refresh: Auto-download triggered during feed refresh
+        - on_demand_rss: RSS download request triggered processing
         """
         with scheduler.app.app_context():
             run = ensure_active_run(
@@ -90,6 +97,7 @@ class JobsManager:
                 logger,
                 run.id if run else None,
                 triggered_by_user_id=triggered_by_user_id,
+                trigger_source=trigger_source,
             ).start_processing(priority)
         if result.get("status") in {"started", "running"}:
             self._wake_worker()
@@ -262,6 +270,12 @@ class JobsManager:
                             job.completed_at.isoformat() if job.completed_at else None
                         ),
                         "error_message": job.error_message,
+                        "trigger_source": job.trigger_source,
+                        "triggered_by_user_id": job.triggered_by_user_id,
+                        "triggered_by_username": (
+                            job.triggered_by_user.username
+                            if job.triggered_by_user else None
+                        ),
                     }
                 )
 
@@ -309,6 +323,12 @@ class JobsManager:
                             job.completed_at.isoformat() if job.completed_at else None
                         ),
                         "error_message": job.error_message,
+                        "trigger_source": job.trigger_source,
+                        "triggered_by_user_id": job.triggered_by_user_id,
+                        "triggered_by_username": (
+                            job.triggered_by_user.username
+                            if job.triggered_by_user else None
+                        ),
                     }
                 )
 
@@ -455,7 +475,10 @@ class JobsManager:
 
             if auto_process_post_guids:
                 for post_guid in auto_process_post_guids:
-                    self.start_post_processing(post_guid, priority="background")
+                    self.start_post_processing(
+                        post_guid, priority="background",
+                        trigger_source="auto_feed_refresh"
+                    )
 
             # Clean up posts with missing audio files
             self._cleanup_inconsistent_posts()

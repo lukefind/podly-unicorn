@@ -354,12 +354,20 @@ export default function JobsPage() {
 
             <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
               <div>
-                <div className="text-gray-500">Job ID</div>
-                <div className="truncate" title={job.job_id}>{job.job_id}</div>
+                <div className="text-gray-500">Triggered By</div>
+                <div className="font-medium">
+                  {job.triggered_by_username || (job.trigger_source === 'auto_feed_refresh' ? 'System' : '—')}
+                </div>
               </div>
               <div>
-                <div className="text-gray-500">Post GUID</div>
-                <div className="truncate" title={job.post_guid}>{job.post_guid}</div>
+                <div className="text-gray-500">Source</div>
+                <div className="font-medium">
+                  {job.trigger_source === 'manual_ui' && 'Manual (UI)'}
+                  {job.trigger_source === 'manual_reprocess' && 'Reprocess'}
+                  {job.trigger_source === 'auto_feed_refresh' && 'Auto-download'}
+                  {job.trigger_source === 'on_demand_rss' && 'RSS Request'}
+                  {!job.trigger_source && '—'}
+                </div>
               </div>
               <div>
                 <div className="text-gray-500">Created</div>

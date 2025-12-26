@@ -496,7 +496,8 @@ def api_process_post(p_guid: str) -> ResponseReturnValue:
         user_id = current_user.id if current_user else None
         
         result = get_jobs_manager().start_post_processing(
-            p_guid, priority="interactive", triggered_by_user_id=user_id
+            p_guid, priority="interactive", triggered_by_user_id=user_id,
+            trigger_source="manual_ui"
         )
         status_code = 200 if result.get("status") in ("started", "completed") else 400
         return flask.jsonify(result), status_code
@@ -550,7 +551,8 @@ def api_reprocess_post(p_guid: str) -> ResponseReturnValue:
         get_jobs_manager().cancel_post_jobs(p_guid)
         clear_post_processing_data(post)
         result = get_jobs_manager().start_post_processing(
-            p_guid, priority="interactive", triggered_by_user_id=user_id
+            p_guid, priority="interactive", triggered_by_user_id=user_id,
+            trigger_source="manual_reprocess"
         )
         status_code = 200 if result.get("status") in ("started", "completed") else 400
         if result.get("status") == "started":
@@ -674,9 +676,10 @@ def api_download_post(p_guid: str) -> flask.Response:
         try:
             app = cast(Any, current_app)._get_current_object()
             post_guid = post.guid  # Cache before leaving request context
+            user_id = current_user.id if current_user else None
             Thread(
                 target=_start_post_processing_async,
-                args=(app, post_guid),
+                args=(app, post_guid, user_id),
                 daemon=True,
                 name=f"on-demand-process-{post_guid[:8]}",
             ).start()
@@ -742,14 +745,15 @@ def api_download_original_post(p_guid: str) -> flask.Response:
     return response
 
 
-def _start_post_processing_async(app: Flask, post_guid: str) -> None:
+def _start_post_processing_async(app: Flask, post_guid: str, user_id: int = None) -> None:
     """Start post processing in a background thread with proper app context."""
     with app.app_context():
         try:
             result = get_jobs_manager().start_post_processing(
                 post_guid,
                 priority="interactive",
-                triggered_by_user_id=None,  # No user context for RSS requests
+                triggered_by_user_id=user_id,
+                trigger_source="on_demand_rss",
             )
             logger.info(f"On-demand processing started for {post_guid}: {result}")
         except Exception as exc:  # pylint: disable=broad-except
