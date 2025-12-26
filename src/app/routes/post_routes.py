@@ -10,7 +10,7 @@ from flask.typing import ResponseReturnValue
 
 from app.extensions import db
 from app.jobs_manager import get_jobs_manager
-from app.models import Identification, ModelCall, Post, TranscriptSegment, UserDownload
+from app.models import Identification, ModelCall, Post, TranscriptSegment, UserDownload, UserFeedSubscription
 from app.posts import clear_post_processing_data
 
 logger = logging.getLogger("global_logger")
@@ -637,8 +637,8 @@ def api_download_post(p_guid: str) -> flask.Response:
     """API endpoint to download processed audio files.
     
     If the episode is whitelisted but not yet processed, this will trigger
-    on-demand processing and return 202 Accepted with a Retry-After header.
-    Podcast apps will typically retry the request after the specified delay.
+    on-demand processing ONLY if the requesting user has auto-download enabled
+    for this feed. Otherwise, returns 404 to indicate the episode is not ready.
     """
     logger.info(f"Request to download post with GUID: {p_guid}")
     post = Post.query.filter_by(guid=p_guid).first()
@@ -651,8 +651,26 @@ def api_download_post(p_guid: str) -> flask.Response:
         return flask.make_response(("Post not whitelisted", 403))
 
     if not post.processed_audio_path or not Path(post.processed_audio_path).exists():
-        # Trigger on-demand processing for whitelisted episodes in background thread
-        logger.info(f"Triggering on-demand processing for post: {post.guid}")
+        # Check if the requesting user has auto-download enabled for this feed
+        current_user = getattr(g, "current_user", None)
+        user_has_auto_download = False
+        
+        if current_user and post.feed_id:
+            subscription = UserFeedSubscription.query.filter_by(
+                user_id=current_user.id,
+                feed_id=post.feed_id,
+                auto_download_new_episodes=True
+            ).first()
+            user_has_auto_download = subscription is not None
+        
+        if not user_has_auto_download:
+            # User doesn't have auto-download enabled - don't auto-process
+            # Return 404 so podcast apps don't keep retrying
+            logger.info(f"Post {post.guid} not processed and user doesn't have auto-download enabled")
+            return flask.make_response(("Episode not yet processed", 404))
+        
+        # User has auto-download enabled - trigger on-demand processing
+        logger.info(f"Triggering on-demand processing for post: {post.guid} (user has auto-download)")
         try:
             app = cast(Any, current_app)._get_current_object()
             post_guid = post.guid  # Cache before leaving request context
