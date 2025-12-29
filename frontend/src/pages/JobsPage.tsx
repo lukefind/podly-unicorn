@@ -176,12 +176,18 @@ export default function JobsPage() {
       return undefined;
     }
 
+    // Poll both status and job list while there's active work
     const interval = setInterval(() => {
       void loadStatus();
-    }, 10000);
+      if (mode === 'active') {
+        void loadActive();
+      } else {
+        void loadAll();
+      }
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, [managerStatus?.run?.queued_jobs, managerStatus?.run?.running_jobs, loadStatus]);
+  }, [managerStatus?.run?.queued_jobs, managerStatus?.run?.running_jobs, loadStatus, loadActive, loadAll, mode]);
 
   useEffect(() => {
     const queued = managerStatus?.run?.queued_jobs ?? 0;
