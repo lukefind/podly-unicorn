@@ -673,22 +673,28 @@ def api_download_post(p_guid: str) -> flask.Response:
         return flask.make_response(("Post not whitelisted", 403))
 
     if not post.processed_audio_path or not Path(post.processed_audio_path).exists():
-        # Check if the requesting user has auto-download enabled for this feed
+        # Check if the requesting user is allowed to trigger on-demand processing
         current_user = getattr(g, "current_user", None)
-        user_has_auto_download = False
+        feed_token = getattr(g, "feed_token", None)
+        can_trigger_processing = False
         
         if current_user and post.feed_id:
+            # Check if user has a subscription to this feed
             subscription = UserFeedSubscription.query.filter_by(
                 user_id=current_user.id,
-                feed_id=post.feed_id,
-                auto_download_new_episodes=True
+                feed_id=post.feed_id
             ).first()
-            user_has_auto_download = subscription is not None
+            
+            # Allow processing if:
+            # 1. User has auto_download enabled for this feed, OR
+            # 2. User is accessing via their RSS feed token (they explicitly want this content)
+            if subscription:
+                can_trigger_processing = subscription.auto_download_new_episodes or feed_token is not None
         
-        if not user_has_auto_download:
-            # User doesn't have auto-download enabled - don't auto-process
+        if not can_trigger_processing:
+            # User doesn't have permission to trigger processing
             # Return 404 so podcast apps don't keep retrying
-            logger.info(f"Post {post.guid} not processed and user doesn't have auto-download enabled")
+            logger.info(f"Post {post.guid} not processed and user can't trigger on-demand processing")
             return flask.make_response(("Episode not yet processed", 404))
         
         # User has auto-download enabled - trigger on-demand processing
