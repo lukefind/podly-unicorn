@@ -673,32 +673,45 @@ def api_download_post(p_guid: str) -> flask.Response:
         return flask.make_response(("Post not whitelisted", 403))
 
     if not post.processed_audio_path or not Path(post.processed_audio_path).exists():
-        # Check if the requesting user is allowed to trigger on-demand processing
+        # Check if the requesting user is allowed to trigger on-demand processing.
+        # Important: many podcast apps prefetch/probe enclosure URLs during RSS refresh.
+        # To avoid surprise auto-processing, only allow RSS-triggered processing when
+        # the user has explicitly enabled auto-download for this feed.
         current_user = getattr(g, "current_user", None)
         feed_token = getattr(g, "feed_token", None)
+        range_header = flask.request.headers.get("Range")
+        user_agent = flask.request.headers.get("User-Agent")
+
         can_trigger_processing = False
-        
         if current_user and post.feed_id:
-            # Check if user has a subscription to this feed
             subscription = UserFeedSubscription.query.filter_by(
                 user_id=current_user.id,
-                feed_id=post.feed_id
+                feed_id=post.feed_id,
             ).first()
-            
-            # Allow processing if:
-            # 1. User has auto_download enabled for this feed, OR
-            # 2. User is accessing via their RSS feed token (they explicitly want this content)
             if subscription:
-                can_trigger_processing = subscription.auto_download_new_episodes or feed_token is not None
-        
+                can_trigger_processing = bool(subscription.auto_download_new_episodes)
+
+        logger.info(
+            "On-demand download request for unprocessed post=%s feed_id=%s user_id=%s via_feed_token=%s can_trigger=%s range=%s ua=%s",
+            post.guid,
+            post.feed_id,
+            current_user.id if current_user else None,
+            feed_token is not None,
+            can_trigger_processing,
+            range_header,
+            user_agent,
+        )
+
         if not can_trigger_processing:
-            # User doesn't have permission to trigger processing
-            # Return 404 so podcast apps don't keep retrying
-            logger.info(f"Post {post.guid} not processed and user can't trigger on-demand processing")
+            # Return 404 so podcast apps don't keep retrying aggressively.
             return flask.make_response(("Episode not yet processed", 404))
         
         # User has auto-download enabled - trigger on-demand processing
-        logger.info(f"Triggering on-demand processing for post: {post.guid} (user has auto-download)")
+        logger.info(
+            "Triggering on-demand processing for post=%s user_id=%s",
+            post.guid,
+            current_user.id if current_user else None,
+        )
         try:
             app = cast(Any, current_app)._get_current_object()
             post_guid = post.guid  # Cache before leaving request context
