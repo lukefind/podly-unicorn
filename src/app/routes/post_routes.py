@@ -689,7 +689,9 @@ def api_download_post(p_guid: str) -> flask.Response:
                 feed_id=post.feed_id,
             ).first()
             if subscription:
-                can_trigger_processing = bool(subscription.auto_download_new_episodes)
+                # Allow processing if user is subscribed to the feed
+                # (auto_download_new_episodes only controls auto-processing on feed refresh)
+                can_trigger_processing = True
 
         logger.info(
             "On-demand download request for unprocessed post=%s feed_id=%s user_id=%s via_feed_token=%s can_trigger=%s range=%s ua=%s",
