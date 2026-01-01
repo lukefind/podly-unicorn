@@ -683,23 +683,41 @@ def api_download_post(p_guid: str) -> flask.Response:
         user_agent = flask.request.headers.get("User-Agent")
 
         can_trigger_processing = False
-        if current_user and post.feed_id:
+        
+        # Detect if this is a prefetch/probe vs a real download attempt.
+        # Podcast apps often send Range: bytes=0-0 or bytes=0-1 when probing URLs.
+        # We only trigger processing for full download requests (no Range header,
+        # or Range requesting more than just the first few bytes).
+        is_probe_request = False
+        if range_header:
+            # Parse Range header like "bytes=0-0" or "bytes=0-1"
+            import re
+            range_match = re.match(r"bytes=(\d+)-(\d*)", range_header)
+            if range_match:
+                start = int(range_match.group(1))
+                end_str = range_match.group(2)
+                # If requesting just first few bytes (0-0, 0-1, 0-100, etc), it's a probe
+                if start == 0 and end_str and int(end_str) < 1000:
+                    is_probe_request = True
+        
+        if current_user and post.feed_id and not is_probe_request:
             subscription = UserFeedSubscription.query.filter_by(
                 user_id=current_user.id,
                 feed_id=post.feed_id,
             ).first()
             if subscription:
-                # Allow processing if user is subscribed to the feed
-                # (auto_download_new_episodes only controls auto-processing on feed refresh)
+                # Allow processing if user is subscribed and this is a real download
+                # (not a prefetch probe from the podcast app)
                 can_trigger_processing = True
 
         logger.info(
-            "On-demand download request for unprocessed post=%s feed_id=%s user_id=%s via_feed_token=%s can_trigger=%s range=%s ua=%s",
+            "On-demand download request for unprocessed post=%s feed_id=%s user_id=%s via_feed_token=%s can_trigger=%s is_probe=%s range=%s ua=%s",
             post.guid,
             post.feed_id,
             current_user.id if current_user else None,
             feed_token is not None,
             can_trigger_processing,
+            is_probe_request,
             range_header,
             user_agent,
         )
