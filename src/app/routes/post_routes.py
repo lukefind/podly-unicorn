@@ -705,9 +705,8 @@ def api_download_post(p_guid: str) -> flask.Response:
                 user_id=current_user.id,
                 feed_id=post.feed_id,
             ).first()
-            if subscription:
-                # Allow processing if user is subscribed and this is a real download
-                # (not a prefetch probe from the podcast app)
+            if subscription and subscription.auto_download_new_episodes:
+                # Only trigger processing if user has auto_download enabled for THIS feed
                 can_trigger_processing = True
 
         logger.info(
