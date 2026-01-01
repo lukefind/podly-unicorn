@@ -289,10 +289,13 @@ def get_combined_feed() -> Response:
 def get_feed(f_id: int) -> Response:
     feed = Feed.query.get_or_404(f_id)
 
-    # Refresh the feed
-    refresh_feed(feed)
+    # Try to refresh the feed, but don't fail if upstream is unavailable
+    try:
+        refresh_feed(feed)
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.warning("Failed to refresh feed %s, serving cached data: %s", f_id, exc)
 
-    # Generate the XML
+    # Generate the XML from cached data
     xml_content = generate_feed_xml(feed)
 
     response = make_response(xml_content)
