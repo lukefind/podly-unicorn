@@ -11,14 +11,25 @@ conn = sqlite3.connect(DB_PATH)
 conn.row_factory = sqlite3.Row
 cursor = conn.cursor()
 
+# First, list all tables
+print("=" * 60)
+print("DATABASE TABLES")
+print("=" * 60)
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+tables = [row[0] for row in cursor.fetchall()]
+print(tables)
+print()
+
 print("=" * 60)
 print("USER FEED SUBSCRIPTIONS")
 print("=" * 60)
 
-cursor.execute("""
+# Check actual table name
+user_table = "users" if "users" in tables else "user"
+cursor.execute(f"""
     SELECT ufs.*, u.username, f.title as feed_title
     FROM user_feed_subscription ufs
-    LEFT JOIN user u ON ufs.user_id = u.id
+    LEFT JOIN {user_table} u ON ufs.user_id = u.id
     LEFT JOIN feed f ON ufs.feed_id = f.id
 """)
 for row in cursor.fetchall():
