@@ -302,9 +302,9 @@ export default function PodcastsPage() {
                         try {
                           await copyTextToClipboard(selectedFeed.rss_url);
                           toast.success('Original RSS copied!');
-                        } catch (err) {
-                          console.error('Failed to copy original RSS', err);
-                          toast.error('Failed to copy');
+                        } catch {
+                          // Clipboard failed (common on iOS) - show manual copy prompt
+                          window.prompt('Copy this RSS feed URL:', selectedFeed.rss_url);
                         }
                       }}
                       className="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
@@ -718,19 +718,25 @@ export default function PodcastsPage() {
 
                     try {
                       // Try to get authenticated share link first
-                      const shareData = await feedsApi.getFeedShareLink(selectedFeed.id);
-                      await copyTextToClipboard(shareData.url);
-                      toast.success('RSS URL copied to clipboard!');
-                    } catch {
-                      // If auth is disabled or error, use simple URL
-                      const rssUrl = `${window.location.origin}/feed/${selectedFeed.id}`;
+                      let rssUrl: string;
+                      try {
+                        const shareData = await feedsApi.getFeedShareLink(selectedFeed.id);
+                        rssUrl = shareData.url;
+                      } catch {
+                        // If auth is disabled or error, use simple URL
+                        rssUrl = `${window.location.origin}/feed/${selectedFeed.id}`;
+                      }
+                      
                       try {
                         await copyTextToClipboard(rssUrl);
                         toast.success('RSS URL copied to clipboard!');
-                      } catch (err) {
-                        console.error('Failed to copy RSS URL', err);
-                        toast.error('Failed to copy RSS URL');
+                      } catch {
+                        // Clipboard failed (common on iOS) - show manual copy prompt
+                        window.prompt('Copy this RSS feed URL:', rssUrl);
                       }
+                    } catch (err) {
+                      console.error('Failed to get RSS URL', err);
+                      toast.error('Failed to get RSS URL');
                     }
                   }}
                   className="px-3 py-2 text-sm font-medium text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2"

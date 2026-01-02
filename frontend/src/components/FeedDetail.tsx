@@ -170,29 +170,32 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
         rssUrl = new URL(`/feed/${feed.id}`, window.location.origin).toString();
       }
 
-      await copyTextToClipboard(rssUrl);
-
-      if (requireAuth) {
+      try {
+        await copyTextToClipboard(rssUrl);
         toast.success('Feed URL copied to clipboard');
-      } else {
-        toast.success('Feed URL copied to clipboard!');
+      } catch {
+        // Clipboard copy failed (common on iOS) - show manual copy prompt
+        window.prompt('Copy this RSS feed URL:', rssUrl);
       }
     } catch (err) {
-      console.error('Failed to copy feed URL', err);
-      toast.error('Failed to copy feed URL');
+      console.error('Failed to get feed URL', err);
+      toast.error('Failed to get feed URL');
     }
   };
 
   const handleCopyOriginalRssToClipboard = async () => {
-    try {
-      const rssUrl = feed.rss_url || '';
-      if (!rssUrl) throw new Error('No RSS URL');
+    const rssUrl = feed.rss_url || '';
+    if (!rssUrl) {
+      toast.error('No RSS URL available');
+      return;
+    }
 
+    try {
       await copyTextToClipboard(rssUrl);
       toast.success('Original RSS URL copied to clipboard');
-    } catch (err) {
-      console.error('Failed to copy original RSS URL', err);
-      toast.error('Failed to copy original RSS URL');
+    } catch {
+      // Clipboard copy failed (common on iOS) - show manual copy prompt
+      window.prompt('Copy this RSS feed URL:', rssUrl);
     }
   };
 
