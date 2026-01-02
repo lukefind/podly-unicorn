@@ -14,34 +14,34 @@ export async function copyTextToClipboard(text: string): Promise<void> {
   }
 
   // Legacy fallback for older iOS and other browsers
-  const textArea = document.createElement('textarea');
-  textArea.value = text;
+  // Use an input element instead of textarea - works better on iOS
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = text;
   
-  // Prevent zoom on iOS
-  textArea.style.fontSize = '16px';
+  // Prevent zoom on iOS (font size must be >= 16px)
+  input.style.fontSize = '16px';
   
-  // Make it invisible but still functional
-  textArea.style.position = 'fixed';
-  textArea.style.top = '50%';
-  textArea.style.left = '50%';
-  textArea.style.transform = 'translate(-50%, -50%)';
-  textArea.style.opacity = '0';
-  textArea.style.pointerEvents = 'none';
-  textArea.setAttribute('readonly', '');
+  // Position it in the viewport but make it invisible
+  input.style.position = 'fixed';
+  input.style.top = '0';
+  input.style.left = '0';
+  input.style.width = '100%';
+  input.style.height = '40px';
+  input.style.opacity = '0';
+  input.style.zIndex = '-1';
+  input.setAttribute('readonly', '');
+  // Prevent iOS keyboard from appearing
+  input.setAttribute('inputmode', 'none');
   
-  document.body.appendChild(textArea);
+  document.body.appendChild(input);
   
-  // iOS-specific selection handling
-  const range = document.createRange();
-  range.selectNodeContents(textArea);
+  // iOS requires focus and select in a specific way
+  input.focus();
+  input.select();
   
-  const selection = window.getSelection();
-  if (selection) {
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-  
-  textArea.setSelectionRange(0, text.length);
+  // For iOS, also try setSelectionRange
+  input.setSelectionRange(0, text.length);
 
   let successful = false;
   try {
@@ -50,10 +50,13 @@ export async function copyTextToClipboard(text: string): Promise<void> {
     successful = false;
   }
   
-  document.body.removeChild(textArea);
+  // Blur before removing to prevent iOS keyboard flash
+  input.blur();
+  document.body.removeChild(input);
 
   if (!successful) {
-    // Last resort: show prompt for manual copy
-    window.prompt('Copy this URL manually:', text);
+    // Last resort: throw so caller knows it failed
+    // The caller can then show a manual copy option
+    throw new Error('Copy failed - please copy manually');
   }
 }
