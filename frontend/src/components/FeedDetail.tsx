@@ -174,8 +174,11 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
         await copyTextToClipboard(rssUrl);
         toast.success('Feed URL copied to clipboard');
       } catch {
-        // Clipboard copy failed (common on iOS) - show manual copy prompt
-        window.prompt('Copy this RSS feed URL:', rssUrl);
+        // Clipboard failed (common on iOS) - show manual copy prompt
+        const result = window.prompt('Copy this RSS feed URL:', rssUrl);
+        if (result !== null) {
+          toast.success('URL shown for manual copy');
+        }
       }
     } catch (err) {
       console.error('Failed to get feed URL', err);
@@ -194,8 +197,11 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
       await copyTextToClipboard(rssUrl);
       toast.success('Original RSS URL copied to clipboard');
     } catch {
-      // Clipboard copy failed (common on iOS) - show manual copy prompt
-      window.prompt('Copy this RSS feed URL:', rssUrl);
+      // Clipboard failed (common on iOS) - show manual copy prompt
+      const result = window.prompt('Copy this RSS feed URL:', rssUrl);
+      if (result !== null) {
+        toast.success('URL shown for manual copy');
+      }
     }
   };
 

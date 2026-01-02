@@ -4,44 +4,52 @@ export async function copyTextToClipboard(text: string): Promise<void> {
   }
 
   // Try modern clipboard API first (works on most browsers including iOS 13.4+)
+  // Note: On iOS Safari, this can silently fail even without throwing
   if (navigator.clipboard && window.isSecureContext) {
     try {
       await navigator.clipboard.writeText(text);
-      return;
+      // Verify it actually worked by reading back (if permitted)
+      try {
+        const clipboardText = await navigator.clipboard.readText();
+        if (clipboardText === text) {
+          return; // Confirmed success
+        }
+      } catch {
+        // Can't verify, assume it worked since writeText didn't throw
+        return;
+      }
     } catch {
       // Fall through to legacy method
     }
   }
 
-  // Legacy fallback for older iOS and other browsers
-  // Use an input element instead of textarea - works better on iOS
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.value = text;
+  // Legacy fallback - use execCommand which works on older iOS
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
   
-  // Prevent zoom on iOS (font size must be >= 16px)
-  input.style.fontSize = '16px';
+  // Styling to prevent iOS issues
+  textArea.style.position = 'fixed';
+  textArea.style.top = '0';
+  textArea.style.left = '0';
+  textArea.style.width = '2em';
+  textArea.style.height = '2em';
+  textArea.style.padding = '0';
+  textArea.style.border = 'none';
+  textArea.style.outline = 'none';
+  textArea.style.boxShadow = 'none';
+  textArea.style.background = 'transparent';
+  textArea.style.fontSize = '16px'; // Prevent iOS zoom
   
-  // Position it in the viewport but make it invisible
-  input.style.position = 'fixed';
-  input.style.top = '0';
-  input.style.left = '0';
-  input.style.width = '100%';
-  input.style.height = '40px';
-  input.style.opacity = '0';
-  input.style.zIndex = '-1';
-  input.setAttribute('readonly', '');
-  // Prevent iOS keyboard from appearing
-  input.setAttribute('inputmode', 'none');
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
   
-  document.body.appendChild(input);
-  
-  // iOS requires focus and select in a specific way
-  input.focus();
-  input.select();
-  
-  // For iOS, also try setSelectionRange
-  input.setSelectionRange(0, text.length);
+  // iOS needs setSelectionRange
+  try {
+    textArea.setSelectionRange(0, text.length);
+  } catch {
+    // Ignore if not supported
+  }
 
   let successful = false;
   try {
@@ -50,13 +58,9 @@ export async function copyTextToClipboard(text: string): Promise<void> {
     successful = false;
   }
   
-  // Blur before removing to prevent iOS keyboard flash
-  input.blur();
-  document.body.removeChild(input);
+  document.body.removeChild(textArea);
 
   if (!successful) {
-    // Last resort: throw so caller knows it failed
-    // The caller can then show a manual copy option
     throw new Error('Copy failed - please copy manually');
   }
 }
