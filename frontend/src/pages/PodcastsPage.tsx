@@ -304,7 +304,10 @@ export default function PodcastsPage() {
                           toast.success('Original RSS copied!');
                         } catch {
                           // Clipboard failed (common on iOS) - show manual copy prompt
-                          window.prompt('Copy this RSS feed URL:', selectedFeed.rss_url);
+                          const result = window.prompt('Copy this RSS feed URL:', selectedFeed.rss_url);
+                          if (result !== null) {
+                            toast.success('URL shown for manual copy');
+                          }
                         }
                       }}
                       className="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
@@ -732,7 +735,10 @@ export default function PodcastsPage() {
                         toast.success('RSS URL copied to clipboard!');
                       } catch {
                         // Clipboard failed (common on iOS) - show manual copy prompt
-                        window.prompt('Copy this RSS feed URL:', rssUrl);
+                        const result = window.prompt('Copy this RSS feed URL:', rssUrl);
+                        if (result !== null) {
+                          toast.success('URL shown for manual copy');
+                        }
                       }
                     } catch (err) {
                       console.error('Failed to get RSS URL', err);
