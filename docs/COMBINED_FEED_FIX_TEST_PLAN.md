@@ -325,6 +325,129 @@ docker logs podly-pure-podcasts 2>&1 | grep "TRIGGER_PROCESSING" | tail -10
 
 ---
 
+## Test 7: Combined Feed Enclosures Use Feed-Scoped Tokens
+
+**Expected:** Enclosure URLs in combined feed use feed-scoped tokens (feed_id != NULL)
+
+This is the key fix: when a podcast app fetches the combined feed, the enclosure URLs
+contain feed-scoped tokens that CAN trigger processing, while the feed URL itself
+uses a combined token that CANNOT trigger processing.
+
+### Quick Verification
+
+```bash
+# Run the verification script
+docker exec podly-pure-podcasts python /app/scripts/verify_combined_feed_tokens.py
+```
+
+### Manual Verification
+
+```bash
+# 1. Get your combined feed URL with tokens
+docker exec podly-pure-podcasts python -c "
+import sqlite3
+conn = sqlite3.connect('/app/src/instance/sqlite3.db')
+cursor = conn.cursor()
+cursor.execute('''
+    SELECT token_id, token_secret, user_id 
+    FROM feed_access_token 
+    WHERE feed_id IS NULL AND revoked = 0
+    LIMIT 1
+''')
+row = cursor.fetchone()
+if row:
+    print(f'Combined feed URL:')
+    print(f'  /feed/combined?feed_token={row[0]}&feed_secret={row[1]}')
+conn.close()
+"
+
+# 2. Fetch combined feed and extract an enclosure URL
+COMBINED_URL="https://your-server.com/feed/combined?feed_token=XXX&feed_secret=YYY"
+curl -s "$COMBINED_URL" | grep -o 'url="[^"]*download[^"]*"' | head -1
+
+# 3. Extract the feed_token from the enclosure URL and verify it's feed-scoped
+# (The token in the enclosure should be DIFFERENT from the combined token)
+ENCLOSURE_TOKEN="token_id_from_enclosure_url"
+
+docker exec podly-pure-podcasts python -c "
+import sqlite3
+conn = sqlite3.connect('/app/src/instance/sqlite3.db')
+cursor = conn.cursor()
+cursor.execute('SELECT feed_id, user_id FROM feed_access_token WHERE token_id = ?', ('$ENCLOSURE_TOKEN',))
+row = cursor.fetchone()
+if row:
+    feed_id, user_id = row
+    if feed_id is not None:
+        print(f'[PASS] Token is feed-scoped: feed_id={feed_id}, user_id={user_id}')
+    else:
+        print(f'[FAIL] Token is combined (feed_id=NULL) - enclosure should use feed-scoped token!')
+else:
+    print('Token not found')
+conn.close()
+"
+```
+
+### Token Bounds Check
+
+Verify that token creation is bounded (no DB bloat from per-post tokens):
+
+```bash
+docker exec podly-pure-podcasts python -c "
+import sqlite3
+conn = sqlite3.connect('/app/src/instance/sqlite3.db')
+cursor = conn.cursor()
+
+# Count tokens by type
+cursor.execute('SELECT COUNT(*) FROM feed_access_token WHERE feed_id IS NULL AND revoked = 0')
+combined = cursor.fetchone()[0]
+
+cursor.execute('SELECT COUNT(*) FROM feed_access_token WHERE feed_id IS NOT NULL AND revoked = 0')
+feed_scoped = cursor.fetchone()[0]
+
+# Count unique (user_id, feed_id) pairs
+cursor.execute('SELECT COUNT(DISTINCT user_id || "-" || feed_id) FROM feed_access_token WHERE feed_id IS NOT NULL AND revoked = 0')
+unique_pairs = cursor.fetchone()[0]
+
+# Count subscriptions
+cursor.execute('SELECT COUNT(*) FROM user_feed_subscription')
+subscriptions = cursor.fetchone()[0]
+
+print(f'Combined tokens: {combined}')
+print(f'Feed-scoped tokens: {feed_scoped}')
+print(f'Unique (user,feed) pairs: {unique_pairs}')
+print(f'Total subscriptions: {subscriptions}')
+
+if feed_scoped == unique_pairs:
+    print('[PASS] One token per (user_id, feed_id) - no bloat')
+else:
+    print(f'[WARN] {feed_scoped - unique_pairs} duplicate tokens')
+
+conn.close()
+"
+```
+
+---
+
+## feed_access_token Schema Reference
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER | Primary key |
+| `token_id` | VARCHAR(32) | URL parameter `feed_token` |
+| `token_hash` | VARCHAR(64) | SHA-256 hash of secret |
+| `token_secret` | VARCHAR(128) | URL parameter `feed_secret` |
+| `feed_id` | INTEGER | NULL for combined tokens, integer for feed-scoped |
+| `user_id` | INTEGER | Owner of the token |
+| `created_at` | DATETIME | Creation timestamp |
+| `last_used_at` | DATETIME | Last usage timestamp |
+| `revoked` | BOOLEAN | Whether token is revoked |
+
+**Key distinction:**
+- `feed_id = NULL` → Combined token (read-only, cannot trigger processing)
+- `feed_id = <int>` → Feed-scoped token (can trigger processing for that feed)
+
+---
+
 ## Rollback
 
 If the fix causes issues, revert to previous commit:
