@@ -212,7 +212,7 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
             <div className="space-y-2">
               {/* Card view - always shown, no table */}
               {data.attempts.map((attempt) => (
-                <div key={attempt.id} className="rounded-lg p-3 border border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20">
+                <div key={attempt.id} className="rounded-lg p-3 border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-gray-800">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="text-purple-900 dark:text-purple-100 text-sm font-medium line-clamp-2">{attempt.post_title}</div>
                     {getDecisionBadge(attempt.decision)}
