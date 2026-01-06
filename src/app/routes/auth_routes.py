@@ -750,3 +750,88 @@ def _format_duration(seconds: float) -> str:
         hours = int(seconds // 3600)
         mins = int((seconds % 3600) // 60)
         return f"{hours}h {mins}m" if mins else f"{hours}h"
+
+
+@auth_bp.route("/api/admin/download-attempts", methods=["GET"])
+def get_download_attempts() -> ResponseReturnValue:
+    """Get all download attempts with full details for admin audit.
+    
+    Query params:
+    - user_id: Filter by user ID (optional)
+    - limit: Max records to return (default 500)
+    - offset: Pagination offset (default 0)
+    - decision: Filter by decision type (optional)
+    """
+    from app.models import UserDownload, Post, Feed, User
+    from app.extensions import db
+    
+    settings = current_app.config.get("AUTH_SETTINGS")
+    if settings and settings.require_auth:
+        current = getattr(g, "current_user", None)
+        if not current or current.role != "admin":
+            return jsonify({"error": "Admin access required"}), 403
+    
+    # Parse query params
+    user_id = request.args.get("user_id", type=int)
+    limit = min(request.args.get("limit", 500, type=int), 5000)
+    offset = request.args.get("offset", 0, type=int)
+    decision_filter = request.args.get("decision")
+    
+    # Build query
+    query = db.session.query(
+        UserDownload,
+        Post.guid.label("post_guid"),
+        Post.title.label("post_title"),
+        Feed.id.label("feed_id"),
+        Feed.title.label("feed_title"),
+        User.username.label("username"),
+    ).outerjoin(
+        Post, UserDownload.post_id == Post.id
+    ).outerjoin(
+        Feed, Post.feed_id == Feed.id
+    ).outerjoin(
+        User, UserDownload.user_id == User.id
+    )
+    
+    if user_id:
+        query = query.filter(UserDownload.user_id == user_id)
+    if decision_filter:
+        query = query.filter(UserDownload.decision == decision_filter)
+    
+    # Get total count before pagination
+    total_count = query.count()
+    
+    # Apply pagination and ordering
+    results = (
+        query.order_by(UserDownload.downloaded_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    
+    attempts = []
+    for row in results:
+        download = row[0]
+        attempts.append({
+            "id": download.id,
+            "downloaded_at": download.downloaded_at.isoformat() if download.downloaded_at else None,
+            "user_id": download.user_id,
+            "username": row.username or "Unknown",
+            "post_id": download.post_id,
+            "post_guid": row.post_guid,
+            "post_title": row.post_title or "Unknown",
+            "feed_id": row.feed_id,
+            "feed_title": row.feed_title or "Unknown",
+            "auth_type": download.auth_type,
+            "decision": download.decision,
+            "download_source": download.download_source,
+            "is_processed": download.is_processed,
+            "file_size_bytes": download.file_size_bytes,
+        })
+    
+    return jsonify({
+        "attempts": attempts,
+        "total_count": total_count,
+        "limit": limit,
+        "offset": offset,
+    })

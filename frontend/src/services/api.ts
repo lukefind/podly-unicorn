@@ -586,6 +586,16 @@ export const authApi = {
     const response = await api.get('/api/admin/user-stats');
     return response.data;
   },
+
+  getDownloadAttempts: async (params?: {
+    user_id?: number;
+    limit?: number;
+    offset?: number;
+    decision?: string;
+  }): Promise<DownloadAttemptsResponse> => {
+    const response = await api.get('/api/admin/download-attempts', { params });
+    return response.data;
+  },
 };
 
 export interface UserStats {
@@ -617,6 +627,30 @@ export interface UserStatsResponse {
     total_episodes: number;
     total_processed: number;
   };
+}
+
+export interface DownloadAttempt {
+  id: number;
+  downloaded_at: string | null;
+  user_id: number | null;
+  username: string;
+  post_id: number;
+  post_guid: string;
+  post_title: string;
+  feed_id: number | null;
+  feed_title: string;
+  auth_type: string | null;
+  decision: string | null;
+  download_source: string;
+  is_processed: boolean;
+  file_size_bytes: number | null;
+}
+
+export interface DownloadAttemptsResponse {
+  attempts: DownloadAttempt[];
+  total_count: number;
+  limit: number;
+  offset: number;
 }
 
 export const configApi = {

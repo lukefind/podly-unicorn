@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { createPortal } from 'react-dom';
 import { authApi } from '../services/api';
 import type { UserStats } from '../services/api';
 import { useState } from 'react';
@@ -76,10 +77,173 @@ interface UserStatCardProps {
   isCurrentUser?: boolean;
 }
 
+interface DownloadAttemptsModalProps {
+  userId: number;
+  username: string;
+  onClose: () => void;
+}
+
+function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsModalProps) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['download-attempts', userId],
+    queryFn: () => authApi.getDownloadAttempts({ user_id: userId, limit: 500 }),
+  });
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return 'Unknown';
+    const date = new Date(dateStr);
+    return date.toLocaleString();
+  };
+
+  const getDecisionBadge = (decision: string | null) => {
+    switch (decision) {
+      case 'SERVED_AUDIO':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Served</span>;
+      case 'TRIGGERED':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">Triggered</span>;
+      case 'NOT_READY_NO_TRIGGER':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-700">Not Ready</span>;
+      case 'JOB_EXISTS':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700">Job Exists</span>;
+      case 'COOLDOWN_ACTIVE':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-orange-100 text-orange-700">Cooldown</span>;
+      default:
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">{decision || 'Legacy'}</span>;
+    }
+  };
+
+  const getAuthTypeBadge = (authType: string | null) => {
+    switch (authType) {
+      case 'combined':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-pink-100 text-pink-700">Combined</span>;
+      case 'feed_scoped':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-cyan-100 text-cyan-700">Feed-Scoped</span>;
+      case 'session':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-700">Session</span>;
+      default:
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">{authType || 'Unknown'}</span>;
+    }
+  };
+
+  const downloadCSV = () => {
+    if (!data?.attempts) return;
+    
+    const headers = ['Date', 'Episode', 'Feed', 'Auth Type', 'Decision', 'Source', 'Processed'];
+    const rows = data.attempts.map(a => [
+      a.downloaded_at || '',
+      a.post_title,
+      a.feed_title,
+      a.auth_type || '',
+      a.decision || '',
+      a.download_source,
+      a.is_processed ? 'Yes' : 'No',
+    ]);
+    
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `download-attempts-${username}-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return createPortal(
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] flex flex-col"
+        style={{ backgroundColor: '#ffffff' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-purple-200">
+          <div>
+            <h2 className="text-lg font-bold text-purple-900">Download Attempts</h2>
+            <p className="text-sm text-purple-500">User: {username} ({data?.total_count ?? 0} records)</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700"
+              onClick={downloadCSV}
+              disabled={!data?.attempts?.length}
+            >
+              Download CSV
+            </button>
+            <button
+              type="button"
+              className="p-2 text-purple-500 hover:text-purple-700"
+              onClick={onClose}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto p-4">
+          {isLoading && (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+            </div>
+          )}
+
+          {error && (
+            <div className="text-red-600 text-center py-8">Failed to load download attempts</div>
+          )}
+
+          {data && data.attempts.length === 0 && (
+            <div className="text-purple-400 text-center py-8">No download attempts found</div>
+          )}
+
+          {data && data.attempts.length > 0 && (
+            <table className="w-full text-sm">
+              <thead className="bg-purple-50 sticky top-0">
+                <tr>
+                  <th className="text-left p-2 text-purple-700">Date</th>
+                  <th className="text-left p-2 text-purple-700">Episode</th>
+                  <th className="text-left p-2 text-purple-700">Feed</th>
+                  <th className="text-left p-2 text-purple-700">Auth</th>
+                  <th className="text-left p-2 text-purple-700">Decision</th>
+                  <th className="text-left p-2 text-purple-700">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.attempts.map((attempt) => (
+                  <tr key={attempt.id} className="border-b border-purple-100 hover:bg-purple-50/50">
+                    <td className="p-2 text-purple-600 whitespace-nowrap">{formatDate(attempt.downloaded_at)}</td>
+                    <td className="p-2 text-purple-800 max-w-xs truncate" title={attempt.post_title}>{attempt.post_title}</td>
+                    <td className="p-2 text-purple-600 max-w-xs truncate" title={attempt.feed_title}>{attempt.feed_title}</td>
+                    <td className="p-2">{getAuthTypeBadge(attempt.auth_type)}</td>
+                    <td className="p-2">{getDecisionBadge(attempt.decision)}</td>
+                    <td className="p-2 text-purple-500">{attempt.download_source}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, adminCount, isCurrentUser }: UserStatCardProps) {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showDownloadAttempts, setShowDownloadAttempts] = useState(false);
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Never';
     const date = new Date(dateStr);
@@ -144,7 +308,16 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
       {/* Recent Downloads */}
       {user.recent_downloads.length > 0 && (
         <div>
-          <div className="text-xs font-medium text-purple-500 mb-2">Recent Downloads</div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs font-medium text-purple-500">Recent Downloads</div>
+            <button
+              type="button"
+              className="text-xs text-purple-500 hover:text-purple-700 underline"
+              onClick={() => setShowDownloadAttempts(true)}
+            >
+              View all attempts
+            </button>
+          </div>
           <div className="space-y-1 max-h-24 overflow-y-auto">
             {user.recent_downloads.slice(0, 3).map((download, idx) => (
               <div key={idx} className="flex items-center justify-between text-xs bg-purple-50/50 rounded px-2 py-1">
@@ -159,9 +332,27 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
       )}
 
       {user.recent_downloads.length === 0 && (
-        <div className="text-xs text-purple-300 text-center py-2">
-          No downloads yet
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs text-purple-300">No downloads yet</div>
+            <button
+              type="button"
+              className="text-xs text-purple-500 hover:text-purple-700 underline"
+              onClick={() => setShowDownloadAttempts(true)}
+            >
+              View all attempts
+            </button>
+          </div>
         </div>
+      )}
+
+      {/* Download Attempts Modal */}
+      {showDownloadAttempts && (
+        <DownloadAttemptsModal
+          userId={user.id}
+          username={user.username}
+          onClose={() => setShowDownloadAttempts(false)}
+        />
       )}
 
       {/* User Controls */}
