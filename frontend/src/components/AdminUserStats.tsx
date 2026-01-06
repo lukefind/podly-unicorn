@@ -155,19 +155,19 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
   return createPortal(
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] flex flex-col"
-        style={{ backgroundColor: '#ffffff' }}
+        className="rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] flex flex-col"
+        style={{ backgroundColor: '#1e1b4b' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-purple-200">
+        <div className="flex items-center justify-between p-4 border-b border-purple-700">
           <div>
-            <h2 className="text-lg font-bold text-purple-900">Download Attempts</h2>
-            <p className="text-sm text-purple-500">User: {username} ({data?.total_count ?? 0} records)</p>
+            <h2 className="text-lg font-bold text-purple-200">Download Attempts</h2>
+            <p className="text-sm text-purple-400">User: {username} ({data?.total_count ?? 0} records)</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -180,7 +180,7 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
             </button>
             <button
               type="button"
-              className="p-2 text-purple-500 hover:text-purple-700"
+              className="p-2 text-purple-300 hover:text-purple-100"
               onClick={onClose}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -199,7 +199,7 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
           )}
 
           {error && (
-            <div className="text-red-600 text-center py-8">Failed to load download attempts</div>
+            <div className="text-red-400 text-center py-8">Failed to load download attempts</div>
           )}
 
           {data && data.attempts.length === 0 && (
@@ -208,25 +208,25 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
 
           {data && data.attempts.length > 0 && (
             <table className="w-full text-sm">
-              <thead className="bg-purple-50 sticky top-0">
+              <thead className="sticky top-0" style={{ backgroundColor: '#2e1065' }}>
                 <tr>
-                  <th className="text-left p-2 text-purple-700">Date</th>
-                  <th className="text-left p-2 text-purple-700">Episode</th>
-                  <th className="text-left p-2 text-purple-700">Feed</th>
-                  <th className="text-left p-2 text-purple-700">Auth</th>
-                  <th className="text-left p-2 text-purple-700">Decision</th>
-                  <th className="text-left p-2 text-purple-700">Source</th>
+                  <th className="text-left p-2 text-purple-300">Date</th>
+                  <th className="text-left p-2 text-purple-300">Episode</th>
+                  <th className="text-left p-2 text-purple-300">Feed</th>
+                  <th className="text-left p-2 text-purple-300">Auth</th>
+                  <th className="text-left p-2 text-purple-300">Decision</th>
+                  <th className="text-left p-2 text-purple-300">Source</th>
                 </tr>
               </thead>
               <tbody>
                 {data.attempts.map((attempt) => (
-                  <tr key={attempt.id} className="border-b border-purple-100 hover:bg-purple-50/50">
-                    <td className="p-2 text-purple-600 whitespace-nowrap">{formatDate(attempt.downloaded_at)}</td>
-                    <td className="p-2 text-purple-800 max-w-xs truncate" title={attempt.post_title}>{attempt.post_title}</td>
-                    <td className="p-2 text-purple-600 max-w-xs truncate" title={attempt.feed_title}>{attempt.feed_title}</td>
+                  <tr key={attempt.id} className="border-b border-purple-800 hover:bg-purple-900/50">
+                    <td className="p-2 text-purple-300 whitespace-nowrap">{formatDate(attempt.downloaded_at)}</td>
+                    <td className="p-2 text-purple-200 max-w-xs truncate" title={attempt.post_title}>{attempt.post_title}</td>
+                    <td className="p-2 text-purple-300 max-w-xs truncate" title={attempt.feed_title}>{attempt.feed_title}</td>
                     <td className="p-2">{getAuthTypeBadge(attempt.auth_type)}</td>
                     <td className="p-2">{getDecisionBadge(attempt.decision)}</td>
-                    <td className="p-2 text-purple-500">{attempt.download_source}</td>
+                    <td className="p-2 text-purple-400">{attempt.download_source}</td>
                   </tr>
                 ))}
               </tbody>
