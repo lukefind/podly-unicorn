@@ -208,53 +208,21 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
 
           {data && data.attempts.length > 0 && (
             <div className="space-y-2">
-              {/* Desktop table - hidden on mobile */}
-              <div className="hidden md:block">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0" style={{ backgroundColor: '#2e1065' }}>
-                    <tr>
-                      <th className="text-left p-2 text-purple-300">Date</th>
-                      <th className="text-left p-2 text-purple-300">Episode</th>
-                      <th className="text-left p-2 text-purple-300">Feed</th>
-                      <th className="text-left p-2 text-purple-300">Auth</th>
-                      <th className="text-left p-2 text-purple-300">Decision</th>
-                      <th className="text-left p-2 text-purple-300">Source</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.attempts.map((attempt) => (
-                      <tr key={attempt.id} className="border-b border-purple-800 hover:bg-purple-900/50">
-                        <td className="p-2 text-purple-300 whitespace-nowrap">{formatDate(attempt.downloaded_at)}</td>
-                        <td className="p-2 text-purple-200 max-w-xs truncate" title={attempt.post_title}>{attempt.post_title}</td>
-                        <td className="p-2 text-purple-300 max-w-xs truncate" title={attempt.feed_title}>{attempt.feed_title}</td>
-                        <td className="p-2">{getAuthTypeBadge(attempt.auth_type)}</td>
-                        <td className="p-2">{getDecisionBadge(attempt.decision)}</td>
-                        <td className="p-2 text-purple-400">{attempt.download_source}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile cards - shown only on mobile */}
-              <div className="md:hidden space-y-2">
-                {data.attempts.map((attempt) => (
-                  <div key={attempt.id} className="rounded-lg p-3 border border-purple-800" style={{ backgroundColor: '#2e1065' }}>
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="text-purple-200 text-sm font-medium line-clamp-2">{attempt.post_title}</div>
-                      {getDecisionBadge(attempt.decision)}
-                    </div>
-                    <div className="text-purple-400 text-xs mb-2 truncate">{attempt.feed_title}</div>
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        {getAuthTypeBadge(attempt.auth_type)}
-                        <span className="text-purple-500">{attempt.download_source}</span>
-                      </div>
-                      <span className="text-purple-400">{formatDate(attempt.downloaded_at)}</span>
-                    </div>
+              {/* Card view - always shown, no table */}
+              {data.attempts.map((attempt) => (
+                <div key={attempt.id} className="rounded-lg p-3 border border-purple-700" style={{ backgroundColor: '#2e1065' }}>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="text-purple-100 text-sm font-medium line-clamp-2">{attempt.post_title}</div>
+                    {getDecisionBadge(attempt.decision)}
                   </div>
-                ))}
-              </div>
+                  <div className="text-purple-300 text-xs mb-2">{attempt.feed_title}</div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    {getAuthTypeBadge(attempt.auth_type)}
+                    <span className="text-purple-400">{attempt.download_source}</span>
+                    <span className="text-purple-400 ml-auto">{formatDate(attempt.downloaded_at)}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
