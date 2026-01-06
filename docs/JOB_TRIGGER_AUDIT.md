@@ -4,6 +4,20 @@
 
 This document audits all code paths that can trigger episode processing jobs in Podly Unicorn. The goal is to understand when and why jobs start, and identify potential issues causing unwanted automatic processing.
 
+**Last Updated:** January 2026
+
+---
+
+## Current Implementation Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Enclosure URL | ✅ PASS | Points to `/api/posts/<guid>/download` with feed token |
+| HTTP Semantics | ✅ PASS | HEAD→204, GET unprocessed→202+Retry-After |
+| Separation of Concerns | ✅ PASS | `auto_download_new_episodes` only affects scheduled refresh |
+| Cooldown Logic | ⚠️ IN-MEMORY | Lost on restart; should be database-backed |
+| Job Idempotency | ⚠️ PARTIAL | Check-then-insert without locking; race window exists |
+
 ---
 
 ## 1. Entry Points That Trigger Processing Jobs
@@ -11,16 +25,9 @@ This document audits all code paths that can trigger episode processing jobs in 
 There are **5 distinct code paths** that call `start_post_processing()`:
 
 ### 1.1 Manual UI Process Button
-**File:** `src/app/routes/post_routes.py` (lines 518-521)
+**File:** `src/app/routes/post_routes.py`
 **Endpoint:** `POST /api/posts/<guid>/process`
 **Trigger Source:** `manual_ui`
-
-```python
-result = get_jobs_manager().start_post_processing(
-    p_guid, priority="interactive", triggered_by_user_id=user_id,
-    trigger_source="manual_ui"
-)
-```
 
 **When triggered:** User clicks "Process" button in web UI.
 **Expected behavior:** Always triggers processing. This is intentional.
@@ -28,51 +35,44 @@ result = get_jobs_manager().start_post_processing(
 ---
 
 ### 1.2 Manual UI Reprocess Button
-**File:** `src/app/routes/post_routes.py` (lines 571-576)
+**File:** `src/app/routes/post_routes.py`
 **Endpoint:** `POST /api/posts/<guid>/reprocess`
 **Trigger Source:** `manual_reprocess`
-
-```python
-get_jobs_manager().cancel_post_jobs(p_guid)
-clear_post_processing_data(post)
-result = get_jobs_manager().start_post_processing(
-    p_guid, priority="interactive", triggered_by_user_id=user_id,
-    trigger_source="manual_reprocess"
-)
-```
 
 **When triggered:** User clicks "Reprocess" button in web UI.
 **Expected behavior:** Always triggers processing. This is intentional.
 
 ---
 
-### 1.3 On-Demand RSS Download Request (FIXED)
+### 1.3 On-Demand RSS Download Request
 **File:** `src/app/routes/post_routes.py`
 **Endpoint:** `GET/HEAD /api/posts/<guid>/download`
 **Trigger Source:** `on_demand_rss`
 
-**When triggered:** Podcast app requests download of an unprocessed episode.
+**When triggered:** Podcast app (Overcast, Pocket Casts, Apple Podcasts) requests download of an unprocessed episode.
 
-**NEW guard conditions (after fix):**
+**Current Logic (Two-Tier Trigger):**
 
-1. **Probe Detection** - Request is a probe if ANY of:
-   - HTTP method is `HEAD`
-   - `Range` header requests <= 1MB (e.g., `bytes=0-0`, `bytes=0-1023`, `bytes=0-1048575`)
-   
-2. **Authorization Check** - User must have a subscription to the feed (via session or feed token)
-   - **NO LONGER requires `auto_download_new_episodes=True`**
-   - That setting now ONLY controls scheduled refresh auto-processing
+#### Tier 1: HEAD = True Probe (Never Triggers)
+- HTTP method `HEAD` → Return `204 No Content`
+- No processing triggered
 
-3. **Idempotency Check** - Before starting a new job, checks if one already exists in `pending` or `running` status
+#### Tier 2: GET Can Trigger (With Cooldown)
+- GET requests CAN trigger processing, even with small Range headers
+- Podcast apps use Range requests for real downloads, not just probes
+- 10-minute cooldown per GUID prevents trigger storms
 
-**Response behavior:**
-- **Probe requests:** Return `202 Accepted` with `Retry-After: 300` (no processing triggered)
-- **Unauthorized:** Return `401 Authentication required`
-- **Job already running:** Return `202 Accepted` with `Retry-After: 60`
-- **New job started:** Return `202 Accepted` with `Retry-After: 60`
-- **Processing complete:** Return audio file
+**Decision Flow:**
+1. **HEAD request?** → 204 (no trigger)
+2. **Not authorized?** → 401 (no trigger)
+3. **Job already pending/running?** → 202 + Retry-After (no new trigger)
+4. **Within cooldown window?** → 202 + Retry-After (no new trigger)
+5. **Otherwise** → Start job, return 202 + Retry-After
 
-**Key change:** `auto_download_new_episodes` no longer gates on-demand processing. Any authorized user can trigger processing by attempting to download an episode.
+**Key Design Decisions:**
+- `auto_download_new_episodes` does NOT gate on-demand processing
+- That setting ONLY controls scheduled refresh auto-processing
+- Any authorized user can trigger processing by downloading
 
 ---
 
@@ -198,23 +198,32 @@ trigger_source: str (manual_ui, manual_reprocess, auto_feed_refresh, on_demand_r
 
 ## 4. Flow Diagrams
 
-### 4.1 Podcast App Refreshes RSS Feed
+### 4.1 Podcast App Downloads Episode (On-Demand Flow)
 ```
 Podcast App                    Podly Server
     |                               |
     |-- GET /feed/combined -------->|
     |                               |-- generate_combined_feed_xml()
-    |                               |   (NO refresh_feed called)
+    |                               |   (NO processing triggered)
     |<-- RSS XML -------------------|
     |                               |
+    |-- HEAD /api/posts/X/download->|
+    |                               |-- Return 204 (probe, no trigger)
+    |<-- 204 No Content ------------|
+    |                               |
     |-- GET /api/posts/X/download ->|
-    |                               |-- Check: post.processed_audio_path exists?
-    |                               |   NO: Check can_trigger_processing
-    |                               |        - is_probe_request? (Range header check)
-    |                               |        - subscription.auto_download_new_episodes?
-    |                               |   If can_trigger=False: Return 404
-    |                               |   If can_trigger=True: Start job, return 202
-    |<-- 404 or 202 or audio -------|
+    |   (Range: bytes=0-1023)       |-- Check: is_processed?
+    |                               |   NO: Check authorization
+    |                               |       Check existing job
+    |                               |       Check cooldown
+    |                               |       → Start job, return 202
+    |<-- 202 + Retry-After: 120 ----|
+    |                               |
+    |   ... wait 2 minutes ...      |
+    |                               |
+    |-- GET /api/posts/X/download ->|
+    |                               |-- Check: is_processed? YES
+    |<-- 200 + audio file ----------|
 ```
 
 ### 4.2 Scheduled Background Refresh
@@ -259,68 +268,41 @@ All other feeds:
 
 ---
 
-## 6. Identified Issues
+## 6. Known Limitations
 
-### Issue 1: RSS Download Triggering for Wrong Feeds
-**Symptom:** Joe Rogan and Huberman episodes being processed when they shouldn't.
+### Limitation 1: Cooldown is In-Memory
+**File:** `src/app/routes/post_routes.py:661`
 
-**Possible causes:**
-1. The `auto_download_new_episodes` check is working, but "Late Night Linux Family" is a meta-feed that includes episodes from multiple podcasts
-2. The probe detection (Range header check) isn't catching all prefetch requests
-3. There's a bug in the subscription lookup
+The cooldown tracking uses a module-level dict:
+```python
+_on_demand_trigger_cooldowns: dict[str, float] = {}
+```
 
-**Investigation needed:**
-- Check if Joe Rogan/Huberman episodes are somehow associated with feed_id=2
-- Check logs for the exact `trigger_source` when these jobs start
+**Impact:**
+- Lost on container restart
+- Not shared across gunicorn workers (if multi-worker)
+- Trigger storms possible after restart
 
-### Issue 2: Mass Processing After Code Changes
-**Symptom:** "Every single podcast gets automatically processed" after changes.
+**Recommended Fix:** Use `ProcessingJob.created_at` as implicit cooldown:
+```python
+last_job = ProcessingJob.query.filter(
+    ProcessingJob.post_guid == post.guid
+).order_by(ProcessingJob.created_at.desc()).first()
 
-**Possible causes:**
-1. Database migration or schema change resetting `auto_download_new_episodes` to True
-2. Code change accidentally enabling processing
-3. `enqueue_pending_jobs()` being called with different behavior
+if last_job:
+    cooldown_remaining = COOLDOWN_SECONDS - (time.time() - last_job.created_at.timestamp())
+```
 
-**Investigation needed:**
-- Check if `_ensure_jobs_for_all_posts()` is still returning 0
-- Check if any migration modified subscription settings
+### Limitation 2: Job Idempotency Race Window
+**File:** `src/app/job_manager.py:50-66`
+
+The `ensure_job()` method uses check-then-insert without transactional locking. Under concurrent requests, duplicate jobs are theoretically possible.
+
+**Mitigation:** The download route checks for existing jobs before calling `start_post_processing`, reducing the race window.
 
 ---
 
-## 7. Recommended Fixes
-
-### Fix 1: Add More Logging
-Add detailed logging to identify exactly what's triggering jobs:
-```python
-logger.info(
-    "Job triggered: post=%s feed_id=%s trigger_source=%s user_id=%s auto_download=%s",
-    post_guid, feed_id, trigger_source, user_id, auto_download_enabled
-)
-```
-
-### Fix 2: Verify Feed Association
-Ensure episodes are correctly associated with their feeds and not incorrectly linked to the "Late Night Linux Family" meta-feed.
-
-### Fix 3: Add Kill Switch
-Add a global setting to completely disable automatic processing:
-```python
-if config.disable_all_auto_processing:
-    return []  # Never return GUIDs for auto-processing
-```
-
-### Fix 4: Audit Database State
-Run query to verify current state:
-```sql
-SELECT f.id, f.title, ufs.auto_download_new_episodes, u.username
-FROM user_feed_subscription ufs
-JOIN feed f ON ufs.feed_id = f.id
-JOIN users u ON ufs.user_id = u.id
-WHERE ufs.auto_download_new_episodes = 1;
-```
-
----
-
-## 8. Files Involved
+## 7. Files Involved
 
 | File | Purpose |
 |------|---------|
@@ -339,18 +321,26 @@ WHERE ufs.auto_download_new_episodes = 1;
 |--------|---------------------------|-----------|
 | Click "Process" in UI | YES | Always |
 | Click "Reprocess" in UI | YES | Always |
-| Podcast app downloads episode | ONLY IF | `auto_download_new_episodes=True` for that feed |
+| Podcast app HEAD request | NO | Never (returns 204) |
+| Podcast app GET request (unprocessed) | YES | If authorized + no existing job + cooldown expired |
 | Scheduled feed refresh finds new episode | ONLY IF | `auto_download_new_episodes=True` for that feed |
 | Podcast app refreshes RSS feed | NO | Never triggers processing directly |
 | GET /feed/combined | NO | Never triggers processing |
+
+**Key Change:** On-demand downloads no longer require `auto_download_new_episodes=True`. That setting only affects scheduled refresh auto-processing.
 
 ---
 
 ## 10. Debug Commands
 
+Check download requests and decisions:
+```bash
+docker logs podly-pure-podcasts 2>&1 | grep "DOWNLOAD_" | tail -50
+```
+
 Check recent job triggers:
 ```bash
-docker logs podly-pure-podcasts 2>&1 | grep -i "trigger_source\|start_post_processing\|On-demand" | tail -50
+docker logs podly-pure-podcasts 2>&1 | grep -i "trigger_source\|start_post_processing" | tail -50
 ```
 
 Check subscription settings:
