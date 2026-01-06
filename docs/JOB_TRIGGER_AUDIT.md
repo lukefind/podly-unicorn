@@ -15,7 +15,8 @@ This document audits all code paths that can trigger episode processing jobs in 
 | Enclosure URL | ✅ PASS | Points to `/api/posts/<guid>/download` with feed token |
 | HTTP Semantics | ✅ PASS | HEAD→204, GET unprocessed→202+Retry-After |
 | Separation of Concerns | ✅ PASS | `auto_download_new_episodes` only affects scheduled refresh |
-| Cooldown Logic | ⚠️ IN-MEMORY | Lost on restart; should be database-backed |
+| Combined vs Feed-Scoped Tokens | ✅ PASS | Combined tokens (unified feed) cannot trigger processing |
+| Cooldown Logic | ✅ PASS | Database-backed via `ProcessingJob.created_at` |
 | Job Idempotency | ⚠️ PARTIAL | Check-then-insert without locking; race window exists |
 
 ---
@@ -64,15 +65,18 @@ There are **5 distinct code paths** that call `start_post_processing()`:
 
 **Decision Flow:**
 1. **HEAD request?** → 204 (no trigger)
-2. **Not authorized?** → 401 (no trigger)
-3. **Job already pending/running?** → 202 + Retry-After (no new trigger)
-4. **Within cooldown window?** → 202 + Retry-After (no new trigger)
-5. **Otherwise** → Start job, return 202 + Retry-After
+2. **Not authorized to read?** → 401 (no trigger)
+3. **Combined feed token?** → 202 + Retry-After: 3600 (READ-ONLY, no trigger)
+4. **Job already pending/running?** → 202 + Retry-After (no new trigger)
+5. **Within cooldown window?** → 202 + Retry-After (no new trigger)
+6. **Feed-scoped token or session auth** → Start job, return 202 + Retry-After
 
 **Key Design Decisions:**
+- **Combined feed tokens (unified feed) CANNOT trigger processing** - read-only access
+- **Feed-scoped tokens CAN trigger processing** - full access for that specific feed
 - `auto_download_new_episodes` does NOT gate on-demand processing
 - That setting ONLY controls scheduled refresh auto-processing
-- Any authorized user can trigger processing by downloading
+- Cooldown is database-backed via `ProcessingJob.created_at` (persists across restarts)
 
 ---
 
@@ -270,30 +274,7 @@ All other feeds:
 
 ## 6. Known Limitations
 
-### Limitation 1: Cooldown is In-Memory
-**File:** `src/app/routes/post_routes.py:661`
-
-The cooldown tracking uses a module-level dict:
-```python
-_on_demand_trigger_cooldowns: dict[str, float] = {}
-```
-
-**Impact:**
-- Lost on container restart
-- Not shared across gunicorn workers (if multi-worker)
-- Trigger storms possible after restart
-
-**Recommended Fix:** Use `ProcessingJob.created_at` as implicit cooldown:
-```python
-last_job = ProcessingJob.query.filter(
-    ProcessingJob.post_guid == post.guid
-).order_by(ProcessingJob.created_at.desc()).first()
-
-if last_job:
-    cooldown_remaining = COOLDOWN_SECONDS - (time.time() - last_job.created_at.timestamp())
-```
-
-### Limitation 2: Job Idempotency Race Window
+### Limitation 1: Job Idempotency Race Window
 **File:** `src/app/job_manager.py:50-66`
 
 The `ensure_job()` method uses check-then-insert without transactional locking. Under concurrent requests, duplicate jobs are theoretically possible.
@@ -322,12 +303,18 @@ The `ensure_job()` method uses check-then-insert without transactional locking. 
 | Click "Process" in UI | YES | Always |
 | Click "Reprocess" in UI | YES | Always |
 | Podcast app HEAD request | NO | Never (returns 204) |
-| Podcast app GET request (unprocessed) | YES | If authorized + no existing job + cooldown expired |
+| Combined feed token GET (unprocessed) | NO | Returns 202 + Retry-After: 3600 (read-only) |
+| Feed-scoped token GET (unprocessed) | YES | If no existing job + cooldown expired |
+| Session auth GET (unprocessed) | YES | If subscribed + no existing job + cooldown expired |
 | Scheduled feed refresh finds new episode | ONLY IF | `auto_download_new_episodes=True` for that feed |
 | Podcast app refreshes RSS feed | NO | Never triggers processing directly |
 | GET /feed/combined | NO | Never triggers processing |
 
-**Key Change:** On-demand downloads no longer require `auto_download_new_episodes=True`. That setting only affects scheduled refresh auto-processing.
+**Key Changes:**
+- Combined feed tokens (unified feed) are READ-ONLY and cannot trigger processing
+- Feed-scoped tokens and session auth can trigger processing
+- Cooldown is now database-backed (persists across restarts)
+- `auto_download_new_episodes` only affects scheduled refresh auto-processing
 
 ---
 

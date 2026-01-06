@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Thread
 from typing import Any, cast
@@ -656,9 +657,7 @@ def api_get_post_audio(p_guid: str) -> ResponseReturnValue:
         )
 
 
-# Cooldown tracking for on-demand processing triggers
-# Key: post_guid, Value: timestamp of last trigger
-_on_demand_trigger_cooldowns: dict[str, float] = {}
+# Cooldown duration for on-demand processing triggers (DB-backed via ProcessingJob.created_at)
 _ON_DEMAND_COOLDOWN_SECONDS = 600  # 10 minutes between triggers for same GUID
 
 
@@ -693,10 +692,48 @@ def api_download_post(p_guid: str) -> flask.Response:
 
     # Gather request metadata for logging and decisions
     current_user = getattr(g, "current_user", None)
-    feed_token = getattr(g, "feed_token", None)
+    feed_token = getattr(g, "feed_token", None)  # FeedTokenAuthResult or None
     range_header = flask.request.headers.get("Range")
     user_agent = flask.request.headers.get("User-Agent", "")
     request_method = flask.request.method
+    
+    # --- DETERMINE AUTH TYPE ---
+    # Auth types:
+    # - "session": User logged in via web session (can trigger processing if subscribed)
+    # - "feed_scoped": Feed token with specific feed_id matching post.feed_id (can trigger)
+    # - "combined": Combined feed token (feed_id=None) - READ ONLY, cannot trigger processing
+    # - "none": No valid auth
+    auth_type = "none"
+    is_authorized_to_read = False
+    can_trigger_processing = False
+    
+    if feed_token is not None:
+        # Authenticated via feed token
+        if feed_token.feed_id is None:
+            # Combined feed token - read access only, NO processing trigger
+            auth_type = "combined"
+            is_authorized_to_read = True
+            can_trigger_processing = False
+        elif feed_token.feed_id == post.feed_id:
+            # Feed-scoped token matching this post's feed - full access
+            auth_type = "feed_scoped"
+            is_authorized_to_read = True
+            can_trigger_processing = True
+        else:
+            # Feed-scoped token for different feed - no access
+            auth_type = "feed_scoped_mismatch"
+            is_authorized_to_read = False
+            can_trigger_processing = False
+    elif current_user and post.feed_id:
+        # Session auth - check subscription
+        subscription = UserFeedSubscription.query.filter_by(
+            user_id=current_user.id,
+            feed_id=post.feed_id,
+        ).first()
+        if subscription:
+            auth_type = "session"
+            is_authorized_to_read = True
+            can_trigger_processing = True
     
     # Check if episode is already processed and available
     is_processed = post.processed_audio_path and Path(post.processed_audio_path).exists()
@@ -704,20 +741,28 @@ def api_download_post(p_guid: str) -> flask.Response:
     # --- DIAGNOSTIC LOGGING (always log for debugging) ---
     logger.info(
         "DOWNLOAD_REQUEST: post=%s feed_id=%s method=%s range=%s "
-        "user_id=%s feed_token=%s ua=%s is_processed=%s",
+        "user_id=%s auth_type=%s can_trigger=%s ua=%s is_processed=%s",
         post.guid[:16],
         post.feed_id,
         request_method,
         range_header,
         current_user.id if current_user else None,
-        "yes" if feed_token else "no",
+        auth_type,
+        can_trigger_processing,
         user_agent[:60] if user_agent else "none",
         is_processed,
     )
     
     if is_processed:
-        # Episode is ready - serve it
-        pass  # Fall through to file serving below
+        # Episode is ready - serve it (read access is sufficient)
+        if not is_authorized_to_read:
+            logger.info(
+                "DOWNLOAD_DECISION: post=%s decision=NOT_AUTHORIZED_READ response=401",
+                post.guid[:16],
+            )
+            return flask.make_response(("Authentication required", 401))
+        # Fall through to file serving below
+        pass
     else:
         # Episode not yet processed - determine response
         
@@ -730,27 +775,32 @@ def api_download_post(p_guid: str) -> flask.Response:
             # 204 No Content - tells client "nothing here yet" without implying retry
             return flask.make_response(("", 204))
         
-        # --- AUTHORIZATION CHECK ---
-        # User must be authorized via session OR feed token
-        # Podcast apps use feed token in URL since they don't send cookies
-        is_authorized = False
-        if current_user and post.feed_id:
-            subscription = UserFeedSubscription.query.filter_by(
-                user_id=current_user.id,
-                feed_id=post.feed_id,
-            ).first()
-            if subscription:
-                is_authorized = True
-        
-        if not is_authorized:
+        # --- AUTHORIZATION CHECK FOR READ ---
+        if not is_authorized_to_read:
             logger.info(
                 "DOWNLOAD_DECISION: post=%s decision=NOT_AUTHORIZED response=401 "
-                "user_id=%s feed_token=%s",
+                "user_id=%s auth_type=%s",
                 post.guid[:16],
                 current_user.id if current_user else None,
-                "yes" if feed_token else "no",
+                auth_type,
             )
             return flask.make_response(("Authentication required", 401))
+        
+        # --- COMBINED TOKEN: READ-ONLY, NO PROCESSING TRIGGER ---
+        # Combined feed tokens can read processed audio but CANNOT trigger processing
+        # This prevents the unified feed from causing expensive processing jobs
+        if not can_trigger_processing:
+            logger.info(
+                "DOWNLOAD_DECISION: post=%s decision=COMBINED_TOKEN_NO_TRIGGER "
+                "auth_type=%s response=202",
+                post.guid[:16],
+                auth_type,
+            )
+            # Return 202 to indicate "not ready" but do NOT start processing
+            # The episode must be processed via per-feed access or manual UI
+            response = flask.make_response(("Episode not yet processed", 202))
+            response.headers["Retry-After"] = "3600"  # 1 hour - don't retry aggressively
+            return response
         
         # --- CHECK FOR EXISTING JOB ---
         existing_job = ProcessingJob.query.filter(
@@ -769,33 +819,39 @@ def api_download_post(p_guid: str) -> flask.Response:
             response.headers["Retry-After"] = "120"
             return response
         
-        # --- TIER 2: GET triggers, but with cooldown ---
-        # Check cooldown to prevent trigger storms
-        now = time.time()
-        last_trigger = _on_demand_trigger_cooldowns.get(post.guid, 0)
-        cooldown_remaining = _ON_DEMAND_COOLDOWN_SECONDS - (now - last_trigger)
+        # --- TIER 2: GET triggers, but with DB-backed cooldown ---
+        # Check cooldown using ProcessingJob.created_at (persists across restarts)
+        last_job = ProcessingJob.query.filter(
+            ProcessingJob.post_guid == post.guid
+        ).order_by(ProcessingJob.created_at.desc()).first()
         
-        if cooldown_remaining > 0:
-            # Within cooldown window - don't trigger again
-            logger.info(
-                "DOWNLOAD_DECISION: post=%s decision=COOLDOWN_ACTIVE cooldown_remaining=%ds response=202",
-                post.guid[:16],
-                int(cooldown_remaining),
-            )
-            response = flask.make_response(("Processing recently requested", 202))
-            response.headers["Retry-After"] = str(min(int(cooldown_remaining) + 10, 300))
-            return response
+        if last_job and last_job.created_at:
+            job_age_seconds = (datetime.now(timezone.utc) - last_job.created_at.replace(tzinfo=timezone.utc)).total_seconds()
+            cooldown_remaining = _ON_DEMAND_COOLDOWN_SECONDS - job_age_seconds
+            
+            if cooldown_remaining > 0:
+                # Within cooldown window - don't trigger again
+                logger.info(
+                    "DOWNLOAD_DECISION: post=%s decision=COOLDOWN_ACTIVE "
+                    "last_job_id=%s cooldown_remaining=%ds response=202",
+                    post.guid[:16],
+                    last_job.id,
+                    int(cooldown_remaining),
+                )
+                response = flask.make_response(("Processing recently requested", 202))
+                response.headers["Retry-After"] = str(min(int(cooldown_remaining) + 10, 300))
+                return response
         
         # --- TRIGGER PROCESSING ---
-        # This is a GET from an authorized user, no existing job, cooldown expired
+        # This is a GET from an authorized user (feed-scoped or session),
+        # no existing job, cooldown expired
         logger.info(
-            "DOWNLOAD_DECISION: post=%s decision=TRIGGER_PROCESSING user_id=%s response=202",
+            "DOWNLOAD_DECISION: post=%s decision=TRIGGER_PROCESSING "
+            "user_id=%s auth_type=%s response=202",
             post.guid[:16],
             current_user.id if current_user else None,
+            auth_type,
         )
-        
-        # Set cooldown BEFORE starting job to prevent race conditions
-        _on_demand_trigger_cooldowns[post.guid] = now
         
         try:
             app = cast(Any, current_app)._get_current_object()
@@ -813,8 +869,6 @@ def api_download_post(p_guid: str) -> flask.Response:
             return response
         except Exception as e:
             logger.error(f"Failed to trigger on-demand processing for {p_guid}: {e}")
-            # Clear cooldown on failure so retry can work
-            _on_demand_trigger_cooldowns.pop(post.guid, None)
             response = flask.make_response(("Processing temporarily unavailable", 503))
             response.headers["Retry-After"] = "60"
             return response
