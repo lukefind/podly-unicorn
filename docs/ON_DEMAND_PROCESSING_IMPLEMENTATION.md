@@ -4,6 +4,8 @@ This guide explains how to implement on-demand episode processing triggered by p
 
 **Target Audience:** Developers of the original Podly fork or similar systems.
 
+**Last Updated:** January 2026
+
 ---
 
 ## Problem Statement
@@ -14,12 +16,14 @@ When a user subscribes to a Podly RSS feed in their podcast app (Overcast, Pocke
 2. The podcast app retries automatically until the episode is ready
 3. Probes/prefetches do NOT trigger processing
 4. No duplicate jobs are created
+5. **Combined/unified feeds** should allow listing episodes but only trigger processing when explicitly downloading
 
 The challenge is that podcast apps behave differently:
 - Some send `HEAD` requests to probe URLs
 - Some send small `Range` requests (e.g., `bytes=0-1023`) before full downloads
 - Some don't send cookies or session auth
 - Some cache failure responses aggressively
+- **Combined feeds** get polled frequently, which could trigger unwanted mass processing
 
 ---
 
@@ -344,6 +348,114 @@ DOWNLOAD_DECISION: post=abc123 decision=TRIGGER_PROCESSING response=202
 
 ---
 
+## Combined Feed Token Scoping
+
+**Critical Issue:** Combined/unified feeds aggregate episodes from multiple podcasts. If the combined feed token is used in enclosure URLs, polling the feed could trigger processing for ALL episodes.
+
+### Solution: Feed-Scoped Tokens in Enclosures
+
+The combined feed uses two types of tokens:
+
+| Token Type | `feed_id` | Can Trigger Processing? | Used For |
+|------------|-----------|------------------------|----------|
+| Combined token | `NULL` | **No** (read-only) | Feed URL itself |
+| Feed-scoped token | `<int>` | **Yes** | Enclosure URLs |
+
+**Implementation:**
+
+```python
+def generate_combined_feed_xml(user_id: int, username: str):
+    # Get combined token for feed URL (read-only)
+    combined_token = get_combined_token(user)
+    
+    # Pre-fetch feed-scoped tokens for each subscribed feed
+    feed_tokens: Dict[int, tuple[str, str]] = {}
+    for feed_id in subscribed_feed_ids:
+        feed = Feed.query.get(feed_id)
+        token_id, secret = create_feed_access_token(user, feed)  # feed_id != NULL
+        feed_tokens[feed_id] = (token_id, secret)
+    
+    # Generate items with feed-scoped tokens
+    for post in posts:
+        token_override = feed_tokens.get(post.feed_id)
+        items.append(feed_item(post, feed_token_override=token_override))
+```
+
+**Key points:**
+- `create_feed_access_token(user, feed)` reuses existing tokens per `(user_id, feed_id)`
+- No per-post tokens (prevents database bloat)
+- Combined token in feed URL cannot trigger processing
+- Feed-scoped tokens in enclosures CAN trigger processing
+
+### Download Endpoint Authorization
+
+```python
+def download_post(guid: str):
+    feed_token = getattr(g, "feed_token", None)
+    
+    # Combined tokens are read-only
+    if feed_token and feed_token.feed_id is None:
+        # Can serve processed audio, but cannot trigger processing
+        if is_processed:
+            return send_file(post.processed_audio_path)
+        else:
+            response = make_response(("Episode not yet processed", 202))
+            response.headers["Retry-After"] = "300"  # Longer retry for read-only
+            return response
+    
+    # Feed-scoped tokens can trigger processing
+    # ... normal processing trigger logic ...
+```
+
+---
+
+## Reverse Proxy Configuration (Caddy)
+
+When running behind a reverse proxy (especially over WireGuard), you must forward headers so Flask generates correct HTTPS URLs.
+
+### Flask ProxyFix
+
+```python
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1, x_for=1)
+```
+
+### Caddyfile
+
+```caddyfile
+pod.example.com {
+    reverse_proxy upstream:5001 {
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-For {remote_host}
+    }
+}
+```
+
+Without these headers, RSS enclosure URLs will use `http://` instead of `https://`.
+
+---
+
+## Verification Script
+
+A verification script is provided at `scripts/verify_combined_feed_tokens.py`:
+
+```bash
+# Run from inside container (fetches via public URL)
+docker exec podly-pure-podcasts python /app/scripts/verify_combined_feed_tokens.py
+
+# With custom host
+docker exec podly-pure-podcasts python /app/scripts/verify_combined_feed_tokens.py --host your-domain.com
+```
+
+The script verifies:
+1. Enclosure tokens differ from combined token
+2. Enclosure tokens have `feed_id != NULL` (feed-scoped)
+3. Enclosure URLs use `https://` and public domain
+4. End-to-end: feed-scoped token triggers job, combined token does not
+
+---
+
 ## Summary
 
 1. **Enclosure URLs** must point to your download endpoint
@@ -353,3 +465,5 @@ DOWNLOAD_DECISION: post=abc123 decision=TRIGGER_PROCESSING response=202
 5. **202 + Retry-After** for all "not ready" responses
 6. **Auth via URL tokens** since apps don't send cookies
 7. **Separate concerns**: `auto_download_new_episodes` only affects scheduled refresh
+8. **Combined feeds**: Use feed-scoped tokens in enclosures, combined token for feed URL
+9. **Reverse proxy**: Configure X-Forwarded-Proto/Host headers for HTTPS URLs
