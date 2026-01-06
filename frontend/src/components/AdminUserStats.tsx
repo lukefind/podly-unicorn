@@ -98,30 +98,30 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
   const getDecisionBadge = (decision: string | null) => {
     switch (decision) {
       case 'SERVED_AUDIO':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Served</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">Served</span>;
       case 'TRIGGERED':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">Triggered</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">Triggered</span>;
       case 'NOT_READY_NO_TRIGGER':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-700">Not Ready</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300">Not Ready</span>;
       case 'JOB_EXISTS':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700">Job Exists</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">Job Exists</span>;
       case 'COOLDOWN_ACTIVE':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-orange-100 text-orange-700">Cooldown</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300">Cooldown</span>;
       default:
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">{decision || 'Legacy'}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{decision || 'Legacy'}</span>;
     }
   };
 
   const getAuthTypeBadge = (authType: string | null) => {
     switch (authType) {
       case 'combined':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-pink-100 text-pink-700">Combined</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300">Combined</span>;
       case 'feed_scoped':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-cyan-100 text-cyan-700">Feed-Scoped</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-300">Feed-Scoped</span>;
       case 'session':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-700">Session</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">Session</span>;
       default:
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">{authType || 'Unknown'}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{authType || 'Unknown'}</span>;
     }
   };
 
@@ -153,21 +153,23 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
   };
 
   return createPortal(
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+      {/* Backdrop */}
       <div 
-        className="rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col"
-        style={{ backgroundColor: '#1e1b4b' }}
+        className="absolute inset-0 bg-black/80"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div 
+        className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-purple-700">
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-purple-100 dark:border-purple-800 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30">
           <div className="min-w-0 flex-1">
-            <h2 className="text-base sm:text-lg font-bold text-purple-200">Download Attempts</h2>
-            <p className="text-xs sm:text-sm text-purple-400">User: {username} ({data?.total_count ?? 0} records)</p>
+            <h2 className="text-base sm:text-lg font-bold text-purple-900 dark:text-purple-100">Download Attempts</h2>
+            <p className="text-xs sm:text-sm text-purple-600 dark:text-purple-400">User: {username} ({data?.total_count ?? 0} records)</p>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 ml-2">
             <button
@@ -180,7 +182,7 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
             </button>
             <button
               type="button"
-              className="p-1.5 sm:p-2 text-purple-300 hover:text-purple-100"
+              className="p-1.5 sm:p-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-800 text-gray-500 dark:text-gray-400 transition-colors"
               onClick={onClose}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -199,27 +201,27 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
           )}
 
           {error && (
-            <div className="text-red-400 text-center py-8">Failed to load download attempts</div>
+            <div className="text-red-600 dark:text-red-400 text-center py-8">Failed to load download attempts</div>
           )}
 
           {data && data.attempts.length === 0 && (
-            <div className="text-purple-400 text-center py-8">No download attempts found</div>
+            <div className="text-gray-500 dark:text-gray-400 text-center py-8">No download attempts found</div>
           )}
 
           {data && data.attempts.length > 0 && (
             <div className="space-y-2">
               {/* Card view - always shown, no table */}
               {data.attempts.map((attempt) => (
-                <div key={attempt.id} className="rounded-lg p-3 border border-purple-700" style={{ backgroundColor: '#2e1065' }}>
+                <div key={attempt.id} className="rounded-lg p-3 border border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20">
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="text-purple-100 text-sm font-medium line-clamp-2">{attempt.post_title}</div>
+                    <div className="text-purple-900 dark:text-purple-100 text-sm font-medium line-clamp-2">{attempt.post_title}</div>
                     {getDecisionBadge(attempt.decision)}
                   </div>
-                  <div className="text-purple-300 text-xs mb-2">{attempt.feed_title}</div>
+                  <div className="text-purple-700 dark:text-purple-300 text-xs mb-2">{attempt.feed_title}</div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     {getAuthTypeBadge(attempt.auth_type)}
-                    <span className="text-purple-400">{attempt.download_source}</span>
-                    <span className="text-purple-400 ml-auto">{formatDate(attempt.downloaded_at)}</span>
+                    <span className="text-gray-500 dark:text-gray-400">{attempt.download_source}</span>
+                    <span className="text-gray-500 dark:text-gray-400 ml-auto">{formatDate(attempt.downloaded_at)}</span>
                   </div>
                 </div>
               ))}
