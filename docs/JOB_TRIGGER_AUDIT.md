@@ -16,7 +16,8 @@ This document audits all code paths that can trigger episode processing jobs in 
 | HTTP Semantics | ✅ PASS | HEAD→204, GET unprocessed→202+Retry-After |
 | Separation of Concerns | ✅ PASS | `auto_download_new_episodes` only affects scheduled refresh |
 | Combined vs Feed-Scoped Tokens | ✅ PASS | Combined tokens (unified feed) cannot trigger processing |
-| Cooldown Logic | ✅ PASS | Database-backed via `ProcessingJob.created_at` |
+| Cooldown Logic | ✅ PASS | Job-based: checks `ProcessingJob.created_at` for recent jobs |
+| Download Audit Trail | ✅ PASS | `user_download` table records auth_type and decision |
 | Job Idempotency | ⚠️ PARTIAL | Check-then-insert without locking; race window exists |
 
 ---
@@ -66,7 +67,7 @@ There are **5 distinct code paths** that call `start_post_processing()`:
 **Decision Flow:**
 1. **HEAD request?** → 204 (no trigger)
 2. **Not authorized to read?** → 401 (no trigger)
-3. **Combined feed token?** → 202 + Retry-After: 3600 (READ-ONLY, no trigger)
+3. **Combined feed token?** → 202 + Retry-After: 300 (READ-ONLY, no trigger)
 4. **Job already pending/running?** → 202 + Retry-After (no new trigger)
 5. **Within cooldown window?** → 202 + Retry-After (no new trigger)
 6. **Feed-scoped token or session auth** → Start job, return 202 + Retry-After
@@ -76,7 +77,8 @@ There are **5 distinct code paths** that call `start_post_processing()`:
 - **Feed-scoped tokens CAN trigger processing** - full access for that specific feed
 - `auto_download_new_episodes` does NOT gate on-demand processing
 - That setting ONLY controls scheduled refresh auto-processing
-- Cooldown is database-backed via `ProcessingJob.created_at` (persists across restarts)
+- Cooldown is job-based: checks `ProcessingJob.created_at` for recent jobs (persists across restarts)
+- Download attempts are recorded in `user_download` table with `auth_type` and `decision` for audit trail
 
 ---
 
