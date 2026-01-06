@@ -166,7 +166,7 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-purple-100 dark:border-purple-800 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30">
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-purple-100 dark:border-purple-800 bg-purple-50 dark:bg-gray-800">
           <div className="min-w-0 flex-1">
             <h2 className="text-base sm:text-lg font-bold text-purple-900 dark:text-purple-100">Download Attempts</h2>
             <p className="text-xs sm:text-sm text-purple-600 dark:text-purple-400">User: {username} ({data?.total_count ?? 0} records)</p>
@@ -193,7 +193,7 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-2 sm:p-4">
+        <div className="flex-1 overflow-auto p-2 sm:p-4 bg-white dark:bg-gray-900">
           {isLoading && (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
