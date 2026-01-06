@@ -621,8 +621,14 @@ def admin_user_stats() -> RouteResult:
             ).count()
         )
 
-        # Downloads by this user
-        downloads = UserDownload.query.filter_by(user_id=u.id).all()
+        # Downloads by this user - only count successful downloads (SERVED_AUDIO)
+        # Filter out failed attempts like NOT_READY_NO_TRIGGER, TRIGGERED, etc.
+        downloads = UserDownload.query.filter_by(user_id=u.id).filter(
+            db.or_(
+                UserDownload.decision == "SERVED_AUDIO",
+                UserDownload.decision.is_(None),  # Legacy records before decision tracking
+            )
+        ).all()
         total_downloads = len(downloads)
         processed_downloads = len([d for d in downloads if d.is_processed])
         rss_downloads = len([d for d in downloads if getattr(d, "download_source", "web") == "rss"])
@@ -673,9 +679,16 @@ def admin_user_stats() -> RouteResult:
         if candidates:
             last_activity = max(candidates).isoformat()
 
-        # Recent downloads (last 10)
+        # Recent downloads (last 10) - only successful downloads (SERVED_AUDIO)
+        # Filter out failed attempts like NOT_READY_NO_TRIGGER, TRIGGERED, etc.
         recent_downloads = (
             UserDownload.query.filter_by(user_id=u.id)
+            .filter(
+                db.or_(
+                    UserDownload.decision == "SERVED_AUDIO",
+                    UserDownload.decision.is_(None),  # Legacy records before decision tracking
+                )
+            )
             .order_by(UserDownload.downloaded_at.desc())
             .limit(10)
             .all()
