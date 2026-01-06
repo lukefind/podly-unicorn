@@ -309,10 +309,10 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
       {user.recent_downloads.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <div className="text-xs font-medium text-purple-500">Recent Downloads</div>
+            <div className="text-xs font-medium text-purple-500 dark:text-purple-300">Recent Downloads</div>
             <button
               type="button"
-              className="text-xs text-purple-500 hover:text-purple-700 underline"
+              className="text-xs text-cyan-500 hover:text-cyan-400 underline font-medium"
               onClick={() => setShowDownloadAttempts(true)}
             >
               View all attempts
@@ -337,7 +337,7 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
             <div className="text-xs text-purple-300">No downloads yet</div>
             <button
               type="button"
-              className="text-xs text-purple-500 hover:text-purple-700 underline"
+              className="text-xs text-cyan-500 hover:text-cyan-400 underline font-medium"
               onClick={() => setShowDownloadAttempts(true)}
             >
               View all attempts
