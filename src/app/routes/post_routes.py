@@ -735,6 +735,18 @@ def api_download_post(p_guid: str) -> flask.Response:
     user_agent = flask.request.headers.get("User-Agent", "")
     request_method = flask.request.method
     
+    # --- DEBUG: Log raw token params and resolved token info ---
+    raw_feed_token = flask.request.args.get("feed_token", "")
+    logger.info(
+        "DOWNLOAD_TOKEN_DEBUG: post=%s raw_feed_token=%s feed_token_obj=%s "
+        "token_feed_id=%s token_user_id=%s",
+        post.guid[:16],
+        raw_feed_token[:16] if raw_feed_token else "none",
+        "present" if feed_token else "none",
+        feed_token.feed_id if feed_token else "N/A",
+        feed_token.user.id if feed_token else "N/A",
+    )
+    
     # --- DETERMINE AUTH TYPE ---
     # Auth types:
     # - "session": User logged in via web session (can trigger processing if subscribed)
