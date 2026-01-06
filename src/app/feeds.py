@@ -304,7 +304,11 @@ def add_feed(feed_data: feedparser.FeedParserDict) -> Feed:
         raise e
 
 
-def feed_item(post: Post, include_show_name: bool = False) -> PyRSS2Gen.RSSItem:
+def feed_item(
+    post: Post,
+    include_show_name: bool = False,
+    feed_token_override: Optional[tuple[str, str]] = None,
+) -> PyRSS2Gen.RSSItem:
     """
     Given a post, return the corresponding RSS item. Reference:
     https://github.com/Podcast-Standards-Project/PSP-1-Podcast-RSS-Specification?tab=readme-ov-file#required-item-elements
@@ -312,12 +316,17 @@ def feed_item(post: Post, include_show_name: bool = False) -> PyRSS2Gen.RSSItem:
     Args:
         post: The post to create an RSS item for
         include_show_name: If True, include the original show name as itunes:author (for combined feeds)
+        feed_token_override: If provided, use this (token_id, secret) instead of request token
     """
 
     base_url = _get_base_url()
 
     # Generate URLs that will be proxied by the frontend to the backend
-    audio_url = _append_feed_token_params(f"{base_url}/api/posts/{post.guid}/download")
+    if feed_token_override:
+        token_id, secret = feed_token_override
+        audio_url = f"{base_url}/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+    else:
+        audio_url = _append_feed_token_params(f"{base_url}/api/posts/{post.guid}/download")
 
     # Use the original episode description as-is (no Podly link - it doesn't exist)
     description = post.description or ""
@@ -368,10 +377,22 @@ def generate_feed_xml(feed: Feed) -> Any:
 
 
 def generate_combined_feed_xml(user_id: int, username: str) -> Any:
-    """Generate a combined RSS feed with all episodes from a user's subscribed podcasts."""
-    from typing import List
+    """Generate a combined RSS feed with all episodes from a user's subscribed podcasts.
+    
+    IMPORTANT: Enclosure URLs use feed-scoped tokens (not the combined token).
+    This allows podcast apps to trigger on-demand processing when downloading,
+    while the combined token only authorizes listing episodes (read-only).
+    """
+    from typing import Dict, List
+    from app.auth.feed_tokens import create_feed_access_token
     
     logger.info(f"Generating combined feed for user {user_id}")
+    
+    # Get the user for token creation
+    user = User.query.get(user_id)
+    if not user:
+        logger.error(f"User {user_id} not found for combined feed generation")
+        return None
     
     # Get all feeds the user is subscribed to
     subscriptions = UserFeedSubscription.query.filter_by(user_id=user_id).all()
@@ -395,14 +416,27 @@ def generate_combined_feed_xml(user_id: int, username: str) -> Any:
         )
         return rss_feed.to_xml("utf-8")
     
+    # Pre-fetch all feeds and create feed-scoped tokens for each
+    # This ensures enclosure URLs use feed-scoped tokens that can trigger processing
+    feeds_by_id: Dict[int, Feed] = {f.id: f for f in Feed.query.filter(Feed.id.in_(feed_ids)).all()}
+    feed_tokens: Dict[int, tuple[str, str]] = {}
+    for feed_id in feed_ids:
+        feed = feeds_by_id.get(feed_id)
+        if feed:
+            token_id, secret = create_feed_access_token(user, feed)
+            feed_tokens[feed_id] = (token_id, secret)
+    
     # Get all posts from subscribed feeds, sorted by release date (newest first)
     posts: List[Post] = Post.query.filter(
         Post.feed_id.in_(feed_ids)
     ).order_by(Post.release_date.desc()).limit(200).all()
     
-    # Generate feed items with episode images from original podcasts
-    # Include show name as itunes:author for combined feed
-    items = [feed_item(post, include_show_name=True) for post in posts]
+    # Generate feed items with feed-scoped tokens for enclosure URLs
+    # This allows on-demand processing when podcast apps download episodes
+    items = []
+    for post in posts:
+        token_override = feed_tokens.get(post.feed_id) if post.feed_id else None
+        items.append(feed_item(post, include_show_name=True, feed_token_override=token_override))
     
     base_url = _get_base_url()
     link = _append_feed_token_params(f"{base_url}/feed/combined")
