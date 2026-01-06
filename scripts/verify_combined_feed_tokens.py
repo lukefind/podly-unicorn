@@ -149,24 +149,19 @@ def lookup_post_feed_id(guid: str) -> Optional[int]:
     return row[0] if row else None
 
 
-def fetch_combined_feed(port: str, token_id: str, token_secret: str, public_host: str = "") -> Optional[str]:
-    """Fetch combined feed XML from internal server.
+def fetch_combined_feed(base_url: str, token_id: str, token_secret: str) -> Optional[str]:
+    """Fetch combined feed XML from server.
     
     Args:
-        port: Internal Flask port
+        base_url: Base URL to fetch from (e.g., 'https://your-domain.com')
         token_id: Combined token ID
         token_secret: Combined token secret
-        public_host: Public hostname to set in Host header (e.g., 'your-domain.com')
-                     This ensures _get_base_url() generates correct public URLs.
     """
-    url = f"http://127.0.0.1:{port}/feed/combined?feed_token={token_id}&feed_secret={token_secret}"
+    url = f"{base_url}/feed/combined?feed_token={token_id}&feed_secret={token_secret}"
     try:
         req = urllib.request.Request(url)
-        # Set Host header to public domain so _get_base_url() generates correct URLs
-        if public_host:
-            req.add_header("Host", public_host)
-            req.add_header("X-Forwarded-Proto", "https")  # Indicate HTTPS
-        with urllib.request.urlopen(req, timeout=10) as response:
+        req.add_header("User-Agent", "Podly-Verification/1.0")
+        with urllib.request.urlopen(req, timeout=30) as response:
             return response.read().decode("utf-8", "ignore")
     except Exception as e:
         print(f"[ERROR] Failed to fetch combined feed: {e}")
@@ -225,12 +220,12 @@ def http_get(url: str, host_header: str = "") -> Tuple[int, str]:
         return 0, str(e)
 
 
-def verify_enclosure_tokens(columns: List[str], port: str, public_host: str) -> Tuple[bool, Optional[str], Optional[str], Optional[str]]:
+def verify_enclosure_tokens(columns: List[str], base_url: str) -> Tuple[bool, Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
     Main verification: fetch combined feed and verify enclosure tokens are feed-scoped.
     
     Returns:
-        (success, sample_enclosure_url, sample_guid, combined_token_id)
+        (success, sample_enclosure_url, sample_guid, combined_token_id, combined_secret)
     """
     print("\n" + "=" * 60)
     print("C) Enclosure Token Verification (Automated)")
@@ -240,17 +235,17 @@ def verify_enclosure_tokens(columns: List[str], port: str, public_host: str) -> 
     combined = get_combined_token(columns)
     if not combined:
         print("[SKIP] No combined token found in database")
-        return False, None, None, None
+        return False, None, None, None, None
     
     combined_token_id, combined_secret = combined
     print(f"Combined token: {combined_token_id[:8]}...")
     print(f"Combined secret: {combined_secret[:8]}...")
     
-    # Fetch combined feed with Host header set to public domain
-    print(f"Fetching combined feed from 127.0.0.1:{port} (Host: {public_host})...")
-    xml_content = fetch_combined_feed(port, combined_token_id, combined_secret, public_host)
+    # Fetch combined feed from public URL
+    print(f"Fetching combined feed from {base_url}...")
+    xml_content = fetch_combined_feed(base_url, combined_token_id, combined_secret)
     if not xml_content:
-        return False, None, None, None
+        return False, None, None, None, None
     
     print(f"Feed fetched: {len(xml_content)} bytes")
     
@@ -258,7 +253,7 @@ def verify_enclosure_tokens(columns: List[str], port: str, public_host: str) -> 
     enclosure_urls = extract_enclosure_urls(xml_content)
     if not enclosure_urls:
         print("[WARN] No enclosure URLs found in feed")
-        return False, None, None, None
+        return False, None, None, None, None
     
     print(f"Found {len(enclosure_urls)} enclosure URLs")
     
@@ -323,10 +318,10 @@ def verify_enclosure_tokens(columns: List[str], port: str, public_host: str) -> 
         print(f"  GUID: {sample_guid}")
     
     success = passed == checked and checked > 0
-    return success, sample_url, sample_guid, combined_token_id
+    return success, sample_url, sample_guid, combined_token_id, combined_secret
 
 
-def test_end_to_end_job_creation(port: str, public_host: str, enclosure_url: str, guid: str, 
+def test_end_to_end_job_creation(base_url: str, enclosure_url: str, guid: str, 
                                   combined_token_id: str, combined_secret: str) -> bool:
     """
     End-to-end test that proves:
@@ -334,12 +329,14 @@ def test_end_to_end_job_creation(port: str, public_host: str, enclosure_url: str
     2. Using combined token against same GUID does NOT create a job
     
     This is the deterministic test that proves Podcast Addict will trigger processing.
+    Uses public URLs (via Caddy) for all requests.
     """
     print("\n" + "=" * 60)
     print("F) End-to-End Job Creation Test")
     print("=" * 60)
     
     print(f"Testing GUID: {guid}")
+    print(f"Base URL: {base_url}")
     
     # Count existing jobs for this GUID
     initial_job_count = count_jobs_for_guid(guid)
@@ -347,12 +344,10 @@ def test_end_to_end_job_creation(port: str, public_host: str, enclosure_url: str
     
     # Step 1: Hit enclosure URL (feed-scoped token) - should trigger job
     print("\nStep 1: Requesting enclosure URL (feed-scoped token)...")
+    print(f"  URL: {enclosure_url[:80]}...")
     
-    # Convert public URL to internal URL for testing
-    parsed = urllib.parse.urlparse(enclosure_url)
-    internal_url = f"http://127.0.0.1:{port}{parsed.path}?{parsed.query}"
-    
-    status, body = http_get(internal_url, public_host)
+    # Use the enclosure URL directly (it's already a public HTTPS URL)
+    status, body = http_get(enclosure_url)
     print(f"  Response: {status}")
     print(f"  Body preview: {body[:100]}..." if len(body) > 100 else f"  Body: {body}")
     
@@ -380,9 +375,10 @@ def test_end_to_end_job_creation(port: str, public_host: str, enclosure_url: str
     
     # Step 2: Hit same GUID with combined token - should NOT trigger job
     print("\nStep 2: Requesting same GUID with combined token...")
-    combined_url = f"http://127.0.0.1:{port}/api/posts/{guid}/download?feed_token={combined_token_id}&feed_secret={combined_secret}"
+    combined_url = f"{base_url}/api/posts/{guid}/download?feed_token={combined_token_id}&feed_secret={combined_secret}"
+    print(f"  URL: {combined_url[:80]}...")
     
-    status2, body2 = http_get(combined_url, public_host)
+    status2, body2 = http_get(combined_url)
     print(f"  Response: {status2}")
     print(f"  Body preview: {body2[:100]}..." if len(body2) > 100 else f"  Body: {body2}")
     
@@ -473,20 +469,20 @@ def check_job_created(guid: str) -> Optional[Tuple[str, str, str]]:
     return row if row else None
 
 
-def print_manual_commands(port: str):
+def print_manual_commands(base_url: str):
     """Print manual verification commands."""
     print("\n" + "=" * 60)
     print("E) Manual Verification Commands")
     print("=" * 60)
     
     print(f"""
-# Inside container, the Flask app listens on port {port}
+# Base URL: {base_url}
 
-# 1. Fetch combined feed and show enclosure tokens:
+# 1. Run full verification from host machine:
 docker exec podly-pure-podcasts python /app/scripts/verify_combined_feed_tokens.py
 
-# 2. Test that enclosure URL triggers processing (use URL from above):
-docker exec podly-pure-podcasts sh -lc 'curl -i "ENCLOSURE_URL_HERE" | head -30'
+# 2. Test enclosure URL triggers processing (use URL from script output):
+curl -i "ENCLOSURE_URL_HERE" | head -30
 
 # 3. Check if job was created:
 docker exec podly-pure-podcasts python -c "
@@ -500,8 +496,8 @@ conn.close()
 "
 
 # 4. Test that combined token does NOT trigger processing:
-# Get combined token, then curl an unprocessed episode with it
-# Expected: 202 Accepted, NO job created
+# Use combined token from script output with same GUID
+# Expected: 202 Accepted, NO new job created
 """)
 
 
@@ -509,18 +505,20 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Verify combined feed token implementation")
-    parser.add_argument("--port", default=INTERNAL_PORT, help=f"Internal Flask port (default: {INTERNAL_PORT})")
-    parser.add_argument("--host", default="your-domain.com", help="Public hostname for Host header (default: your-domain.com)")
+    parser.add_argument("--host", default="your-domain.com", help="Public hostname (default: your-domain.com)")
+    parser.add_argument("--base-url", default=None, help="Base URL for requests (default: https://{host})")
     parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching combined feed (schema/bounds only)")
     parser.add_argument("--skip-e2e", action="store_true", help="Skip end-to-end job creation test")
     args = parser.parse_args()
+    
+    # Determine base URL
+    base_url = args.base_url if args.base_url else f"https://{args.host}"
     
     print("=" * 60)
     print("Combined Feed Token Verification")
     print("=" * 60)
     print(f"DB Path: {DB_PATH}")
-    print(f"Internal Port: {args.port}")
-    print(f"Public Host: {args.host}")
+    print(f"Base URL: {base_url}")
     print()
     
     # A) Print schema and get column list
@@ -534,10 +532,11 @@ def main():
     sample_url = None
     sample_guid = None
     combined_token_id = None
+    combined_secret = None
     
     if not args.skip_fetch:
-        enclosure_ok, sample_url, sample_guid, combined_token_id = verify_enclosure_tokens(
-            columns, args.port, args.host
+        enclosure_ok, sample_url, sample_guid, combined_token_id, combined_secret = verify_enclosure_tokens(
+            columns, base_url
         )
     else:
         print("\n[SKIP] Enclosure verification (--skip-fetch)")
@@ -546,19 +545,15 @@ def main():
     list_sample_tokens(columns)
     
     # E) Print manual commands
-    print_manual_commands(args.port)
+    print_manual_commands(base_url)
     
     # F) End-to-end job creation test
     e2e_ok = None
-    if not args.skip_e2e and sample_url and sample_guid and combined_token_id:
-        # Get combined secret for e2e test
-        combined = get_combined_token(columns)
-        if combined:
-            _, combined_secret = combined
-            e2e_ok = test_end_to_end_job_creation(
-                args.port, args.host, sample_url, sample_guid,
-                combined_token_id, combined_secret
-            )
+    if not args.skip_e2e and sample_url and sample_guid and combined_token_id and combined_secret:
+        e2e_ok = test_end_to_end_job_creation(
+            base_url, sample_url, sample_guid,
+            combined_token_id, combined_secret
+        )
     elif args.skip_e2e:
         print("\n[SKIP] End-to-end test (--skip-e2e)")
     elif not sample_url:
