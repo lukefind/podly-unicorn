@@ -137,7 +137,7 @@ class ITunesRSS2(PyRSS2Gen.RSS2):
         handler.endElement("rss")
 
 from app.extensions import db
-from app.models import Feed, Post, UserFeedSubscription
+from app.models import Feed, Post, User, UserFeedSubscription
 from app.runtime_config import config
 from podcast_processor.podcast_downloader import find_audio_link
 
