@@ -23,8 +23,8 @@ import urllib.parse
 import urllib.request
 from typing import Optional, Tuple, List, Dict
 
-# Default internal port - will be auto-detected if possible
-INTERNAL_PORT = os.environ.get("FLASK_PORT", "5000")
+# Default internal port - Waitress serves on 5001 in production
+INTERNAL_PORT = os.environ.get("FLASK_PORT", "5001")
 DB_PATH = "/app/src/instance/sqlite3.db"
 
 
