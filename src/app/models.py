@@ -176,16 +176,25 @@ class User(db.Model):  # type: ignore[name-defined, misc]
 
 
 class UserDownload(db.Model):  # type: ignore[name-defined, misc]
-    """Tracks episode downloads per user for usage statistics."""
+    """Tracks episode downloads and download attempts per user.
+    
+    Used for:
+    - Usage statistics (successful downloads)
+    - Audit trail for download attempts (auth_type, decision)
+    - DB-backed cooldown for on-demand processing triggers
+    """
     __tablename__ = "user_download"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)  # nullable for unauthenticated
     post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False, index=True)
     downloaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     file_size_bytes = db.Column(db.Integer, nullable=True)  # Size of downloaded file
     is_processed = db.Column(db.Boolean, default=True)  # Was it a processed (ad-free) version?
     download_source = db.Column(db.String(20), nullable=False, default="web")
+    # New fields for download attempt tracking
+    auth_type = db.Column(db.String(20), nullable=True)  # combined/feed_scoped/session/none
+    decision = db.Column(db.String(30), nullable=True)  # SERVED_AUDIO/TRIGGERED/NOT_READY_NO_TRIGGER/etc
 
     # Relationships
     user = db.relationship("User", backref=db.backref("downloads", lazy="dynamic"))

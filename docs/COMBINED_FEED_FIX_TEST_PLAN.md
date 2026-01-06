@@ -101,7 +101,7 @@ curl -v "${SERVER}/api/posts/${EPISODE_GUID}/download?${COMBINED_TOKEN}"
 
 **Verify:**
 1. Response is `202 Accepted`
-2. `Retry-After` header is `3600`
+2. `Retry-After` header is `300`
 3. Body contains "Episode not yet processed"
 4. Check logs for `COMBINED_TOKEN_NO_TRIGGER`:
 ```bash
@@ -121,6 +121,23 @@ cursor.execute('''
 ''')
 for row in cursor.fetchall():
     print(f'{row[4]} | {row[0][:8]}... | {row[2]} | {row[3]} | {row[1][:20]}...')
+conn.close()
+"
+```
+6. Verify attempt was recorded in `user_download` with `decision=NOT_READY_NO_TRIGGER`:
+```bash
+docker exec podly-pure-podcasts python -c "
+import sqlite3
+conn = sqlite3.connect('/app/src/instance/sqlite3.db')
+cursor = conn.cursor()
+cursor.execute('''
+    SELECT downloaded_at, auth_type, decision, post_id
+    FROM user_download
+    ORDER BY downloaded_at DESC
+    LIMIT 5
+''')
+for row in cursor.fetchall():
+    print(f'{row[0]} | auth={row[1]} | decision={row[2]} | post_id={row[3]}')
 conn.close()
 "
 ```

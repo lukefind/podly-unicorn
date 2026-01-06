@@ -40,12 +40,18 @@ def _increment_download_count(post: Post) -> None:
 
 
 def _track_user_download(post: Post, is_processed: bool = True) -> None:
-    """Track a download for the current user if authenticated."""
+    """Track a successful download for the current user if authenticated."""
     try:
         current_user = getattr(g, "current_user", None)
         if not current_user:
             return  # No user to track
-        download_source = "rss" if getattr(g, "feed_token", None) is not None else "web"
+        feed_token = getattr(g, "feed_token", None)
+        download_source = "rss" if feed_token is not None else "web"
+        
+        # Determine auth_type
+        auth_type = "session"
+        if feed_token is not None:
+            auth_type = "combined" if feed_token.feed_id is None else "feed_scoped"
         
         # Get file size if available
         file_size = None
@@ -59,6 +65,8 @@ def _track_user_download(post: Post, is_processed: bool = True) -> None:
             is_processed=is_processed,
             file_size_bytes=file_size,
             download_source=download_source,
+            auth_type=auth_type,
+            decision="SERVED_AUDIO",
         )
         db.session.add(download)
         db.session.commit()
@@ -66,6 +74,36 @@ def _track_user_download(post: Post, is_processed: bool = True) -> None:
         logger.error(
             "Failed to track download for user %s post %s: %s",
             getattr(getattr(g, "current_user", None), "id", "?"),
+            post.guid,
+            exc,
+        )
+
+
+def _record_download_attempt(
+    post: Post, current_user: Any, auth_type: str, decision: str
+) -> None:
+    """Record a download attempt for audit trail (not necessarily a successful download).
+    
+    This is used to track:
+    - Combined token attempts that didn't trigger processing
+    - Triggered processing attempts
+    - Job-exists responses
+    """
+    try:
+        download = UserDownload(
+            user_id=current_user.id if current_user else None,
+            post_id=post.id,
+            is_processed=False,
+            file_size_bytes=None,
+            download_source="rss",
+            auth_type=auth_type,
+            decision=decision,
+        )
+        db.session.add(download)
+        db.session.commit()
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error(
+            "Failed to record download attempt for post %s: %s",
             post.guid,
             exc,
         )
@@ -796,10 +834,14 @@ def api_download_post(p_guid: str) -> flask.Response:
                 post.guid[:16],
                 auth_type,
             )
+            # Record the attempt for audit trail
+            _record_download_attempt(
+                post, current_user, auth_type, "NOT_READY_NO_TRIGGER"
+            )
             # Return 202 to indicate "not ready" but do NOT start processing
             # The episode must be processed via per-feed access or manual UI
             response = flask.make_response(("Episode not yet processed", 202))
-            response.headers["Retry-After"] = "3600"  # 1 hour - don't retry aggressively
+            response.headers["Retry-After"] = "300"  # 5 minutes
             return response
         
         # --- CHECK FOR EXISTING JOB ---
@@ -852,6 +894,9 @@ def api_download_post(p_guid: str) -> flask.Response:
             current_user.id if current_user else None,
             auth_type,
         )
+        
+        # Record the trigger attempt for audit trail
+        _record_download_attempt(post, current_user, auth_type, "TRIGGERED")
         
         try:
             app = cast(Any, current_app)._get_current_object()
