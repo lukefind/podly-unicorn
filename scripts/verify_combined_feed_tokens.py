@@ -15,10 +15,12 @@ Or from host:
     docker exec podly-pure-podcasts python /app/scripts/verify_combined_feed_tokens.py
 """
 
+import html
 import os
 import re
 import sqlite3
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Optional, Tuple, List, Dict
@@ -173,10 +175,15 @@ def fetch_combined_feed(port: str, token_id: str, token_secret: str, public_host
 
 
 def extract_enclosure_urls(xml_content: str) -> List[str]:
-    """Extract enclosure URLs from RSS XML."""
+    """Extract enclosure URLs from RSS XML.
+    
+    Applies html.unescape() to convert &amp; to & in URLs.
+    """
     # Use regex to avoid XML parsing issues with namespaces
     pattern = r'<enclosure[^>]+url="([^"]+)"'
-    return re.findall(pattern, xml_content)
+    raw_urls = re.findall(pattern, xml_content)
+    # Unescape HTML entities (e.g., &amp; -> &)
+    return [html.unescape(url) for url in raw_urls]
 
 
 def extract_guid_from_url(url: str) -> Optional[str]:
@@ -297,7 +304,11 @@ def verify_enclosure_tokens(columns: List[str], port: str, public_host: str) -> 
             print(f"[FAIL] Enclosure URL uses localhost: {parsed.netloc}")
             continue
         
-        print(f"[PASS] Token {enclosure_token[:8]}... -> feed_id={token_feed_id}, host={parsed.netloc}")
+        # Check 5: URL uses HTTPS scheme
+        if parsed.scheme != "https":
+            print(f"[WARN] Enclosure URL uses {parsed.scheme} instead of https")
+        
+        print(f"[PASS] Token {enclosure_token[:8]}... -> feed_id={token_feed_id}, scheme={parsed.scheme}, host={parsed.netloc}")
         passed += 1
         
         if sample_url is None:

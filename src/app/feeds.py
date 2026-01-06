@@ -157,7 +157,12 @@ def _get_base_url() -> str:
             or request.headers.get("authority")
             or request.environ.get("HTTP2_AUTHORITY")
         )
-        host = request.headers.get("Host")
+        
+        # Prefer X-Forwarded-Host over Host header (set by reverse proxy)
+        host = (
+            request.headers.get("X-Forwarded-Host")
+            or request.headers.get("Host")
+        )
 
         if http2_scheme and http2_authority:
             return f"{http2_scheme}://{http2_authority}"
@@ -174,6 +179,13 @@ def _get_base_url() -> str:
                 or request.scheme == "https"
             )
             scheme = "https" if is_https else "http"
+            
+            # Strip port from host if present and using standard ports
+            if ":" in host:
+                host_part, port_part = host.rsplit(":", 1)
+                if (scheme == "https" and port_part == "443") or (scheme == "http" and port_part == "80"):
+                    host = host_part
+            
             return f"{scheme}://{host}"
     except RuntimeError:
         # Working outside of request context
