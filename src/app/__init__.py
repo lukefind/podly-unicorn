@@ -162,8 +162,19 @@ def _validate_env_key_conflicts() -> None:
 
 
 def _create_flask_app() -> Flask:
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    
     static_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "static"))
-    return Flask(__name__, static_folder=static_folder)
+    app = Flask(__name__, static_folder=static_folder)
+    
+    # Trust reverse proxy headers (Caddy, nginx, etc.)
+    # x_proto=1: Trust X-Forwarded-Proto header for HTTPS detection
+    # x_host=1: Trust X-Forwarded-Host header for hostname
+    # x_for=1: Trust X-Forwarded-For header for client IP
+    # This is required when behind a reverse proxy like Caddy over WireGuard
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1, x_for=1)  # type: ignore[assignment]
+    
+    return app
 
 
 def _load_auth_settings() -> AuthSettings:
