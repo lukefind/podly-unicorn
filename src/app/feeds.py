@@ -332,13 +332,26 @@ def feed_item(
     """
 
     base_url = _get_base_url()
+    
+    # Ensure base_url uses https for public URLs (avoid leaking http://localhost)
+    # This is critical for RSS feeds consumed by external podcast apps
+    if base_url.startswith("http://localhost") or base_url.startswith("http://127.0.0.1"):
+        # Fallback: use the configured public domain or keep as-is for local dev
+        pass  # Local dev is fine with http://localhost
+    elif base_url.startswith("http://"):
+        # Force https for any non-localhost URL
+        base_url = "https://" + base_url[7:]
 
     # Generate URLs that will be proxied by the frontend to the backend
     if feed_token_override:
         token_id, secret = feed_token_override
         audio_url = f"{base_url}/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+        # Trigger URL uses feed-scoped token - this is the explicit user action to start processing
+        trigger_url = f"{base_url}/trigger?guid={post.guid}&feed_token={token_id}&feed_secret={secret}"
     else:
         audio_url = _append_feed_token_params(f"{base_url}/api/posts/{post.guid}/download")
+        # Build trigger URL with current request's feed token
+        trigger_url = _append_feed_token_params(f"{base_url}/trigger?guid={post.guid}")
 
     # Use the original episode description as-is (no Podly link - it doesn't exist)
     description = post.description or ""
@@ -352,6 +365,7 @@ def feed_item(
 
     item = ITunesRSSItem(
         title=post.title,
+        link=trigger_url,  # Link to trigger page for explicit user-initiated processing
         enclosure=PyRSS2Gen.Enclosure(
             url=audio_url,
             type="audio/mpeg",

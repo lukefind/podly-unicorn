@@ -904,7 +904,11 @@ def api_download_post(p_guid: str) -> flask.Response:
             response.headers["Retry-After"] = "300"  # 5 minutes
             return response
         
-        # --- CHECK FOR EXISTING JOB ---
+        # --- DOWNLOAD ENDPOINT DOES NOT CREATE JOBS ---
+        # Per design: only /trigger can create jobs. Download endpoint is non-mutating.
+        # This prevents processing storms from podcast app probes/prefetches.
+        
+        # Check if there's an existing job in progress
         existing_job = ProcessingJob.query.filter(
             ProcessingJob.post_guid == post.guid,
             ProcessingJob.status.in_(["pending", "running"])
@@ -917,66 +921,13 @@ def api_download_post(p_guid: str) -> flask.Response:
             response.headers["Retry-After"] = "120"
             return response
         
-        # --- COOLDOWN CHECK (DB-backed via ProcessingJob.created_at) ---
-        last_job = ProcessingJob.query.filter(
-            ProcessingJob.post_guid == post.guid
-        ).order_by(ProcessingJob.created_at.desc()).first()
-        
-        if last_job and last_job.created_at:
-            job_age_seconds = (datetime.now(timezone.utc) - last_job.created_at.replace(tzinfo=timezone.utc)).total_seconds()
-            cooldown_remaining = _ON_DEMAND_COOLDOWN_SECONDS - job_age_seconds
-            
-            if cooldown_remaining > 0:
-                # Within cooldown window - don't trigger again
-                _log_decision("COOLDOWN", 503, f"remaining={int(cooldown_remaining)}s")
-                print(f"[DOWNLOAD_RETURN] guid={post.guid} status=503 reason=cooldown remaining={int(cooldown_remaining)}s", file=sys.stderr, flush=True)
-                response = flask.make_response(("Processing recently requested", 503))
-                response.headers["Retry-After"] = str(min(int(cooldown_remaining) + 10, 300))
-                return response
-        
-        # --- TRIGGER PROCESSING ---
-        # This is a full GET from an authorized user (feed-scoped or session),
-        # no existing job, cooldown expired
-        
-        # Record the trigger attempt for audit trail
-        _record_download_attempt(post, current_user, auth_type, "TRIGGERED")
-        
-        # Create job SYNCHRONOUSLY before returning 503
-        # This ensures the job exists in DB before we tell the client to retry
-        try:
-            user_id = current_user.id if current_user else None
-            print(f"[JOB_CREATE_ATTEMPT] guid={post.guid} user_id={user_id}", file=sys.stderr, flush=True)
-            result = get_jobs_manager().start_post_processing(
-                post.guid,
-                priority="interactive",
-                triggered_by_user_id=user_id,
-                trigger_source="on_demand_rss",
-            )
-            job_id = result.get("job_id")
-            job_status = result.get("status")
-            print(f"[JOB_RESULT] guid={post.guid} result={result}", file=sys.stderr, flush=True)
-            
-            # Verify job actually exists in DB
-            job_count = db.session.execute(
-                db.text("SELECT COUNT(*) FROM processing_job WHERE post_guid = :guid"),
-                {"guid": post.guid}
-            ).scalar()
-            print(f"[JOB_ENSURE] guid={post.guid} job_count_after={job_count} created_new={job_status=='started'} job_id={job_id}", file=sys.stderr, flush=True)
-            
-            _log_decision("TRIGGER", 503, f"job_id={job_id} job_status={job_status}")
-            print(f"[DOWNLOAD_RETURN] guid={post.guid} status=503 reason=trigger job_id={job_id}", file=sys.stderr, flush=True)
-            
-            response = flask.make_response(("Processing started", 503))
-            response.headers["Retry-After"] = "120"
-            return response
-        except Exception as e:
-            import traceback
-            logger.error(f"Failed to trigger on-demand processing for {p_guid}: {e}")
-            print(f"[JOB_ERROR] guid={post.guid} error={e} traceback={traceback.format_exc()}", file=sys.stderr, flush=True)
-            print(f"[DOWNLOAD_RETURN] guid={post.guid} status=503 reason=job_error", file=sys.stderr, flush=True)
-            response = flask.make_response(("Job trigger failed", 503))
-            response.headers["Retry-After"] = "60"
-            return response
+        # Episode not processed, no job in progress
+        # Return 503 with hint to use trigger link
+        _log_decision("NOT_PROCESSED", 503)
+        print(f"[DOWNLOAD_RETURN] guid={post.guid} status=503 reason=not_processed", file=sys.stderr, flush=True)
+        response = flask.make_response(("Episode not yet processed. Click the episode link in your podcast app to start processing.", 503))
+        response.headers["Retry-After"] = "300"
+        return response
 
     try:
         response = send_file(
@@ -1039,3 +990,480 @@ def download_post_legacy(p_guid: str) -> flask.Response:
 @post_bp.route("/post/<string:p_guid>/original.mp3", methods=["GET"])
 def download_original_post_legacy(p_guid: str) -> flask.Response:
     return api_download_original_post(p_guid)
+
+
+# =============================================================================
+# TRIGGER ENDPOINTS - User-initiated processing via capability URLs
+# =============================================================================
+
+@post_bp.route("/trigger", methods=["GET"])
+def trigger_processing() -> flask.Response:
+    """Trigger processing for an episode via a capability URL.
+    
+    This endpoint is linked from RSS <item><link> elements. When a user clicks
+    the link in their podcast app, it queues the episode for processing.
+    
+    Required query params:
+    - guid: The episode GUID
+    - feed_token: The feed-scoped token ID
+    - feed_secret: The feed-scoped token secret
+    
+    Combined tokens (feed_id=NULL) are NOT allowed to trigger processing.
+    Only feed-scoped tokens can trigger.
+    """
+    from app.auth.feed_tokens import authenticate_feed_token
+    
+    guid = flask.request.args.get("guid")
+    token_id = flask.request.args.get("feed_token")
+    secret = flask.request.args.get("feed_secret")
+    
+    print(f"[TRIGGER_HIT] guid={guid} token_id={token_id}", file=sys.stderr, flush=True)
+    
+    if not guid or not token_id or not secret:
+        print(f"[TRIGGER_RETURN] status=400 reason=missing_params", file=sys.stderr, flush=True)
+        return _render_trigger_page(
+            title="Missing Parameters",
+            message="Required parameters: guid, feed_token, feed_secret",
+            state="error"
+        )
+    
+    # Authenticate the token
+    auth_result = authenticate_feed_token(token_id, secret, f"/api/posts/{guid}/download")
+    
+    if not auth_result:
+        print(f"[TRIGGER_RETURN] status=401 reason=invalid_token", file=sys.stderr, flush=True)
+        return _render_trigger_page(
+            title="Invalid Token",
+            message="The link has expired or is invalid. Please get a fresh link from your podcast app.",
+            state="error"
+        )
+    
+    print(f"[TRIGGER_AUTH] guid={guid} feed_id={auth_result.feed_id} user_id={auth_result.user_id}", file=sys.stderr, flush=True)
+    
+    # Combined tokens (feed_id=None) cannot trigger processing
+    if auth_result.feed_id is None:
+        print(f"[TRIGGER_RETURN] status=403 reason=combined_token_no_trigger", file=sys.stderr, flush=True)
+        return _render_trigger_page(
+            title="Cannot Trigger from Combined Feed",
+            message="Combined feed tokens cannot trigger processing. Please use the per-show feed URL instead.",
+            state="error"
+        )
+    
+    # Look up the post
+    post = Post.query.filter_by(guid=guid).first()
+    if not post:
+        print(f"[TRIGGER_RETURN] status=404 reason=post_not_found", file=sys.stderr, flush=True)
+        return _render_trigger_page(
+            title="Episode Not Found",
+            message="This episode could not be found.",
+            state="error"
+        )
+    
+    # Verify the token's feed_id matches the post's feed_id
+    if post.feed_id != auth_result.feed_id:
+        print(f"[TRIGGER_RETURN] status=403 reason=feed_mismatch token_feed={auth_result.feed_id} post_feed={post.feed_id}", file=sys.stderr, flush=True)
+        return _render_trigger_page(
+            title="Access Denied",
+            message="This token is not authorized for this episode.",
+            state="error"
+        )
+    
+    # Get feed info for display
+    feed = Feed.query.get(post.feed_id)
+    feed_title = feed.title if feed else "Unknown Show"
+    
+    # Build download URL for when ready
+    download_url = f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+    
+    # Check if already processed
+    if post.processed_audio_path and Path(post.processed_audio_path).exists():
+        print(f"[TRIGGER_RETURN] status=200 reason=already_processed", file=sys.stderr, flush=True)
+        return _render_trigger_page(
+            title="Episode Ready",
+            message=f"'{post.title}' is ready to play!",
+            state="ready",
+            post=post,
+            feed_title=feed_title,
+            download_url=download_url,
+            token_id=token_id,
+            secret=secret
+        )
+    
+    # Check for existing pending/running job
+    existing_job = ProcessingJob.query.filter(
+        ProcessingJob.post_guid == post.guid,
+        ProcessingJob.status.in_(["pending", "running"])
+    ).first()
+    
+    if existing_job:
+        print(f"[TRIGGER_JOB] guid={guid} action=existing job_id={existing_job.id} status={existing_job.status}", file=sys.stderr, flush=True)
+        return _render_trigger_page(
+            title="Processing In Progress",
+            message=f"'{post.title}' is being processed.",
+            state="processing",
+            post=post,
+            feed_title=feed_title,
+            download_url=download_url,
+            token_id=token_id,
+            secret=secret,
+            job=existing_job
+        )
+    
+    # Check cooldown (10 minutes)
+    _TRIGGER_COOLDOWN_SECONDS = 600
+    last_job = ProcessingJob.query.filter(
+        ProcessingJob.post_guid == post.guid
+    ).order_by(ProcessingJob.created_at.desc()).first()
+    
+    if last_job and last_job.created_at:
+        job_age = (datetime.now(timezone.utc) - last_job.created_at.replace(tzinfo=timezone.utc)).total_seconds()
+        if job_age < _TRIGGER_COOLDOWN_SECONDS:
+            remaining = int(_TRIGGER_COOLDOWN_SECONDS - job_age)
+            print(f"[TRIGGER_RETURN] status=200 reason=cooldown remaining={remaining}s", file=sys.stderr, flush=True)
+            return _render_trigger_page(
+                title="Please Wait",
+                message=f"Processing was recently attempted. Please wait {remaining // 60 + 1} minutes.",
+                state="cooldown",
+                post=post,
+                feed_title=feed_title,
+                cooldown_remaining=remaining
+            )
+    
+    # Trigger processing
+    try:
+        user_id = auth_result.user_id
+        print(f"[TRIGGER_JOB] guid={guid} action=create user_id={user_id}", file=sys.stderr, flush=True)
+        result = get_jobs_manager().start_post_processing(
+            post.guid,
+            priority="interactive",
+            triggered_by_user_id=user_id,
+            trigger_source="trigger_link",
+        )
+        job_id = result.get("job_id")
+        print(f"[TRIGGER_JOB] guid={guid} action=created job_id={job_id}", file=sys.stderr, flush=True)
+        
+        # Fetch the job we just created
+        job = ProcessingJob.query.get(job_id)
+        
+        return _render_trigger_page(
+            title="Processing Started",
+            message=f"'{post.title}' has been queued for ad removal.",
+            state="processing",
+            post=post,
+            feed_title=feed_title,
+            download_url=download_url,
+            token_id=token_id,
+            secret=secret,
+            job=job
+        )
+    except Exception as e:
+        logger.error(f"Failed to trigger processing for {guid}: {e}")
+        print(f"[TRIGGER_JOB] guid={guid} action=error error={e}", file=sys.stderr, flush=True)
+        return _render_trigger_page(
+            title="Error",
+            message=f"Failed to start processing: {e}",
+            state="error"
+        )
+
+
+@post_bp.route("/api/trigger/status", methods=["GET"])
+def trigger_status() -> flask.Response:
+    """Get processing status for an episode (JSON endpoint for polling).
+    
+    Required query params:
+    - guid: The episode GUID
+    - feed_token: The feed-scoped token ID
+    - feed_secret: The feed-scoped token secret
+    """
+    from app.auth.feed_tokens import authenticate_feed_token
+    
+    guid = flask.request.args.get("guid")
+    token_id = flask.request.args.get("feed_token")
+    secret = flask.request.args.get("feed_secret")
+    
+    print(f"[TRIGGER_STATUS] guid={guid} token_id={token_id}", file=sys.stderr, flush=True)
+    
+    if not guid or not token_id or not secret:
+        return flask.jsonify({"state": "error", "message": "Missing required parameters"}), 400
+    
+    # Authenticate the token
+    auth_result = authenticate_feed_token(token_id, secret, f"/api/posts/{guid}/download")
+    
+    if not auth_result:
+        return flask.jsonify({"state": "error", "message": "Invalid or expired token"}), 401
+    
+    # Combined tokens cannot access status
+    if auth_result.feed_id is None:
+        return flask.jsonify({"state": "error", "message": "Combined tokens not allowed"}), 403
+    
+    # Look up the post
+    post = Post.query.filter_by(guid=guid).first()
+    if not post:
+        return flask.jsonify({"state": "not_found", "message": "Episode not found"}), 404
+    
+    # Verify feed match
+    if post.feed_id != auth_result.feed_id:
+        return flask.jsonify({"state": "error", "message": "Token not authorized for this episode"}), 403
+    
+    # Build download URL
+    download_url = f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+    
+    # Check if processed
+    is_processed = post.processed_audio_path and Path(post.processed_audio_path).exists()
+    
+    if is_processed:
+        return flask.jsonify({
+            "state": "ready",
+            "processed": True,
+            "download_url": download_url,
+            "message": "Episode is ready to download",
+            "job": None
+        })
+    
+    # Check for active job
+    job = ProcessingJob.query.filter(
+        ProcessingJob.post_guid == post.guid,
+        ProcessingJob.status.in_(["pending", "running"])
+    ).first()
+    
+    if job:
+        return flask.jsonify({
+            "state": "processing" if job.status == "running" else "queued",
+            "processed": False,
+            "download_url": download_url,
+            "message": f"Step {job.current_step}/{job.total_steps}: {job.step_name or 'Processing'}",
+            "job": {
+                "id": job.id,
+                "status": job.status,
+                "current_step": job.current_step,
+                "total_steps": job.total_steps,
+                "step_name": job.step_name,
+                "progress_percentage": job.progress_percentage,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+            }
+        })
+    
+    # Check for failed job
+    last_job = ProcessingJob.query.filter(
+        ProcessingJob.post_guid == post.guid
+    ).order_by(ProcessingJob.created_at.desc()).first()
+    
+    if last_job and last_job.status == "failed":
+        return flask.jsonify({
+            "state": "failed",
+            "processed": False,
+            "download_url": None,
+            "message": f"Processing failed: {last_job.error_message or 'Unknown error'}",
+            "job": {
+                "id": last_job.id,
+                "status": last_job.status,
+                "error_message": last_job.error_message,
+                "created_at": last_job.created_at.isoformat() if last_job.created_at else None,
+            }
+        })
+    
+    # Not processed, no active job
+    return flask.jsonify({
+        "state": "not_started",
+        "processed": False,
+        "download_url": None,
+        "message": "Episode has not been processed yet",
+        "job": None
+    })
+
+
+def _render_trigger_page(
+    title: str,
+    message: str,
+    state: str,
+    post: Optional[Post] = None,
+    feed_title: str = "",
+    download_url: str = "",
+    token_id: str = "",
+    secret: str = "",
+    job: Optional[ProcessingJob] = None,
+    cooldown_remaining: int = 0
+) -> flask.Response:
+    """Render the trigger page HTML."""
+    
+    # Build status endpoint URL for polling
+    status_url = ""
+    if post and token_id and secret:
+        status_url = f"/api/trigger/status?guid={post.guid}&feed_token={token_id}&feed_secret={secret}"
+    
+    # Progress info
+    progress_percent = 0
+    step_name = "Queued"
+    if job:
+        progress_percent = int(job.progress_percentage or 0)
+        step_name = job.step_name or f"Step {job.current_step}/{job.total_steps}"
+    
+    html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title} - Podly Unicorn</title>
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }}
+        .card {{
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 480px;
+            width: 100%;
+            overflow: hidden;
+        }}
+        .header {{
+            background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }}
+        .header h1 {{ font-size: 1.5rem; margin-bottom: 4px; }}
+        .header .subtitle {{ opacity: 0.9; font-size: 0.9rem; }}
+        .content {{ padding: 24px; }}
+        .episode-info {{
+            background: #f8f4ff;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }}
+        .episode-title {{ font-weight: 600; color: #1f2937; margin-bottom: 4px; font-size: 1.1rem; }}
+        .episode-show {{ color: #6b7280; font-size: 0.9rem; }}
+        .status-message {{ text-align: center; color: #4b5563; margin-bottom: 20px; font-size: 1rem; }}
+        .progress-container {{
+            background: #e5e7eb;
+            border-radius: 999px;
+            height: 12px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }}
+        .progress-bar {{
+            background: linear-gradient(90deg, #9333ea, #7c3aed);
+            height: 100%;
+            border-radius: 999px;
+            transition: width 0.5s ease;
+            width: {progress_percent}%;
+        }}
+        .progress-bar.indeterminate {{
+            width: 30%;
+            animation: indeterminate 1.5s infinite ease-in-out;
+        }}
+        @keyframes indeterminate {{
+            0% {{ transform: translateX(-100%); }}
+            100% {{ transform: translateX(400%); }}
+        }}
+        .step-name {{ text-align: center; color: #6b7280; font-size: 0.85rem; margin-bottom: 20px; }}
+        .estimate {{ text-align: center; color: #9ca3af; font-size: 0.8rem; margin-bottom: 20px; }}
+        .btn {{
+            display: block;
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            text-align: center;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }}
+        .btn:hover {{ transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }}
+        .btn-primary {{ background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%); color: white; }}
+        .footer {{ text-align: center; padding: 16px 24px 24px; color: #9ca3af; font-size: 0.8rem; }}
+        .footer a {{ color: #7c3aed; text-decoration: none; }}
+        .error-icon {{ font-size: 3rem; margin-bottom: 12px; text-align: center; }}
+        .success-icon {{ font-size: 3rem; margin-bottom: 12px; color: #10b981; text-align: center; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header">
+            <h1>Podly Unicorn</h1>
+            <div class="subtitle">Ad-free podcast processing</div>
+        </div>
+        <div class="content">
+            {"<div class='episode-info'><div class='episode-title'>" + (post.title if post else "") + "</div><div class='episode-show'>" + feed_title + "</div></div>" if post else ""}
+            <div id="status-container">
+                {"<div class='success-icon'>&#10003;</div>" if state == "ready" else ""}
+                {"<div class='error-icon'>&#9888;</div>" if state == "error" else ""}
+                <div class="status-message" id="status-message">{message}</div>
+                {"<div class='progress-container'><div class='progress-bar " + ("indeterminate" if progress_percent == 0 else "") + "' id='progress-bar' style='width: " + str(progress_percent) + "%'></div></div>" if state == "processing" else ""}
+                {"<div class='step-name' id='step-name'>" + step_name + "</div>" if state == "processing" else ""}
+                {"<div class='estimate'>Usually takes 1-2 minutes</div>" if state == "processing" else ""}
+                {"<a href='" + download_url + "' class='btn btn-primary' id='download-btn'>Download Ad-Free Episode</a>" if state == "ready" else ""}
+            </div>
+        </div>
+        <div class="footer">
+            Return to your podcast app to listen.<br>
+            <a href="/">Podly Unicorn</a>
+        </div>
+    </div>
+    {"<script>" + _get_trigger_polling_script(status_url, download_url) + "</script>" if state == "processing" and status_url else ""}
+</body>
+</html>'''
+    
+    response = flask.make_response(html)
+    response.headers["Content-Type"] = "text/html"
+    return response
+
+
+def _get_trigger_polling_script(status_url: str, download_url: str) -> str:
+    """Generate JavaScript for polling the status endpoint."""
+    return f'''
+        const statusUrl = "{status_url}";
+        const downloadUrl = "{download_url}";
+        
+        async function checkStatus() {{
+            try {{
+                const response = await fetch(statusUrl);
+                const data = await response.json();
+                
+                const statusMessage = document.getElementById('status-message');
+                const progressBar = document.getElementById('progress-bar');
+                const stepName = document.getElementById('step-name');
+                const statusContainer = document.getElementById('status-container');
+                
+                if (data.state === 'ready') {{
+                    statusContainer.innerHTML = `
+                        <div class="success-icon">&#10003;</div>
+                        <div class="status-message">Episode is ready to play!</div>
+                        <a href="${{downloadUrl}}" class="btn btn-primary">Download Ad-Free Episode</a>
+                    `;
+                    return;
+                }} else if (data.state === 'failed') {{
+                    statusContainer.innerHTML = `
+                        <div class="error-icon">&#9888;</div>
+                        <div class="status-message">${{data.message}}</div>
+                    `;
+                    return;
+                }} else if (data.state === 'processing' || data.state === 'queued') {{
+                    if (statusMessage) statusMessage.textContent = data.message;
+                    if (data.job && progressBar) {{
+                        const percent = data.job.progress_percentage || 0;
+                        progressBar.style.width = percent + '%';
+                        progressBar.classList.toggle('indeterminate', percent === 0);
+                    }}
+                    if (stepName && data.job) {{
+                        stepName.textContent = data.job.step_name || 'Processing...';
+                    }}
+                }}
+                setTimeout(checkStatus, 2500);
+            }} catch (error) {{
+                console.error('Status check failed:', error);
+                setTimeout(checkStatus, 5000);
+            }}
+        }}
+        setTimeout(checkStatus, 2500);
+    '''
