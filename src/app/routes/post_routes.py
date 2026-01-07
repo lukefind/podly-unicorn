@@ -5,7 +5,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import flask
 from flask import Blueprint, current_app, g, jsonify, request, send_file
