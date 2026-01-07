@@ -843,6 +843,9 @@ def api_download_post(p_guid: str) -> flask.Response:
     # Check if episode is already processed and available
     is_processed = post.processed_audio_path and Path(post.processed_audio_path).exists()
     
+    # DEBUG: Log the processed state
+    print(f"[POST_STATE] guid={post.guid[:16]} processed_audio_path={post.processed_audio_path or 'None'} is_processed={is_processed} auth={auth_type} can_trigger={can_trigger_processing}", file=sys.stderr, flush=True)
+    
     # Helper to log decision with consistent format
     def _log_decision(decision: str, status: int, extra: str = "") -> None:
         msg = f"DOWNLOAD_DECISION post={post.guid[:16]} method={request_method} range={range_header or 'none'} ua={user_agent[:40] if user_agent else 'none'} auth={auth_type} decision={decision} status={status}{f' {extra}' if extra else ''}"
@@ -925,6 +928,7 @@ def api_download_post(p_guid: str) -> flask.Response:
         # This ensures the job exists in DB before we tell the client to retry
         try:
             user_id = current_user.id if current_user else None
+            print(f"[JOB_CREATE_ATTEMPT] guid={post.guid} user_id={user_id}", file=sys.stderr, flush=True)
             result = get_jobs_manager().start_post_processing(
                 post.guid,
                 priority="interactive",
@@ -932,8 +936,10 @@ def api_download_post(p_guid: str) -> flask.Response:
                 trigger_source="on_demand_rss",
             )
             job_id = result.get("job_id")
-            _log_decision("TRIGGER", 503, f"job_id={job_id}")
-            print(f"[JOB_CREATED] guid={post.guid[:16]} job_id={job_id} user_id={user_id}", file=sys.stderr, flush=True)
+            job_status = result.get("status")
+            print(f"[JOB_RESULT] guid={post.guid[:16]} result={result}", file=sys.stderr, flush=True)
+            _log_decision("TRIGGER", 503, f"job_id={job_id} job_status={job_status}")
+            print(f"[JOB_CREATED] guid={post.guid[:16]} job_id={job_id} user_id={user_id} status={job_status}", file=sys.stderr, flush=True)
             
             response = flask.make_response(("Processing started", 503))
             response.headers["Retry-After"] = "120"
