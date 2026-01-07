@@ -118,11 +118,16 @@ export default function EpisodeDetailModal({
         style={{ zIndex: 10000 }}
         onClick={onClose}
       >
+        {/* 
+          Modal container: flex-col with max-h-[90vh] for viewport constraint.
+          IMPORTANT: min-h-0 is required on flex containers to allow children to shrink 
+          and enable overflow scrolling. Without it, flex items default to min-height: min-content.
+        */}
         <div 
-          className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-purple-200 dark:border-purple-700 max-h-[90vh] flex flex-col"
+          className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-purple-200 dark:border-purple-700 max-h-[90vh] flex flex-col min-h-0"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header */}
+          {/* Header - flex-shrink-0 to prevent shrinking */}
           <div className="p-4 sm:p-6 border-b border-purple-100 dark:border-purple-800 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50 dark:from-pink-950/30 dark:via-purple-950/30 dark:to-cyan-950/30 flex-shrink-0">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
@@ -153,8 +158,8 @@ export default function EpisodeDetailModal({
             </div>
           </div>
 
-          {/* Content */}
-          <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-white dark:bg-gray-800">
+          {/* Content - scrollable area. min-h-0 required for flex child to enable overflow scroll */}
+          <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 bg-white dark:bg-gray-800">
             {/* Episode Image & Metadata */}
             <div className="flex gap-4 mb-4">
               {episode.image_url ? (
@@ -230,7 +235,7 @@ export default function EpisodeDetailModal({
               <div className="mt-4">
                 <h3 className="text-sm font-semibold text-purple-900 dark:text-purple-100 mb-2">Description</h3>
                 <div 
-                  className="text-sm text-purple-700 dark:text-purple-300 prose prose-sm prose-purple dark:prose-invert max-w-none"
+                  className="text-sm text-purple-700 dark:text-purple-300 leading-relaxed"
                   style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                   dangerouslySetInnerHTML={{ 
                     __html: episode.description.replace(/\n/g, '<br />')

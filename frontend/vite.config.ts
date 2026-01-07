@@ -31,6 +31,18 @@ export default defineConfig({
         target: BACKEND_TARGET,
         changeOrigin: true,
         secure: false
+      },
+      // Proxy trigger endpoint for on-demand processing
+      '/trigger': {
+        target: BACKEND_TARGET,
+        changeOrigin: true,
+        secure: false
+      },
+      // Proxy images for trigger page favicon
+      '/images': {
+        target: BACKEND_TARGET,
+        changeOrigin: true,
+        secure: false
       }
     }
   },
