@@ -43,7 +43,7 @@ def find_unprocessed_episode(items: list, enclosure_urls: list, trigger_links: l
 def main():
     parser = argparse.ArgumentParser(description="Verify RSS trigger links and behavior")
     parser.add_argument("--combined-url", required=True, help="Combined feed URL with tokens")
-    parser.add_argument("--expected-domain", default="your-domain.com", help="Expected domain in URLs")
+    parser.add_argument("--expected-domain", default="localhost", help="Expected domain in URLs")
     parser.add_argument("--skip-trigger-test", action="store_true", help="Skip the trigger job creation test")
     parser.add_argument("--poll-timeout", type=int, default=180, help="Timeout for polling status (seconds)")
     args = parser.parse_args()

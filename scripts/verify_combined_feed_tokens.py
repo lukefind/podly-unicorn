@@ -550,7 +550,7 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Verify combined feed token implementation")
-    parser.add_argument("--host", default="your-domain.com", help="Public hostname (default: your-domain.com)")
+    parser.add_argument("--host", default="localhost:5001", help="Public hostname (default: localhost:5001)")
     parser.add_argument("--base-url", default=None, help="Base URL for requests (default: https://{host})")
     parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching combined feed (schema/bounds only)")
     parser.add_argument("--skip-e2e", action="store_true", help="Skip end-to-end job creation test")

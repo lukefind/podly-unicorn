@@ -8,8 +8,9 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import Sidebar from './components/layout/Sidebar';
 import OnboardingModal, { useOnboarding } from './components/OnboardingModal';
 import DashboardPage from './pages/DashboardPage';
-import PodcastsPage from './pages/PodcastsPage';
-import CombinedEpisodesPage from './pages/CombinedEpisodesPage';
+import PodcastsLayout from './layouts/PodcastsLayout';
+import FeedDetailView from './pages/FeedDetailView';
+import CombinedEpisodesView from './pages/CombinedEpisodesView';
 import JobsPage from './pages/JobsPage';
 import PresetsPage from './pages/PresetsPage';
 import ConfigPage from './pages/ConfigPage';
@@ -111,8 +112,10 @@ function AppShell() {
         <main className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-3 sm:p-4 lg:p-6 pb-24 lg:pb-6">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
-            <Route path="/podcasts" element={<PodcastsPage />} />
-            <Route path="/podcasts/combined" element={<CombinedEpisodesPage />} />
+            <Route path="/podcasts" element={<PodcastsLayout />}>
+              <Route index element={<FeedDetailView />} />
+              <Route path="combined" element={<CombinedEpisodesView />} />
+            </Route>
             <Route path="/jobs" element={<JobsPage />} />
             {showSettingsRoute && <Route path="/subscriptions" element={<SubscriptionsPage />} />}
             {showSettingsRoute && <Route path="/presets" element={<PresetsPage />} />}

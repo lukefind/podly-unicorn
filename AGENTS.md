@@ -280,7 +280,24 @@ The `api_key` and `api_base` are passed explicitly in completion calls to suppor
 
 **On-Demand**: Episodes are NOT auto-processed when enabled. Processing only triggers when:
 1. User clicks "Process" button in web UI
-2. Podcast app requests episode from Podly RSS feed
+2. User clicks trigger link in podcast app (RSS `<item><link>` points to `/trigger` page)
+
+### Trigger Page Architecture
+
+The RSS feed includes a trigger URL in each episode's `<item><link>`:
+```
+/trigger?guid=X&feed_token=Y&feed_secret=Z
+```
+
+When users click this link in their podcast app, they see a progress page that:
+- Validates the feed-scoped token
+- Starts processing if not already done
+- Shows real-time progress
+- Redirects to download when complete
+
+**Key design**: Download endpoint (`/api/posts/<guid>/download`) does NOT trigger processing - it only serves audio (processed or original). This prevents accidental mass processing from RSS polling.
+
+See `docs/ON_DEMAND_PROCESSING_IMPLEMENTATION.md` for full details.
 
 ### Episode States
 - **Enabled** (blue badge) - Eligible for processing, but not yet processed
