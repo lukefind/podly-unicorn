@@ -1301,13 +1301,15 @@ def trigger_status() -> flask.Response:
     is_processed = post.processed_audio_path and Path(post.processed_audio_path).exists()
     
     if is_processed:
-        return flask.jsonify({
+        response = flask.jsonify({
             "state": "ready",
             "processed": True,
             "download_url": download_url,
             "message": "Episode is ready to download",
             "job": None
         })
+        response.headers["Cache-Control"] = "no-store"
+        return response
     
     # Check for active job
     job = ProcessingJob.query.filter(
@@ -1316,7 +1318,7 @@ def trigger_status() -> flask.Response:
     ).first()
     
     if job:
-        return flask.jsonify({
+        response = flask.jsonify({
             "state": "processing" if job.status == "running" else "queued",
             "processed": False,
             "download_url": download_url,
@@ -1332,6 +1334,8 @@ def trigger_status() -> flask.Response:
                 "updated_at": job.updated_at.isoformat() if job.updated_at else None,
             }
         })
+        response.headers["Cache-Control"] = "no-store"
+        return response
     
     # Check for failed job
     last_job = ProcessingJob.query.filter(
@@ -1339,7 +1343,7 @@ def trigger_status() -> flask.Response:
     ).order_by(ProcessingJob.created_at.desc()).first()
     
     if last_job and last_job.status == "failed":
-        return flask.jsonify({
+        response = flask.jsonify({
             "state": "failed",
             "processed": False,
             "download_url": None,
@@ -1351,15 +1355,19 @@ def trigger_status() -> flask.Response:
                 "created_at": last_job.created_at.isoformat() if last_job.created_at else None,
             }
         })
+        response.headers["Cache-Control"] = "no-store"
+        return response
     
     # Not processed, no active job
-    return flask.jsonify({
+    response = flask.jsonify({
         "state": "not_started",
         "processed": False,
         "download_url": None,
         "message": "Episode has not been processed yet",
         "job": None
     })
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def _render_trigger_error_page(
