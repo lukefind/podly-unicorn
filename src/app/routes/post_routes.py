@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -780,6 +781,9 @@ def api_download_post(p_guid: str) -> flask.Response:
     - 503 Service Unavailable for "not ready" (NOT 202, which confuses podcast apps)
     - Authorization via feed token in URL (podcast apps don't send cookies)
     """
+    # DEBUG: Force print to stderr to verify route is hit (bypasses logging config)
+    print(f"[DOWNLOAD_HIT] guid={p_guid[:16]} method={flask.request.method} range={flask.request.headers.get('Range')}", file=sys.stderr, flush=True)
+    
     post = Post.query.filter_by(guid=p_guid).first()
     if post is None:
         logger.warning(f"Download request for non-existent post: {p_guid}")
@@ -842,17 +846,10 @@ def api_download_post(p_guid: str) -> flask.Response:
     
     # Helper to log decision with consistent format
     def _log_decision(decision: str, status: int, extra: str = "") -> None:
-        logger.info(
-            "DOWNLOAD_DECISION post=%s method=%s range=%s ua=%s auth=%s decision=%s status=%d%s",
-            post.guid[:16],
-            request_method,
-            range_header or "none",
-            user_agent[:40] if user_agent else "none",
-            auth_type,
-            decision,
-            status,
-            f" {extra}" if extra else "",
-        )
+        msg = f"DOWNLOAD_DECISION post={post.guid[:16]} method={request_method} range={range_header or 'none'} ua={user_agent[:40] if user_agent else 'none'} auth={auth_type} decision={decision} status={status}{f' {extra}' if extra else ''}"
+        logger.info(msg)
+        # Also print to stderr to ensure visibility in docker logs
+        print(f"[DECISION] {msg}", file=sys.stderr, flush=True)
     
     if is_processed:
         # Episode is ready - serve it (read access is sufficient)

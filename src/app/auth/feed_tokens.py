@@ -18,7 +18,7 @@ logger = logging.getLogger("global_logger")
 @dataclass(slots=True)
 class FeedTokenAuthResult:
     user: AuthenticatedUser
-    feed_id: int
+    feed_id: Optional[int]  # None for combined feed tokens
     token: FeedAccessToken
 
 
