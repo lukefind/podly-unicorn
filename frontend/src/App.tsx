@@ -9,6 +9,7 @@ import Sidebar from './components/layout/Sidebar';
 import OnboardingModal, { useOnboarding } from './components/OnboardingModal';
 import DashboardPage from './pages/DashboardPage';
 import PodcastsPage from './pages/PodcastsPage';
+import CombinedEpisodesPage from './pages/CombinedEpisodesPage';
 import JobsPage from './pages/JobsPage';
 import PresetsPage from './pages/PresetsPage';
 import ConfigPage from './pages/ConfigPage';
@@ -111,6 +112,7 @@ function AppShell() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/podcasts" element={<PodcastsPage />} />
+            <Route path="/podcasts/combined" element={<CombinedEpisodesPage />} />
             <Route path="/jobs" element={<JobsPage />} />
             {showSettingsRoute && <Route path="/subscriptions" element={<SubscriptionsPage />} />}
             {showSettingsRoute && <Route path="/presets" element={<PresetsPage />} />}

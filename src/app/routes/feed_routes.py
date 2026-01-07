@@ -255,6 +255,147 @@ def search_feeds() -> ResponseReturnValue:
     )
 
 
+@feed_bp.route("/api/feeds/combined/episodes", methods=["GET"])
+def get_combined_episodes() -> Response:
+    """Get combined episodes from all subscribed feeds with status info.
+    
+    Query params:
+    - limit: Max episodes to return (default 100)
+    - offset: Pagination offset (default 0)
+    - unprocessed_only: If true, only return unprocessed episodes
+    - queued_only: If true, only return episodes with pending/running jobs
+    """
+    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
+    from app.auth.feed_tokens import create_feed_access_token
+    
+    settings = current_app.config.get("AUTH_SETTINGS")
+    current = getattr(g, "current_user", None)
+    
+    if not settings or not settings.require_auth:
+        return jsonify({"error": "Combined episodes requires authentication"}), 400
+    
+    if not current:
+        return jsonify({"error": "Authentication required"}), 401
+    
+    user = User.query.get(current.id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    # Parse query params
+    limit = min(int(request.args.get("limit", 100)), 200)
+    offset = int(request.args.get("offset", 0))
+    unprocessed_only = request.args.get("unprocessed_only", "").lower() == "true"
+    queued_only = request.args.get("queued_only", "").lower() == "true"
+    
+    # Get subscribed feed IDs
+    subscriptions = UserFeedSubscription.query.filter_by(user_id=current.id).all()
+    feed_ids = [sub.feed_id for sub in subscriptions]
+    
+    if not feed_ids:
+        return jsonify({
+            "episodes": [],
+            "total": 0,
+            "subscribed_feeds": 0
+        })
+    
+    # Build query for posts
+    query = Post.query.filter(Post.feed_id.in_(feed_ids))
+    
+    # Apply filters
+    if unprocessed_only:
+        query = query.filter(
+            (Post.processed_audio_path == None) | (Post.processed_audio_path == "")
+        )
+    
+    # Get total count before pagination
+    total = query.count()
+    
+    # Get posts with pagination
+    posts = query.order_by(Post.release_date.desc()).offset(offset).limit(limit).all()
+    
+    # Get all feeds for display
+    feeds_by_id = {f.id: f for f in Feed.query.filter(Feed.id.in_(feed_ids)).all()}
+    
+    # Get active jobs for these posts
+    post_guids = [p.guid for p in posts]
+    active_jobs = ProcessingJob.query.filter(
+        ProcessingJob.post_guid.in_(post_guids),
+        ProcessingJob.status.in_(["pending", "running"])
+    ).all()
+    jobs_by_guid = {j.post_guid: j for j in active_jobs}
+    
+    # Create feed-scoped tokens for each feed
+    feed_tokens = {}
+    for feed_id in feed_ids:
+        feed = feeds_by_id.get(feed_id)
+        if feed:
+            token_id, secret = create_feed_access_token(user, feed)
+            feed_tokens[feed_id] = (token_id, secret)
+    
+    # Filter for queued_only if requested
+    if queued_only:
+        posts = [p for p in posts if p.guid in jobs_by_guid]
+        total = len(posts)
+    
+    # Build response
+    episodes = []
+    for post in posts:
+        feed = feeds_by_id.get(post.feed_id)
+        job = jobs_by_guid.get(post.guid)
+        token_pair = feed_tokens.get(post.feed_id)
+        
+        # Determine status
+        has_processed = bool(post.processed_audio_path and Path(post.processed_audio_path).exists())
+        if has_processed:
+            status = "ready"
+        elif job:
+            status = "processing" if job.status == "running" else "queued"
+        else:
+            status = "not_processed"
+        
+        # Build trigger URL
+        trigger_url = None
+        enclosure_url = None
+        if token_pair:
+            token_id, secret = token_pair
+            trigger_url = f"/trigger?guid={post.guid}&feed_token={token_id}&feed_secret={secret}"
+            enclosure_url = f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+        
+        episodes.append({
+            "id": post.id,
+            "guid": post.guid,
+            "title": post.title,
+            "description": post.description[:200] if post.description else None,
+            "release_date": post.release_date.isoformat() if post.release_date else None,
+            "duration": post.duration,
+            "feed_id": post.feed_id,
+            "feed_title": feed.title if feed else "Unknown",
+            "feed_image": feed.image_url if feed else None,
+            "image_url": post.image_url,
+            "whitelisted": post.whitelisted,
+            "has_processed_audio": has_processed,
+            "status": status,
+            "job": {
+                "id": job.id,
+                "status": job.status,
+                "current_step": job.current_step,
+                "total_steps": job.total_steps,
+                "step_name": job.step_name,
+                "progress_percentage": job.progress_percentage,
+            } if job else None,
+            "trigger_url": trigger_url,
+            "enclosure_url": enclosure_url,
+        })
+    
+    return jsonify({
+        "episodes": episodes,
+        "total": total,
+        "subscribed_feeds": len(feed_ids),
+        "limit": limit,
+        "offset": offset,
+    })
+
+
 @feed_bp.route("/feed/combined", methods=["GET"])
 def get_combined_feed() -> Response:
     """Get a combined RSS feed with all episodes from user's subscribed podcasts.

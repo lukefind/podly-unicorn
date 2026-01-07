@@ -573,6 +573,30 @@ export default function PodcastsPage() {
         />
 
         <div className="flex-1 overflow-y-auto space-y-2 pb-16">
+          {/* Pinned Combined RSS entry */}
+          {requireAuth && feedsArray.length > 0 && (
+            <a
+              href="/podcasts/combined"
+              className="block p-3 rounded-lg bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50 dark:from-pink-950/30 dark:via-purple-950/30 dark:to-cyan-950/30 border-2 border-purple-300 dark:border-purple-600 hover:border-purple-400 dark:hover:border-purple-500 transition-all shadow-sm"
+            >
+              <div className="flex items-center gap-3">
+                <img src="/images/logos/unicorn-logo.png" alt="" className="w-10 h-10 rounded-lg" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-purple-900 dark:text-purple-100 truncate">Combined Episodes</span>
+                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300">
+                      {feedsArray.length} shows
+                    </span>
+                  </div>
+                  <p className="text-xs text-purple-600 dark:text-purple-400 truncate">All episodes from your subscriptions</p>
+                </div>
+                <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </a>
+          )}
+
           {filteredFeeds.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500">No podcasts found</p>
