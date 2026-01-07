@@ -197,6 +197,16 @@ export const feedsApi = {
     return response.data;
   },
 
+  getTriggerLink: async (guid: string): Promise<{
+    trigger_url: string;
+    guid: string;
+    feed_id: number;
+    feed_title: string;
+  }> => {
+    const response = await api.get(`/api/posts/${guid}/trigger_link`);
+    return response.data;
+  },
+
   // Admin feed subscriptions overview
   getAdminFeedSubscriptions: async (): Promise<{
     feeds: Array<{

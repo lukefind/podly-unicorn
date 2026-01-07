@@ -1163,16 +1163,53 @@ export default function PodcastsPage() {
                   </>
                 )}
                 {!selectedEpisode.has_processed_audio && selectedEpisode.whitelisted && (
-                  <ProcessButton 
-                    episodeGuid={selectedEpisode.guid}
-                    feedId={selectedFeed?.id}
-                    onProcessStart={() => {
-                      setProcessingPollTriggers(prev => ({
-                        ...prev,
-                        [selectedEpisode.guid]: Date.now()
-                      }));
-                    }}
-                  />
+                  <>
+                    <ProcessButton 
+                      episodeGuid={selectedEpisode.guid}
+                      feedId={selectedFeed?.id}
+                      onProcessStart={() => {
+                        setProcessingPollTriggers(prev => ({
+                          ...prev,
+                          [selectedEpisode.guid]: Date.now()
+                        }));
+                      }}
+                    />
+                    <button
+                      onClick={async () => {
+                        try {
+                          const data = await feedsApi.getTriggerLink(selectedEpisode.guid);
+                          window.open(data.trigger_url, '_blank');
+                        } catch {
+                          toast.error('Failed to get processing link');
+                        }
+                      }}
+                      className="px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 border bg-white border-purple-200 text-purple-600 hover:bg-purple-50"
+                      title="Opens a page that queues processing and shows progress"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      Open processing page
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const data = await feedsApi.getTriggerLink(selectedEpisode.guid);
+                          await copyTextToClipboard(data.trigger_url);
+                          toast.success('Processing link copied!');
+                        } catch {
+                          toast.error('Failed to copy processing link');
+                        }
+                      }}
+                      className="px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 border bg-white border-purple-200 text-purple-600 hover:bg-purple-50"
+                      title="Copy link to share"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                      </svg>
+                      Copy link
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={() => {
@@ -1188,6 +1225,12 @@ export default function PodcastsPage() {
                   {selectedEpisode.whitelisted ? 'Disable' : 'Enable'}
                 </button>
               </div>
+              {/* Helper text for unprocessed episodes */}
+              {!selectedEpisode.has_processed_audio && selectedEpisode.whitelisted && (
+                <p className="text-xs text-purple-500 mt-3">
+                  Open processing page to queue ad removal. Wait 1-2 minutes, then download.
+                </p>
+              )}
             </div>
           </div>
         </div>,

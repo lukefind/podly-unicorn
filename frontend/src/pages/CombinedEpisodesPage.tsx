@@ -1,17 +1,26 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { feedsApi } from '../services/api';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { copyTextToClipboard } from '../services/clipboard';
 import PlayButton from '../components/PlayButton';
 import DownloadButton from '../components/DownloadButton';
+import type { Feed } from '../types';
 
 export default function CombinedEpisodesPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { requireAuth } = useAuth();
   const [showUnprocessedOnly, setShowUnprocessedOnly] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Fetch feeds for the left sidebar
+  const { data: feeds, isLoading: feedsLoading } = useQuery({
+    queryKey: ['feeds'],
+    queryFn: feedsApi.getFeeds,
+  });
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['combined-episodes', showUnprocessedOnly],
@@ -56,6 +65,25 @@ export default function CombinedEpisodesPage() {
     }
   };
 
+  const handleOpenTriggerPage = async (guid: string) => {
+    try {
+      const data = await feedsApi.getTriggerLink(guid);
+      window.open(data.trigger_url, '_blank');
+    } catch {
+      toast.error('Failed to get processing link');
+    }
+  };
+
+  const handleCopyTriggerLink = async (guid: string) => {
+    try {
+      const data = await feedsApi.getTriggerLink(guid);
+      await copyTextToClipboard(data.trigger_url);
+      toast.success('Processing link copied!');
+    } catch {
+      toast.error('Failed to copy processing link');
+    }
+  };
+
   if (!requireAuth) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -64,42 +92,121 @@ export default function CombinedEpisodesPage() {
     );
   }
 
+  const feedsArray = Array.isArray(feeds) ? feeds : [];
+  const filteredFeeds = feedsArray.filter((feed: Feed) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return feed.title?.toLowerCase().includes(term) || feed.author?.toLowerCase().includes(term);
+  });
+
   const episodes = data?.episodes || [];
   const subscribedFeeds = data?.subscribed_feeds || 0;
   const totalEpisodes = data?.total || 0;
 
-  return (
-    <div className="h-full flex flex-col lg:flex-row gap-4">
-      {/* Left Panel - Back link styled like feed list */}
-      <div className="lg:w-80 flex-shrink-0 flex flex-col">
-        <Link
-          to="/podcasts"
-          className="flex items-center gap-2 text-purple-600 hover:text-purple-800 mb-4 text-sm font-medium"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Podcasts
-        </Link>
+  if (feedsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      </div>
+    );
+  }
 
-        {/* Filter */}
-        <div className="mb-4">
-          <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showUnprocessedOnly}
-              onChange={(e) => setShowUnprocessedOnly(e.target.checked)}
-              className="rounded border-purple-300 text-purple-600 focus:ring-purple-500"
-            />
-            <span className="text-sm text-purple-700 dark:text-purple-300">Show unprocessed only</span>
-          </label>
+  return (
+    <div className="min-h-full lg:h-full flex flex-col lg:flex-row gap-4 lg:gap-6">
+      {/* Left Panel - Feed List (same as PodcastsPage) */}
+      <div className="lg:w-80 flex-shrink-0 flex flex-col hidden lg:flex">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Podcasts</h1>
+        </div>
+
+        <input
+          type="search"
+          placeholder="Search podcasts..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full px-3 py-2 mb-4 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+        />
+
+        <div className="flex-1 overflow-y-auto space-y-2 pb-16">
+          {/* Pinned Combined RSS entry - currently selected */}
+          <div
+            className="p-3 rounded-lg bg-purple-100 dark:bg-purple-900/40 border-2 border-purple-500"
+          >
+            <div className="flex items-center gap-3">
+              <img src="/images/logos/unicorn-logo.png" alt="" className="w-12 h-12 rounded-lg" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-purple-900 dark:text-purple-100 truncate">Combined Episodes</span>
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300">
+                    {feedsArray.length} shows
+                  </span>
+                </div>
+                <p className="text-xs text-purple-600 dark:text-purple-400 truncate">All episodes from your subscriptions</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Feed list */}
+          {filteredFeeds.map((feed: Feed) => (
+            <div
+              key={feed.id}
+              onClick={() => navigate(`/podcasts?feed=${feed.id}`)}
+              className="p-3 rounded-lg transition-all cursor-pointer bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 hover:border-purple-300 dark:hover:border-purple-600/50 hover:shadow-sm"
+            >
+              <div className="flex items-center gap-3">
+                {feed.image_url ? (
+                  <img
+                    src={feed.image_url}
+                    alt={feed.title}
+                    className="w-12 h-12 rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="font-medium text-gray-900 dark:text-gray-100 truncate">{feed.title}</h3>
+                    {(feed.auto_download_enabled || feed.auto_download_enabled_by_user) && (
+                      <span 
+                        className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                        title="Auto-process enabled for new episodes"
+                      >
+                        Auto
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{feed.posts_count} episodes</p>
+                  {feed.effective_prompt_preset?.name && (
+                    <p className="text-[11px] text-purple-600 dark:text-purple-400 truncate">
+                      Preset: {feed.effective_prompt_preset.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Right Panel - Episode list */}
-      <div className="flex-1 flex flex-col min-w-0 bg-gradient-to-br from-purple-50/50 via-pink-50/30 to-cyan-50/50 dark:from-purple-950/30 dark:via-pink-950/20 dark:to-cyan-950/30 rounded-xl border border-purple-200/50 dark:border-purple-700/30 overflow-hidden">
+      {/* Right Panel - Combined Episodes */}
+      <div className="flex-1 w-full flex flex-col bg-white/80 dark:bg-gray-900/50 backdrop-blur-sm rounded-xl border border-purple-200/50 dark:border-purple-700/30 shadow-sm overflow-hidden">
         {/* Header */}
-        <div className="p-4 sm:p-6 border-b border-purple-200/50 dark:border-purple-700/30 bg-white/50 dark:bg-purple-950/30">
+        <div className="p-4 sm:p-6 border-b border-purple-100/50 dark:border-purple-800/30 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50 dark:from-pink-950/20 dark:via-purple-950/20 dark:to-cyan-950/20">
+          {/* Back button - mobile only */}
+          <Link
+            to="/podcasts"
+            className="lg:hidden flex items-center gap-1 text-purple-500 hover:text-purple-700 mb-3 -mt-1"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span className="text-sm">Back</span>
+          </Link>
+
           <div className="flex items-start gap-3">
             <img
               src="/images/logos/unicorn-logo.png"
@@ -115,8 +222,8 @@ export default function CombinedEpisodesPage() {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2 mt-4">
+          {/* Actions row with filter */}
+          <div className="flex flex-wrap items-center gap-2 mt-4">
             <button
               onClick={handleCopyRss}
               className="px-3 py-2 text-sm font-medium text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2"
@@ -133,6 +240,16 @@ export default function CombinedEpisodesPage() {
             >
               Refresh
             </button>
+            {/* Filter in header */}
+            <label className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 cursor-pointer ml-auto">
+              <input
+                type="checkbox"
+                checked={showUnprocessedOnly}
+                onChange={(e) => setShowUnprocessedOnly(e.target.checked)}
+                className="rounded border-purple-300 text-purple-600 focus:ring-purple-500"
+              />
+              <span className="text-sm text-purple-700 dark:text-purple-300">Unprocessed only</span>
+            </label>
           </div>
         </div>
 
@@ -215,7 +332,7 @@ export default function CombinedEpisodesPage() {
                     )}
                   </div>
 
-                  {/* Bottom row: Actions - matching PodcastsPage style */}
+                  {/* Bottom row: Actions */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     {/* Play button for processed episodes */}
                     {episode.has_processed_audio && (
@@ -245,12 +362,13 @@ export default function CombinedEpisodesPage() {
                       />
                     )}
 
-                    {/* Process button for enabled but not yet processed */}
+                    {/* Process button (logged-in) for enabled but not yet processed */}
                     {episode.whitelisted && !episode.has_processed_audio && (
                       <button
                         onClick={() => processMutation.mutate(episode.guid)}
                         disabled={processMutation.isPending}
                         className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 border bg-purple-600 border-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                        title="Process now (requires login)"
                       >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -259,7 +377,42 @@ export default function CombinedEpisodesPage() {
                         Process
                       </button>
                     )}
+
+                    {/* Open processing page (public trigger) - for unprocessed enabled episodes */}
+                    {episode.whitelisted && !episode.has_processed_audio && (
+                      <button
+                        onClick={() => handleOpenTriggerPage(episode.guid)}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 border bg-white dark:bg-purple-950/50 border-purple-200 dark:border-purple-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/50"
+                        title="Opens a page that queues processing and shows progress"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        Open processing page
+                      </button>
+                    )}
+
+                    {/* Copy processing link - for unprocessed enabled episodes */}
+                    {episode.whitelisted && !episode.has_processed_audio && (
+                      <button
+                        onClick={() => handleCopyTriggerLink(episode.guid)}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 border bg-white dark:bg-purple-950/50 border-purple-200 dark:border-purple-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/50"
+                        title="Copy link to share"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                        Copy link
+                      </button>
+                    )}
                   </div>
+
+                  {/* Helper text for unprocessed episodes */}
+                  {episode.whitelisted && !episode.has_processed_audio && (
+                    <p className="text-[11px] text-purple-400 dark:text-purple-500 mt-2">
+                      Open processing page to queue ad removal. Wait 1-2 minutes, then download.
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

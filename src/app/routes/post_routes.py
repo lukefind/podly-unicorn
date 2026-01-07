@@ -996,6 +996,54 @@ def download_original_post_legacy(p_guid: str) -> flask.Response:
 # TRIGGER ENDPOINTS - User-initiated processing via capability URLs
 # =============================================================================
 
+@post_bp.route("/api/posts/<string:guid>/trigger_link", methods=["GET"])
+def get_trigger_link(guid: str) -> flask.Response:
+    """Get the public trigger URL for an episode.
+    
+    Requires logged-in session auth. Returns a feed-scoped trigger URL
+    that can be used without login to trigger processing.
+    
+    Returns JSON: { "trigger_url": "https://..." }
+    """
+    from app.auth.feed_tokens import get_or_create_feed_token
+    from app.feeds import _get_base_url
+    
+    # Require session auth
+    current_user = getattr(g, "current_user", None)
+    if not current_user:
+        return jsonify({"error": "Authentication required"}), 401
+    
+    # Look up the post
+    post = Post.query.filter_by(guid=guid).first()
+    if not post:
+        return jsonify({"error": "Episode not found"}), 404
+    
+    # Get the feed for this post
+    feed = Feed.query.get(post.feed_id)
+    if not feed:
+        return jsonify({"error": "Feed not found"}), 404
+    
+    # Get or create a feed-scoped token for this user
+    token = get_or_create_feed_token(current_user.id, feed.id)
+    if not token:
+        return jsonify({"error": "Failed to create token"}), 500
+    
+    # Build the public trigger URL
+    base_url = _get_base_url()
+    # Force HTTPS for non-localhost
+    if not base_url.startswith("http://localhost") and not base_url.startswith("http://127.0.0.1"):
+        base_url = base_url.replace("http://", "https://")
+    
+    trigger_url = f"{base_url}/trigger?guid={post.guid}&feed_token={token.id}&feed_secret={token.secret}"
+    
+    return jsonify({
+        "trigger_url": trigger_url,
+        "guid": post.guid,
+        "feed_id": feed.id,
+        "feed_title": feed.title,
+    })
+
+
 @post_bp.route("/trigger", methods=["GET"])
 def trigger_processing() -> flask.Response:
     """Trigger processing for an episode via a capability URL.
