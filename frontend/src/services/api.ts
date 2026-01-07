@@ -75,6 +75,46 @@ export const feedsApi = {
     return response.data;
   },
 
+  getCombinedEpisodes: async (params?: {
+    limit?: number;
+    offset?: number;
+    unprocessed_only?: boolean;
+    queued_only?: boolean;
+  }): Promise<{
+    episodes: Array<{
+      id: number;
+      guid: string;
+      title: string;
+      description: string | null;
+      release_date: string | null;
+      duration: number | null;
+      feed_id: number;
+      feed_title: string;
+      feed_image: string | null;
+      image_url: string | null;
+      whitelisted: boolean;
+      has_processed_audio: boolean;
+      status: 'ready' | 'processing' | 'queued' | 'not_processed';
+      job: {
+        id: string;
+        status: string;
+        current_step: number;
+        total_steps: number;
+        step_name: string;
+        progress_percentage: number;
+      } | null;
+      trigger_url: string | null;
+      enclosure_url: string | null;
+    }>;
+    total: number;
+    subscribed_feeds: number;
+    limit: number;
+    offset: number;
+  }> => {
+    const response = await api.get('/api/feeds/combined/episodes', { params });
+    return response.data;
+  },
+
   refreshFeed: async (
     feedId: number
   ): Promise<{ status: string; message?: string }> => {
