@@ -321,15 +321,36 @@ def verify_enclosure_tokens(columns: List[str], base_url: str) -> Tuple[bool, Op
     return success, sample_url, sample_guid, combined_token_id, combined_secret
 
 
+def http_get_with_range(url: str, range_header: str) -> Tuple[int, str]:
+    """Make HTTP GET request with Range header and return (status_code, body)."""
+    try:
+        req = urllib.request.Request(url)
+        req.add_header("User-Agent", "Podly-Verification/1.0")
+        req.add_header("Range", range_header)
+        with urllib.request.urlopen(req, timeout=30) as response:
+            return response.status, response.read().decode("utf-8", "ignore")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8", "ignore") if e.fp else ""
+    except Exception as e:
+        return 0, str(e)
+
+
 def test_end_to_end_job_creation(base_url: str, enclosure_url: str, guid: str, 
                                   combined_token_id: str, combined_secret: str) -> bool:
     """
     End-to-end test that proves:
-    1. Using enclosure URL from combined feed creates a job for that GUID
-    2. Using combined token against same GUID does NOT create a job
+    1. Probe requests (HEAD, small Range) do NOT create jobs
+    2. Full GET with feed-scoped token creates a job (returns 503)
+    3. Combined token does NOT create a job (returns 503 or 204)
     
     This is the deterministic test that proves Podcast Addict will trigger processing.
     Uses public URLs (via Caddy) for all requests.
+    
+    Expected responses:
+    - Probe (HEAD/small Range): 204 No Content, no job
+    - Feed-scoped full GET: 503 Service Unavailable + Retry-After, job created
+    - Combined token: 503 Service Unavailable, no job created
+    - Already processed: 200 OK with audio
     """
     print("\n" + "=" * 60)
     print("F) End-to-End Job Creation Test")
@@ -342,47 +363,64 @@ def test_end_to_end_job_creation(base_url: str, enclosure_url: str, guid: str,
     initial_job_count = count_jobs_for_guid(guid)
     print(f"Initial job count for GUID: {initial_job_count}")
     
-    # Step 1: Hit enclosure URL (feed-scoped token) - should trigger job
-    print("\nStep 1: Requesting enclosure URL (feed-scoped token)...")
+    # --- Step 1: Probe request (small Range) - should NOT trigger job ---
+    print("\nStep 1: Probe request (Range: bytes=0-1023) - should NOT trigger...")
+    status_probe, body_probe = http_get_with_range(enclosure_url, "bytes=0-1023")
+    print(f"  Response: {status_probe}")
+    print(f"  Body: {body_probe[:50]}..." if len(body_probe) > 50 else f"  Body: {body_probe}")
+    
+    post_probe_count = count_jobs_for_guid(guid)
+    print(f"  Job count after probe: {post_probe_count}")
+    
+    probe_triggered = post_probe_count > initial_job_count
+    if probe_triggered:
+        print("  [FAIL] Probe request triggered job creation!")
+        probe_ok = False
+    elif status_probe == 204:
+        print("  [PASS] Probe returned 204, no job created")
+        probe_ok = True
+    elif status_probe == 200:
+        print("  [INFO] Episode already processed (200)")
+        probe_ok = True
+    else:
+        print(f"  [WARN] Unexpected probe response: {status_probe}")
+        probe_ok = status_probe in (204, 206)  # 206 Partial Content is also acceptable
+    
+    # --- Step 2: Full GET with feed-scoped token - should trigger job ---
+    print("\nStep 2: Full GET (feed-scoped token) - should trigger job...")
     print(f"  URL: {enclosure_url[:80]}...")
     
-    # Use the enclosure URL directly (it's already a public HTTPS URL)
     status, body = http_get(enclosure_url)
     print(f"  Response: {status}")
-    print(f"  Body preview: {body[:100]}..." if len(body) > 100 else f"  Body: {body}")
+    print(f"  Body: {body[:100]}..." if len(body) > 100 else f"  Body: {body}")
     
-    # Check job count after enclosure request
     post_enclosure_count = count_jobs_for_guid(guid)
-    print(f"  Job count after enclosure request: {post_enclosure_count}")
+    print(f"  Job count after full GET: {post_enclosure_count}")
     
-    # For unprocessed episodes, we expect either:
-    # - 202 + job created (trigger_source=on_demand_rss)
-    # - 200 (already processed)
-    enclosure_triggered = post_enclosure_count > initial_job_count
+    enclosure_triggered = post_enclosure_count > post_probe_count
     if status == 200:
         print("  [INFO] Episode already processed - skipping job creation check")
         enclosure_ok = True
-    elif status == 202 and enclosure_triggered:
-        print("  [PASS] Feed-scoped token triggered job creation")
+    elif status == 503 and enclosure_triggered:
+        print("  [PASS] Feed-scoped token triggered job creation (503 + job)")
         enclosure_ok = True
-    elif status == 202 and not enclosure_triggered:
+    elif status == 503 and not enclosure_triggered:
         # Could be cooldown or existing job
-        print("  [INFO] 202 but no new job - may be cooldown or existing job")
+        print("  [INFO] 503 but no new job - may be cooldown or existing job")
         enclosure_ok = True  # Not a failure
     else:
-        print(f"  [WARN] Unexpected response: {status}")
+        print(f"  [WARN] Unexpected response: {status} (expected 503 or 200)")
         enclosure_ok = False
     
-    # Step 2: Hit same GUID with combined token - should NOT trigger job
-    print("\nStep 2: Requesting same GUID with combined token...")
+    # --- Step 3: Combined token request - should NOT trigger job ---
+    print("\nStep 3: Full GET (combined token) - should NOT trigger...")
     combined_url = f"{base_url}/api/posts/{guid}/download?feed_token={combined_token_id}&feed_secret={combined_secret}"
     print(f"  URL: {combined_url[:80]}...")
     
     status2, body2 = http_get(combined_url)
     print(f"  Response: {status2}")
-    print(f"  Body preview: {body2[:100]}..." if len(body2) > 100 else f"  Body: {body2}")
+    print(f"  Body: {body2[:100]}..." if len(body2) > 100 else f"  Body: {body2}")
     
-    # Check job count after combined token request
     post_combined_count = count_jobs_for_guid(guid)
     print(f"  Job count after combined token request: {post_combined_count}")
     
@@ -390,14 +428,21 @@ def test_end_to_end_job_creation(base_url: str, enclosure_url: str, guid: str,
     if combined_triggered:
         print("  [FAIL] Combined token triggered job creation (should be read-only!)")
         combined_ok = False
-    else:
-        print("  [PASS] Combined token did NOT trigger job creation")
+    elif status2 in (503, 204):
+        print(f"  [PASS] Combined token returned {status2}, no job created")
         combined_ok = True
+    elif status2 == 200:
+        print("  [INFO] Episode already processed (200)")
+        combined_ok = True
+    else:
+        print(f"  [WARN] Unexpected response: {status2}")
+        combined_ok = False
     
     # Summary
     print("\nEnd-to-end test result:")
-    if enclosure_ok and combined_ok:
-        print("  [PASS] Feed-scoped tokens can trigger, combined tokens cannot")
+    all_ok = probe_ok and enclosure_ok and combined_ok
+    if all_ok:
+        print("  [PASS] Probes don't trigger, feed-scoped can trigger, combined cannot")
         return True
     else:
         print("  [FAIL] See details above")

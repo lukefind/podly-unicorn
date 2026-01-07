@@ -698,6 +698,65 @@ def api_get_post_audio(p_guid: str) -> ResponseReturnValue:
 # Cooldown duration for on-demand processing triggers (DB-backed via ProcessingJob.created_at)
 _ON_DEMAND_COOLDOWN_SECONDS = 600  # 10 minutes between triggers for same GUID
 
+# Probe detection: Range requests with end < this value are treated as probes and won't trigger processing
+# Podcast apps often probe with bytes=0-0, bytes=0-1023, etc. before real downloads
+_PROBE_MAX_BYTES = 1048576  # 1 MB
+
+
+def _is_probe_request(range_header: str | None) -> bool:
+    """Determine if a Range request is a probe (small prefetch) vs real download.
+    
+    Probes are:
+    - bytes=0-0
+    - bytes=0-1023
+    - bytes=0-<end> where end < _PROBE_MAX_BYTES (1MB)
+    
+    Real downloads are:
+    - No Range header
+    - bytes=<start>-<end> where start > 0
+    - bytes=0-<end> where end >= _PROBE_MAX_BYTES
+    - bytes=0- (open-ended)
+    """
+    if not range_header:
+        return False  # No Range = real download attempt
+    
+    # Parse Range header: "bytes=0-1023" or "bytes=0-" or "bytes=1024-2047"
+    if not range_header.startswith("bytes="):
+        return False
+    
+    range_spec = range_header[6:]  # Remove "bytes="
+    
+    # Handle multiple ranges (rare, treat as real download)
+    if "," in range_spec:
+        return False
+    
+    parts = range_spec.split("-")
+    if len(parts) != 2:
+        return False
+    
+    start_str, end_str = parts
+    
+    try:
+        start = int(start_str) if start_str else 0
+    except ValueError:
+        return False
+    
+    # If start > 0, this is seeking into the file = real download
+    if start > 0:
+        return False
+    
+    # If end is empty (open-ended range like "bytes=0-"), it's a real download
+    if not end_str:
+        return False
+    
+    try:
+        end = int(end_str)
+    except ValueError:
+        return False
+    
+    # If end < _PROBE_MAX_BYTES, it's a probe
+    return end < _PROBE_MAX_BYTES
+
 
 @post_bp.route("/api/posts/<string:p_guid>/download", methods=["GET", "HEAD"])
 def api_download_post(p_guid: str) -> flask.Response:
@@ -706,17 +765,19 @@ def api_download_post(p_guid: str) -> flask.Response:
     On-demand processing flow for podcast apps (Overcast, Pocket Casts, Apple Podcasts):
     
     1. HEAD requests: Never trigger processing, return 204 No Content
-    2. GET requests for unprocessed episodes:
-       - If job already pending/running: Return 202 with Retry-After
-       - If within cooldown window: Return 202 with Retry-After (no new job)
-       - Otherwise: Start job, return 202 with Retry-After
-    3. GET requests for processed episodes: Return audio file
+    2. Small Range requests (bytes=0-<1MB>): Probe, never trigger, return 204
+    3. GET requests for unprocessed episodes:
+       - If job already pending/running: Return 503 with Retry-After
+       - If within cooldown window: Return 503 with Retry-After (no new job)
+       - Otherwise: Start job, return 503 with Retry-After
+    4. GET requests for processed episodes: Return audio file
     
     Key design decisions:
-    - HEAD = true probe, never triggers (return 204)
-    - GET with any Range CAN trigger (podcast apps use Range for real downloads)
+    - HEAD = probe, never triggers (return 204)
+    - Small Range (bytes=0-<1MB>) = probe, never triggers (return 204)
+    - Full GET or large Range CAN trigger processing
     - Cooldown prevents trigger storms from aggressive clients
-    - 202 only returned when job exists or was just started
+    - 503 Service Unavailable for "not ready" (NOT 202, which confuses podcast apps)
     - Authorization via feed token in URL (podcast apps don't send cookies)
     """
     post = Post.query.filter_by(guid=p_guid).first()
@@ -735,17 +796,8 @@ def api_download_post(p_guid: str) -> flask.Response:
     user_agent = flask.request.headers.get("User-Agent", "")
     request_method = flask.request.method
     
-    # --- DEBUG: Log raw token params and resolved token info ---
-    raw_feed_token = flask.request.args.get("feed_token", "")
-    logger.info(
-        "DOWNLOAD_TOKEN_DEBUG: post=%s raw_feed_token=%s feed_token_obj=%s "
-        "token_feed_id=%s token_user_id=%s",
-        post.guid[:16],
-        raw_feed_token[:16] if raw_feed_token else "none",
-        "present" if feed_token else "none",
-        feed_token.feed_id if feed_token else "N/A",
-        feed_token.user.id if feed_token else "N/A",
-    )
+    # Detect if this is a probe request
+    is_probe = request_method == "HEAD" or _is_probe_request(range_header)
     
     # --- DETERMINE AUTH TYPE ---
     # Auth types:
@@ -788,71 +840,53 @@ def api_download_post(p_guid: str) -> flask.Response:
     # Check if episode is already processed and available
     is_processed = post.processed_audio_path and Path(post.processed_audio_path).exists()
     
-    # --- DIAGNOSTIC LOGGING (always log for debugging) ---
-    logger.info(
-        "DOWNLOAD_REQUEST: post=%s feed_id=%s method=%s range=%s "
-        "user_id=%s auth_type=%s can_trigger=%s ua=%s is_processed=%s",
-        post.guid[:16],
-        post.feed_id,
-        request_method,
-        range_header,
-        current_user.id if current_user else None,
-        auth_type,
-        can_trigger_processing,
-        user_agent[:60] if user_agent else "none",
-        is_processed,
-    )
+    # Helper to log decision with consistent format
+    def _log_decision(decision: str, status: int, extra: str = "") -> None:
+        logger.info(
+            "DOWNLOAD_DECISION post=%s method=%s range=%s ua=%s auth=%s decision=%s status=%d%s",
+            post.guid[:16],
+            request_method,
+            range_header or "none",
+            user_agent[:40] if user_agent else "none",
+            auth_type,
+            decision,
+            status,
+            f" {extra}" if extra else "",
+        )
     
     if is_processed:
         # Episode is ready - serve it (read access is sufficient)
         if not is_authorized_to_read:
-            logger.info(
-                "DOWNLOAD_DECISION: post=%s decision=NOT_AUTHORIZED_READ response=401",
-                post.guid[:16],
-            )
+            _log_decision("NOT_AUTHORIZED_READ", 401)
             return flask.make_response(("Authentication required", 401))
         # Fall through to file serving below
-        pass
+        _log_decision("SERVED_AUDIO", 200)
     else:
         # Episode not yet processed - determine response
         
-        # --- TIER 1: HEAD = true probe, never trigger ---
-        if request_method == "HEAD":
-            logger.info(
-                "DOWNLOAD_DECISION: post=%s decision=HEAD_PROBE response=204",
-                post.guid[:16],
-            )
+        # --- TIER 1: Probes (HEAD or small Range) = never trigger ---
+        if is_probe:
+            _log_decision("PROBE", 204)
             # 204 No Content - tells client "nothing here yet" without implying retry
             return flask.make_response(("", 204))
         
         # --- AUTHORIZATION CHECK FOR READ ---
         if not is_authorized_to_read:
-            logger.info(
-                "DOWNLOAD_DECISION: post=%s decision=NOT_AUTHORIZED response=401 "
-                "user_id=%s auth_type=%s",
-                post.guid[:16],
-                current_user.id if current_user else None,
-                auth_type,
-            )
+            _log_decision("NOT_AUTHORIZED", 401)
             return flask.make_response(("Authentication required", 401))
         
         # --- COMBINED TOKEN: READ-ONLY, NO PROCESSING TRIGGER ---
         # Combined feed tokens can read processed audio but CANNOT trigger processing
         # This prevents the unified feed from causing expensive processing jobs
         if not can_trigger_processing:
-            logger.info(
-                "DOWNLOAD_DECISION: post=%s decision=COMBINED_TOKEN_NO_TRIGGER "
-                "auth_type=%s response=202",
-                post.guid[:16],
-                auth_type,
-            )
+            _log_decision("NO_TRIGGER_COMBINED", 503)
             # Record the attempt for audit trail
             _record_download_attempt(
                 post, current_user, auth_type, "NOT_READY_NO_TRIGGER"
             )
-            # Return 202 to indicate "not ready" but do NOT start processing
+            # Return 503 Service Unavailable (NOT 202 which confuses podcast apps)
             # The episode must be processed via per-feed access or manual UI
-            response = flask.make_response(("Episode not yet processed", 202))
+            response = flask.make_response(("Episode not yet processed", 503))
             response.headers["Retry-After"] = "300"  # 5 minutes
             return response
         
@@ -863,18 +897,12 @@ def api_download_post(p_guid: str) -> flask.Response:
         ).first()
         
         if existing_job:
-            logger.info(
-                "DOWNLOAD_DECISION: post=%s decision=JOB_EXISTS job_id=%s status=%s response=202",
-                post.guid[:16],
-                existing_job.id,
-                existing_job.status,
-            )
-            response = flask.make_response(("Processing in progress", 202))
+            _log_decision("JOB_EXISTS", 503, f"job_id={existing_job.id}")
+            response = flask.make_response(("Processing in progress", 503))
             response.headers["Retry-After"] = "120"
             return response
         
-        # --- TIER 2: GET triggers, but with DB-backed cooldown ---
-        # Check cooldown using ProcessingJob.created_at (persists across restarts)
+        # --- COOLDOWN CHECK (DB-backed via ProcessingJob.created_at) ---
         last_job = ProcessingJob.query.filter(
             ProcessingJob.post_guid == post.guid
         ).order_by(ProcessingJob.created_at.desc()).first()
@@ -885,27 +913,15 @@ def api_download_post(p_guid: str) -> flask.Response:
             
             if cooldown_remaining > 0:
                 # Within cooldown window - don't trigger again
-                logger.info(
-                    "DOWNLOAD_DECISION: post=%s decision=COOLDOWN_ACTIVE "
-                    "last_job_id=%s cooldown_remaining=%ds response=202",
-                    post.guid[:16],
-                    last_job.id,
-                    int(cooldown_remaining),
-                )
-                response = flask.make_response(("Processing recently requested", 202))
+                _log_decision("COOLDOWN", 503, f"remaining={int(cooldown_remaining)}s")
+                response = flask.make_response(("Processing recently requested", 503))
                 response.headers["Retry-After"] = str(min(int(cooldown_remaining) + 10, 300))
                 return response
         
         # --- TRIGGER PROCESSING ---
-        # This is a GET from an authorized user (feed-scoped or session),
+        # This is a full GET from an authorized user (feed-scoped or session),
         # no existing job, cooldown expired
-        logger.info(
-            "DOWNLOAD_DECISION: post=%s decision=TRIGGER_PROCESSING "
-            "user_id=%s auth_type=%s response=202",
-            post.guid[:16],
-            current_user.id if current_user else None,
-            auth_type,
-        )
+        _log_decision("TRIGGER", 503)
         
         # Record the trigger attempt for audit trail
         _record_download_attempt(post, current_user, auth_type, "TRIGGERED")
@@ -921,7 +937,7 @@ def api_download_post(p_guid: str) -> flask.Response:
                 name=f"on-demand-process-{post_guid[:8]}",
             ).start()
             
-            response = flask.make_response(("Processing started", 202))
+            response = flask.make_response(("Processing started", 503))
             response.headers["Retry-After"] = "120"
             return response
         except Exception as e:
