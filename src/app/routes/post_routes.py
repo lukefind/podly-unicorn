@@ -13,7 +13,7 @@ from flask.typing import ResponseReturnValue
 
 from app.extensions import db
 from app.jobs_manager import get_jobs_manager
-from app.models import Identification, ModelCall, Post, ProcessingJob, TranscriptSegment, UserDownload, UserFeedSubscription
+from app.models import Feed, Identification, ModelCall, Post, ProcessingJob, TranscriptSegment, UserDownload, UserFeedSubscription
 from app.posts import clear_post_processing_data
 
 logger = logging.getLogger("global_logger")
