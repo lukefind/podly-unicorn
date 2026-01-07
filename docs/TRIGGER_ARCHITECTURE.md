@@ -150,7 +150,7 @@ This prevents a single compromised combined token from triggering processing sto
 curl -s "http://localhost:5001/feed/combined?feed_token=...&feed_secret=..." | grep -o '<link>[^<]*</link>' | head -5
 ```
 
-Expected: Links should be `https://pod.lukus.cloud/trigger?guid=...&feed_token=...&feed_secret=...`
+Expected: Links should be `https://your-domain.com/trigger?guid=...&feed_token=...&feed_secret=...`
 
 ### 2. Verify Download Doesn't Create Jobs
 
@@ -182,8 +182,8 @@ sqlite3 src/instance/sqlite3.db "SELECT id, status FROM processing_job WHERE pos
 
 ```bash
 python scripts/verify_trigger_links.py \
-  --combined-url "https://pod.lukus.cloud/feed/combined?feed_token=...&feed_secret=..." \
-  --expected-domain pod.lukus.cloud
+  --combined-url "https://your-domain.com/feed/combined?feed_token=...&feed_secret=..." \
+  --expected-domain your-domain.com
 ```
 
 ---

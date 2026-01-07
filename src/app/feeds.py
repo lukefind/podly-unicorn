@@ -23,12 +23,13 @@ class ITunesImage:
 
 
 class ITunesRSSItem(PyRSS2Gen.RSSItem):
-    """Extended RSSItem that supports iTunes image and author for episode artwork."""
+    """Extended RSSItem that supports iTunes image, author, and content:encoded for episode artwork."""
 
-    def __init__(self, itunes_image_url: Optional[str] = None, itunes_author: Optional[str] = None, **kwargs: Any):
+    def __init__(self, itunes_image_url: Optional[str] = None, itunes_author: Optional[str] = None, content_encoded: Optional[str] = None, **kwargs: Any):
         super().__init__(**kwargs)
         self.itunes_image_url = itunes_image_url
         self.itunes_author = itunes_author
+        self.content_encoded = content_encoded
 
     def publish(self, handler: Any) -> None:
         handler.startElement("item", {})
@@ -73,6 +74,12 @@ class ITunesRSSItem(PyRSS2Gen.RSSItem):
         # Add iTunes author (show name) if available
         if self.itunes_author:
             PyRSS2Gen._element(handler, "itunes:author", self.itunes_author)
+        
+        # Add content:encoded for richer HTML content (preferred by many podcast apps)
+        if self.content_encoded:
+            handler.startElement("content:encoded", {})
+            handler.characters(self.content_encoded)
+            handler.endElement("content:encoded")
 
         handler.endElement("item")
 
@@ -83,6 +90,7 @@ class ITunesRSS2(PyRSS2Gen.RSS2):
     rss_attrs = {
         "version": "2.0",
         "xmlns:itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd",
+        "xmlns:content": "http://purl.org/rss/1.0/modules/content/",
     }
 
     def publish(self, handler: Any) -> None:
@@ -145,6 +153,24 @@ logger = logging.getLogger("global_logger")
 
 
 def _get_base_url() -> str:
+    import os
+    from app.models import EmailSettings
+    from app.extensions import db
+    
+    # Priority 1: Environment variable PUBLIC_BASE_URL
+    env_base_url = os.environ.get("PUBLIC_BASE_URL")
+    if env_base_url:
+        return env_base_url.rstrip("/")
+    
+    # Priority 2: app_base_url from EmailSettings (configured in UI)
+    try:
+        email_settings = db.session.get(EmailSettings, 1)
+        if email_settings and email_settings.app_base_url:
+            return email_settings.app_base_url.rstrip("/")
+    except Exception:
+        pass  # Database not available or settings not configured
+    
+    # Priority 3: Detect from request headers
     try:
         # Check various ways HTTP/2 pseudo-headers might be available
         http2_scheme = (
@@ -353,8 +379,21 @@ def feed_item(
         # Build trigger URL with current request's feed token
         trigger_url = _append_feed_token_params(f"{base_url}/trigger?guid={post.guid}")
 
-    # Use the original episode description as-is (no Podly link - it doesn't exist)
-    description = post.description or ""
+    # Build description with trigger link for podcast apps
+    # This allows users to tap a link in the episode description to queue processing
+    original_description = post.description or ""
+    
+    # Create the processing CTA block (HTML escaped for XML safety)
+    processing_cta = (
+        f'<p style="margin-top: 16px; padding: 12px; background: #f3e8ff; border-radius: 8px; border: 1px solid #c4b5fd;">'
+        f'<strong>🦄 Process this episode</strong><br/>'
+        f'<a href="{trigger_url}" style="color: #7c3aed;">Tap here to queue ad removal</a>. '
+        f'Wait 1-2 minutes, then download again to get the processed version.'
+        f'</p>'
+    )
+    
+    # Combine original description with processing CTA
+    description = f"{original_description}\n\n{processing_cta}"
 
     # Get the original show name if requested (for combined feeds)
     itunes_author = None
@@ -362,6 +401,10 @@ def feed_item(
         feed = Feed.query.get(post.feed_id)
         if feed:
             itunes_author = feed.title
+
+    # content:encoded uses the same content as description for belt-and-braces compatibility
+    # Some podcast apps prefer content:encoded over description for HTML content
+    content_encoded = description
 
     item = ITunesRSSItem(
         title=post.title,
@@ -376,6 +419,7 @@ def feed_item(
         pubDate=_format_pub_date(post.release_date),
         itunes_image_url=post.image_url,
         itunes_author=itunes_author,
+        content_encoded=content_encoded,
     )
 
     return item

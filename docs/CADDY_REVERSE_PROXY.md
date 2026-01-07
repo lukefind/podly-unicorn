@@ -13,7 +13,7 @@ Caddy must set these headers when proxying to the upstream Podly container:
 ## Example Caddyfile
 
 ```caddyfile
-pod.lukus.cloud {
+your-domain.com {
     reverse_proxy podly-server:5001 {
         # Required for correct URL generation in RSS feeds
         header_up X-Forwarded-Proto {scheme}
@@ -28,7 +28,7 @@ pod.lukus.cloud {
 If Caddy is on a different server connected via WireGuard:
 
 ```caddyfile
-pod.lukus.cloud {
+your-domain.com {
     reverse_proxy 10.0.0.2:5001 {
         # Replace 10.0.0.2 with the WireGuard IP of your Podly server
         header_up X-Forwarded-Proto {scheme}
@@ -51,10 +51,10 @@ The Flask app uses `werkzeug.middleware.proxy_fix.ProxyFix` to trust these heade
 After configuring Caddy, verify the RSS feed uses correct URLs:
 
 ```bash
-curl -s "https://pod.lukus.cloud/feed/combined?feed_token=...&feed_secret=..." | grep -o 'url="[^"]*"' | head -3
+curl -s "https://your-domain.com/feed/combined?feed_token=...&feed_secret=..." | grep -o 'url="[^"]*"' | head -3
 ```
 
-Expected output should show `https://pod.lukus.cloud/...` URLs.
+Expected output should show `https://your-domain.com/...` URLs.
 
 ## Flask ProxyFix Configuration
 

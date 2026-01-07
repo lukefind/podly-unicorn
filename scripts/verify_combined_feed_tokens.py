@@ -153,7 +153,7 @@ def fetch_combined_feed(base_url: str, token_id: str, token_secret: str) -> Opti
     """Fetch combined feed XML from server.
     
     Args:
-        base_url: Base URL to fetch from (e.g., 'https://pod.lukus.cloud')
+        base_url: Base URL to fetch from (e.g., 'https://your-domain.com')
         token_id: Combined token ID
         token_secret: Combined token secret
     """
@@ -550,7 +550,7 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Verify combined feed token implementation")
-    parser.add_argument("--host", default="pod.lukus.cloud", help="Public hostname (default: pod.lukus.cloud)")
+    parser.add_argument("--host", default="localhost:5001", help="Public hostname (default: localhost:5001)")
     parser.add_argument("--base-url", default=None, help="Base URL for requests (default: https://{host})")
     parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching combined feed (schema/bounds only)")
     parser.add_argument("--skip-e2e", action="store_true", help="Skip end-to-end job creation test")

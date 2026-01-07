@@ -3,7 +3,7 @@
 Smoke test to verify RSS trigger links and download/trigger behavior.
 
 Usage:
-    python scripts/verify_trigger_links.py --combined-url "https://pod.lukus.cloud/feed/combined?feed_token=...&feed_secret=..."
+    python scripts/verify_trigger_links.py --combined-url "https://your-domain.com/feed/combined?feed_token=...&feed_secret=..."
 
 This script verifies:
 1. RSS <item><link> elements point to /trigger with correct params
@@ -43,7 +43,7 @@ def find_unprocessed_episode(items: list, enclosure_urls: list, trigger_links: l
 def main():
     parser = argparse.ArgumentParser(description="Verify RSS trigger links and behavior")
     parser.add_argument("--combined-url", required=True, help="Combined feed URL with tokens")
-    parser.add_argument("--expected-domain", default="pod.lukus.cloud", help="Expected domain in URLs")
+    parser.add_argument("--expected-domain", default="localhost", help="Expected domain in URLs")
     parser.add_argument("--skip-trigger-test", action="store_true", help="Skip the trigger job creation test")
     parser.add_argument("--poll-timeout", type=int, default=180, help="Timeout for polling status (seconds)")
     args = parser.parse_args()

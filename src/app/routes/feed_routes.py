@@ -353,13 +353,15 @@ def get_combined_episodes() -> Response:
         else:
             status = "not_processed"
         
-        # Build trigger URL
+        # Build trigger URL (fully-qualified)
         trigger_url = None
         enclosure_url = None
         if token_pair:
+            from app.feeds import _get_base_url
+            base_url = _get_base_url()
             token_id, secret = token_pair
-            trigger_url = f"/trigger?guid={post.guid}&feed_token={token_id}&feed_secret={secret}"
-            enclosure_url = f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+            trigger_url = f"{base_url}/trigger?guid={post.guid}&feed_token={token_id}&feed_secret={secret}"
+            enclosure_url = f"{base_url}/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
         
         episodes.append({
             "id": post.id,

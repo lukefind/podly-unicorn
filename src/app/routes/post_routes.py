@@ -1353,6 +1353,11 @@ def _render_trigger_page(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title} - Podly Unicorn</title>
+    <link rel="icon" type="image/svg+xml" href="/images/logos/favicon.svg">
+    <link rel="icon" type="image/png" sizes="96x96" href="/images/logos/favicon-96x96.png">
+    <link rel="icon" type="image/x-icon" href="/images/logos/favicon.ico">
+    <link rel="apple-touch-icon" href="/images/logos/apple-touch-icon.png">
+    <meta name="theme-color" content="#7c3aed">
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
