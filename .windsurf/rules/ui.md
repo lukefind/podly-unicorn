@@ -4,23 +4,15 @@ trigger: always_on
 
 ## UI Parity Rule (Non-Negotiable)
 
-When adding a new page/view inside an existing section (e.g. Podcasts, Events, Admin), you MUST NOT re-implement layout, header, sidebar, filters, modals, or card styles from scratch.
 
-Instead:
+When adding or changing any view inside an existing section (e.g. Podcasts), you MUST:
 
-1) Reuse the section’s existing layout component (or extract one if missing) so:
-   - Sidebar does not remount or refetch on navigation
-   - Header placement and spacing is consistent
-   - Filters live in the same header region as other pages
+1) **Reuse the existing layout tree** (same sidebar, same header, same routing parent) so navigation does not remount state or refetch lists.
+2) **Reuse the same primitives** (cards, modals, buttons, filters) — no “similar” clones.
+3) **Prove parity**:
+   - Provide before/after screenshots OR a short screen recording
+   - Confirm there is exactly one feed-list fetch on navigation (no duplicate queries)
+   - Confirm filter placement matches the canonical view
 
-2) Reuse the exact same UI primitives/components used elsewhere:
-   - Sidebar items: same component as normal entries
-   - Cards: same card component/styles
-   - Modals: one shared modal component used across lists
+If you cannot achieve parity by composition, STOP and refactor to enable reuse before shipping.
 
-3) Validate parity before shipping:
-   - Screenshot compare vs canonical page
-   - Verify no duplicated network fetches caused by remounting
-   - Verify all existing actions appear in the same place and work
-
-If parity cannot be achieved by composition and reuse, stop and refactor to enable reuse before shipping.

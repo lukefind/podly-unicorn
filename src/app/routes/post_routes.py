@@ -1058,7 +1058,29 @@ def trigger_processing() -> flask.Response:
     
     Combined tokens (feed_id=NULL) are NOT allowed to trigger processing.
     Only feed-scoped tokens can trigger.
+    
+    Error handling:
+    - 400: Missing parameters
+    - 401/403: Invalid token or unauthorized
+    - 404: Episode not found
+    - 409: Episode not eligible (disabled)
+    - Never returns 500 - all exceptions are caught
     """
+    try:
+        return _handle_trigger_processing()
+    except Exception as e:
+        # Catch-all for any unexpected exceptions
+        logger.error(f"Unexpected error in trigger_processing: {e}", exc_info=True)
+        print(f"[TRIGGER_ERROR] unexpected_exception: {e}", file=sys.stderr, flush=True)
+        return _render_trigger_error_page(
+            title="Something Went Wrong",
+            message="An unexpected error occurred. Please try again later.",
+            status_code=500
+        )
+
+
+def _handle_trigger_processing() -> flask.Response:
+    """Internal handler for trigger processing - separated for cleaner error handling."""
     from app.auth.feed_tokens import authenticate_feed_token
     
     guid = flask.request.args.get("guid")
@@ -1067,53 +1089,72 @@ def trigger_processing() -> flask.Response:
     
     print(f"[TRIGGER_HIT] guid={guid} token_id={token_id}", file=sys.stderr, flush=True)
     
+    # Validate required parameters
     if not guid or not token_id or not secret:
         print(f"[TRIGGER_RETURN] status=400 reason=missing_params", file=sys.stderr, flush=True)
-        return _render_trigger_page(
+        return _render_trigger_error_page(
             title="Missing Parameters",
             message="Required parameters: guid, feed_token, feed_secret",
-            state="error"
+            status_code=400
         )
     
     # Authenticate the token
-    auth_result = authenticate_feed_token(token_id, secret, f"/api/posts/{guid}/download")
-    
-    if not auth_result:
-        print(f"[TRIGGER_RETURN] status=401 reason=invalid_token", file=sys.stderr, flush=True)
-        return _render_trigger_page(
-            title="Invalid Token",
-            message="The link has expired or is invalid. Please get a fresh link from your podcast app.",
-            state="error"
+    try:
+        auth_result = authenticate_feed_token(token_id, secret, f"/api/posts/{guid}/download")
+    except Exception as e:
+        logger.error(f"Token authentication failed for guid={guid}: {e}", exc_info=True)
+        print(f"[TRIGGER_RETURN] status=401 reason=auth_exception error={e}", file=sys.stderr, flush=True)
+        return _render_trigger_error_page(
+            title="Authentication Error",
+            message="Failed to verify your access token. Please try getting a fresh link.",
+            status_code=401
         )
     
-    print(f"[TRIGGER_AUTH] guid={guid} feed_id={auth_result.feed_id} user_id={auth_result.user_id}", file=sys.stderr, flush=True)
+    if not auth_result:
+        print(f"[TRIGGER_RETURN] status=403 reason=invalid_token", file=sys.stderr, flush=True)
+        return _render_trigger_error_page(
+            title="Invalid Token",
+            message="The link has expired or is invalid. Please get a fresh link from your podcast app.",
+            status_code=403
+        )
+    
+    print(f"[TRIGGER_AUTH] guid={guid} feed_id={auth_result.feed_id} user_id={auth_result.user.id}", file=sys.stderr, flush=True)
     
     # Combined tokens (feed_id=None) cannot trigger processing
     if auth_result.feed_id is None:
         print(f"[TRIGGER_RETURN] status=403 reason=combined_token_no_trigger", file=sys.stderr, flush=True)
-        return _render_trigger_page(
+        return _render_trigger_error_page(
             title="Cannot Trigger from Combined Feed",
             message="Combined feed tokens cannot trigger processing. Please use the per-show feed URL instead.",
-            state="error"
+            status_code=403
         )
     
     # Look up the post
     post = Post.query.filter_by(guid=guid).first()
     if not post:
         print(f"[TRIGGER_RETURN] status=404 reason=post_not_found", file=sys.stderr, flush=True)
-        return _render_trigger_page(
+        return _render_trigger_error_page(
             title="Episode Not Found",
-            message="This episode could not be found.",
-            state="error"
+            message="This episode could not be found. It may have been removed.",
+            status_code=404
         )
     
     # Verify the token's feed_id matches the post's feed_id
     if post.feed_id != auth_result.feed_id:
         print(f"[TRIGGER_RETURN] status=403 reason=feed_mismatch token_feed={auth_result.feed_id} post_feed={post.feed_id}", file=sys.stderr, flush=True)
-        return _render_trigger_page(
+        return _render_trigger_error_page(
             title="Access Denied",
             message="This token is not authorized for this episode.",
-            state="error"
+            status_code=403
+        )
+    
+    # Check if episode is eligible (whitelisted)
+    if not post.whitelisted:
+        print(f"[TRIGGER_RETURN] status=409 reason=not_whitelisted", file=sys.stderr, flush=True)
+        return _render_trigger_error_page(
+            title="Episode Not Enabled",
+            message="This episode is not enabled for processing. Enable it in the Podly web interface first.",
+            status_code=409
         )
     
     # Get feed info for display
@@ -1179,7 +1220,7 @@ def trigger_processing() -> flask.Response:
     
     # Trigger processing
     try:
-        user_id = auth_result.user_id
+        user_id = auth_result.user.id
         print(f"[TRIGGER_JOB] guid={guid} action=create user_id={user_id}", file=sys.stderr, flush=True)
         result = get_jobs_manager().start_post_processing(
             post.guid,
@@ -1191,7 +1232,7 @@ def trigger_processing() -> flask.Response:
         print(f"[TRIGGER_JOB] guid={guid} action=created job_id={job_id}", file=sys.stderr, flush=True)
         
         # Fetch the job we just created
-        job = ProcessingJob.query.get(job_id)
+        job = ProcessingJob.query.get(job_id) if job_id else None
         
         return _render_trigger_page(
             title="Processing Started",
@@ -1205,12 +1246,12 @@ def trigger_processing() -> flask.Response:
             job=job
         )
     except Exception as e:
-        logger.error(f"Failed to trigger processing for {guid}: {e}")
+        logger.error(f"Failed to trigger processing for {guid}: {e}", exc_info=True)
         print(f"[TRIGGER_JOB] guid={guid} action=error error={e}", file=sys.stderr, flush=True)
-        return _render_trigger_page(
-            title="Error",
-            message=f"Failed to start processing: {e}",
-            state="error"
+        return _render_trigger_error_page(
+            title="Processing Error",
+            message="Failed to start processing. Please try again in a few minutes.",
+            status_code=500
         )
 
 
@@ -1319,6 +1360,96 @@ def trigger_status() -> flask.Response:
         "message": "Episode has not been processed yet",
         "job": None
     })
+
+
+def _render_trigger_error_page(
+    title: str,
+    message: str,
+    status_code: int = 400
+) -> flask.Response:
+    """Render a themed error page for trigger failures with proper HTTP status code."""
+    html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title} - Podly Unicorn</title>
+    <link rel="icon" type="image/svg+xml" href="/images/logos/favicon.svg">
+    <link rel="icon" type="image/png" sizes="96x96" href="/images/logos/favicon-96x96.png">
+    <link rel="icon" type="image/x-icon" href="/images/logos/favicon.ico">
+    <link rel="apple-touch-icon" href="/images/logos/apple-touch-icon.png">
+    <meta name="theme-color" content="#7c3aed">
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }}
+        .card {{
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 480px;
+            width: 100%;
+            overflow: hidden;
+        }}
+        .header {{
+            background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }}
+        .header h1 {{ font-size: 1.5rem; margin-bottom: 4px; }}
+        .header .subtitle {{ opacity: 0.9; font-size: 0.9rem; }}
+        .content {{ padding: 24px; text-align: center; }}
+        .error-icon {{ font-size: 3rem; margin-bottom: 16px; color: #ef4444; }}
+        .error-title {{ font-size: 1.25rem; font-weight: 600; color: #1f2937; margin-bottom: 8px; }}
+        .error-message {{ color: #6b7280; margin-bottom: 24px; line-height: 1.5; }}
+        .btn {{
+            display: inline-block;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            text-align: center;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }}
+        .btn:hover {{ transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }}
+        .btn-primary {{ background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%); color: white; }}
+        .footer {{ text-align: center; padding: 16px 24px 24px; color: #9ca3af; font-size: 0.8rem; }}
+        .footer a {{ color: #7c3aed; text-decoration: none; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header">
+            <h1>Podly Unicorn</h1>
+            <div class="subtitle">Ad-free podcast processing</div>
+        </div>
+        <div class="content">
+            <div class="error-icon">&#9888;</div>
+            <div class="error-title">{title}</div>
+            <div class="error-message">{message}</div>
+            <a href="/" class="btn btn-primary">Go to Podly</a>
+        </div>
+        <div class="footer">
+            <a href="/">Podly Unicorn</a>
+        </div>
+    </div>
+</body>
+</html>'''
+    
+    response = flask.make_response(html, status_code)
+    response.headers["Content-Type"] = "text/html"
+    return response
 
 
 def _render_trigger_page(
