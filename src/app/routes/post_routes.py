@@ -5,11 +5,10 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import Thread
-from typing import Any, cast
+from typing import Any
 
 import flask
-from flask import Blueprint, Flask, current_app, g, jsonify, request, send_file
+from flask import Blueprint, current_app, g, jsonify, request, send_file
 from flask.typing import ResponseReturnValue
 
 from app.extensions import db
@@ -918,27 +917,30 @@ def api_download_post(p_guid: str) -> flask.Response:
         # --- TRIGGER PROCESSING ---
         # This is a full GET from an authorized user (feed-scoped or session),
         # no existing job, cooldown expired
-        _log_decision("TRIGGER", 503)
         
         # Record the trigger attempt for audit trail
         _record_download_attempt(post, current_user, auth_type, "TRIGGERED")
         
+        # Create job SYNCHRONOUSLY before returning 503
+        # This ensures the job exists in DB before we tell the client to retry
         try:
-            app = cast(Any, current_app)._get_current_object()
-            post_guid = post.guid
             user_id = current_user.id if current_user else None
-            Thread(
-                target=_start_post_processing_async,
-                args=(app, post_guid, user_id),
-                daemon=True,
-                name=f"on-demand-process-{post_guid[:8]}",
-            ).start()
+            result = get_jobs_manager().start_post_processing(
+                post.guid,
+                priority="interactive",
+                triggered_by_user_id=user_id,
+                trigger_source="on_demand_rss",
+            )
+            job_id = result.get("job_id")
+            _log_decision("TRIGGER", 503, f"job_id={job_id}")
+            print(f"[JOB_CREATED] guid={post.guid[:16]} job_id={job_id} user_id={user_id}", file=sys.stderr, flush=True)
             
             response = flask.make_response(("Processing started", 503))
             response.headers["Retry-After"] = "120"
             return response
         except Exception as e:
             logger.error(f"Failed to trigger on-demand processing for {p_guid}: {e}")
+            print(f"[JOB_ERROR] guid={post.guid[:16]} error={e}", file=sys.stderr, flush=True)
             response = flask.make_response(("Processing temporarily unavailable", 503))
             response.headers["Retry-After"] = "60"
             return response
@@ -993,21 +995,6 @@ def api_download_original_post(p_guid: str) -> flask.Response:
     _increment_download_count(post)
     _track_user_download(post, is_processed=False)
     return response
-
-
-def _start_post_processing_async(app: Flask, post_guid: str, user_id: int = None) -> None:
-    """Start post processing in a background thread with proper app context."""
-    with app.app_context():
-        try:
-            result = get_jobs_manager().start_post_processing(
-                post_guid,
-                priority="interactive",
-                triggered_by_user_id=user_id,
-                trigger_source="on_demand_rss",
-            )
-            logger.info(f"On-demand processing started for {post_guid}: {result}")
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.error(f"Failed to start on-demand processing for {post_guid}: {exc}")
 
 
 # Legacy endpoints for backward compatibility
