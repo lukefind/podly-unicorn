@@ -1406,7 +1406,7 @@ def _render_trigger_page(
             </div>
         </div>
         <div class="footer">
-            Return to your podcast app to listen.<br>
+            {"This page starts ad removal for your episode.<br>Your download will be ready here when complete." if state == "processing" else "Return to your podcast app to listen."}<br>
             <a href="/">Podly Unicorn</a>
         </div>
     </div>
