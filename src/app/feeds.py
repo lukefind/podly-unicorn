@@ -23,13 +23,14 @@ class ITunesImage:
 
 
 class ITunesRSSItem(PyRSS2Gen.RSSItem):
-    """Extended RSSItem that supports iTunes image, author, and content:encoded for episode artwork."""
+    """Extended RSSItem that supports iTunes image, author, content:encoded, and itunes:summary."""
 
-    def __init__(self, itunes_image_url: Optional[str] = None, itunes_author: Optional[str] = None, content_encoded: Optional[str] = None, **kwargs: Any):
+    def __init__(self, itunes_image_url: Optional[str] = None, itunes_author: Optional[str] = None, content_encoded: Optional[str] = None, itunes_summary: Optional[str] = None, **kwargs: Any):
         super().__init__(**kwargs)
         self.itunes_image_url = itunes_image_url
         self.itunes_author = itunes_author
         self.content_encoded = content_encoded
+        self.itunes_summary = itunes_summary
 
     def publish(self, handler: Any) -> None:
         handler.startElement("item", {})
@@ -80,6 +81,12 @@ class ITunesRSSItem(PyRSS2Gen.RSSItem):
             handler.startElement("content:encoded", {})
             handler.characters(self.content_encoded)
             handler.endElement("content:encoded")
+        
+        # Add itunes:summary - many podcast apps prefer this over description
+        if self.itunes_summary:
+            handler.startElement("itunes:summary", {})
+            handler.characters(self.itunes_summary)
+            handler.endElement("itunes:summary")
 
         handler.endElement("item")
 
@@ -383,17 +390,32 @@ def feed_item(
     # This allows users to tap a link in the episode description to queue processing
     original_description = post.description or ""
     
-    # Create the processing CTA block (HTML escaped for XML safety)
-    processing_cta = (
+    # Create plain text CTA with URL on its own line (for apps that strip HTML)
+    # Many podcast apps sanitize HTML or only detect plain URLs
+    plain_text_cta = (
+        f"\n\n---\n"
+        f"Process this episode (remove ads):\n"
+        f"{trigger_url}\n"
+        f"---"
+    )
+    
+    # Create HTML CTA block for apps that render HTML
+    html_cta = (
         f'<p style="margin-top: 16px; padding: 12px; background: #f3e8ff; border-radius: 8px; border: 1px solid #c4b5fd;">'
-        f'<strong>🦄 Process this episode</strong><br/>'
-        f'<a href="{trigger_url}" style="color: #7c3aed;">Tap here to queue ad removal</a>. '
-        f'Wait 1-2 minutes, then download again to get the processed version.'
+        f'<strong>Process this episode (remove ads)</strong><br/>'
+        f'<a href="{trigger_url}" style="color: #7c3aed;">Tap here to queue ad removal</a><br/>'
+        f'<small>Or copy this URL: {trigger_url}</small>'
         f'</p>'
     )
     
-    # Combine original description with processing CTA
-    description = f"{original_description}\n\n{processing_cta}"
+    # description: include both HTML and plain URL for maximum compatibility
+    description = f"{original_description}\n\n{html_cta}{plain_text_cta}"
+    
+    # content:encoded: same as description (HTML + plain URL)
+    content_encoded = description
+    
+    # itunes:summary: plain text only (no HTML), many apps prefer this field
+    itunes_summary = f"{original_description}{plain_text_cta}"
 
     # Get the original show name if requested (for combined feeds)
     itunes_author = None
@@ -401,10 +423,6 @@ def feed_item(
         feed = Feed.query.get(post.feed_id)
         if feed:
             itunes_author = feed.title
-
-    # content:encoded uses the same content as description for belt-and-braces compatibility
-    # Some podcast apps prefer content:encoded over description for HTML content
-    content_encoded = description
 
     item = ITunesRSSItem(
         title=post.title,
@@ -420,6 +438,7 @@ def feed_item(
         itunes_image_url=post.image_url,
         itunes_author=itunes_author,
         content_encoded=content_encoded,
+        itunes_summary=itunes_summary,
     )
 
     return item
