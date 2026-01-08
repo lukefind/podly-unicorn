@@ -1,7 +1,7 @@
 """Add event_type to user_download
 
 Revision ID: i6j7k8l9m0n1
-Revises: h5i6j7k8l9m0
+Revises: g4h5i6j7k8l9
 Create Date: 2026-01-08
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "i6j7k8l9m0n1"
-down_revision = "h5i6j7k8l9m0"
+down_revision = "g4h5i6j7k8l9"
 branch_labels = None
 depends_on = None
 
