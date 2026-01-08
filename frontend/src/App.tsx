@@ -19,6 +19,7 @@ import SignupPage from './pages/SignupPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
+import TriggerPage from './pages/TriggerPage';
 import AudioPlayer from './components/AudioPlayer';
 import './App.css';
 
@@ -165,6 +166,17 @@ function AppShell() {
   );
 }
 
+function AppRouter() {
+  return (
+    <Routes>
+      {/* Trigger page - public, uses feed token auth, no session required */}
+      <Route path="/trigger" element={<TriggerPage />} />
+      {/* All other routes go through AppShell */}
+      <Route path="/*" element={<AppShell />} />
+    </Routes>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -172,7 +184,7 @@ function App() {
         <AuthProvider>
           <AudioPlayerProvider>
             <Router>
-              <AppShell />
+              <AppRouter />
             </Router>
           </AudioPlayerProvider>
         </AuthProvider>

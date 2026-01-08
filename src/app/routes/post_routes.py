@@ -1488,7 +1488,40 @@ def _render_trigger_page(
     job: Optional[ProcessingJob] = None,
     cooldown_remaining: int = 0
 ) -> flask.Response:
-    """Render the trigger page HTML."""
+    """Serve the React app for the trigger page.
+    
+    The React TriggerPage component will handle:
+    - Polling /api/trigger/status for updates
+    - Displaying the canonical ProcessingProgressUI component
+    - Reactive state updates without page refresh
+    """
+    import os
+    from flask import current_app, send_from_directory
+    
+    static_folder = current_app.static_folder
+    if static_folder and os.path.exists(os.path.join(static_folder, "index.html")):
+        return send_from_directory(static_folder, "index.html")
+    
+    # Fallback to simple HTML if React app not built
+    return _render_trigger_page_fallback(
+        title, message, state, post, feed_title, 
+        download_url, token_id, secret, job, cooldown_remaining
+    )
+
+
+def _render_trigger_page_fallback(
+    title: str,
+    message: str,
+    state: str,
+    post: Optional[Post] = None,
+    feed_title: str = "",
+    download_url: str = "",
+    token_id: str = "",
+    secret: str = "",
+    job: Optional[ProcessingJob] = None,
+    cooldown_remaining: int = 0
+) -> flask.Response:
+    """Fallback server-rendered trigger page when React app is not available."""
     
     # Build status endpoint URL for polling
     status_url = ""
@@ -1635,7 +1668,7 @@ def _get_trigger_polling_script(status_url: str, download_url: str) -> str:
         
         async function checkStatus() {{
             try {{
-                const response = await fetch(statusUrl);
+                const response = await fetch(statusUrl + "&t=" + Date.now());
                 const data = await response.json();
                 
                 const statusMessage = document.getElementById('status-message');
@@ -1667,11 +1700,11 @@ def _get_trigger_polling_script(status_url: str, download_url: str) -> str:
                         stepName.textContent = data.job.step_name || 'Processing...';
                     }}
                 }}
-                setTimeout(checkStatus, 2500);
+                setTimeout(checkStatus, 2000);
             }} catch (error) {{
                 console.error('Status check failed:', error);
                 setTimeout(checkStatus, 5000);
             }}
         }}
-        setTimeout(checkStatus, 2500);
+        setTimeout(checkStatus, 2000);
     '''
