@@ -95,12 +95,19 @@ This is a fork of [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podc
 ## How It Works
 
 1. **Add a podcast** — Paste an RSS feed URL or search the built-in podcast catalog
-2. **Transcribe** — Podly uses Whisper (via Groq or local) to transcribe each episode
-3. **Detect ads** — An LLM analyzes the transcript to identify ad segments with timestamps
-4. **Remove ads** — FFmpeg silently cuts the detected segments from the audio
-5. **Subscribe** — Get a new RSS feed URL to use in your favorite podcast app
+2. **Subscribe in your podcast app** — Copy the Podly RSS feed URL and add it to your app
+3. **Trigger processing** — Tap the episode link in your podcast app to open the trigger page
+4. **Wait for processing** — Podly transcribes the audio, detects ads, and removes them
+5. **Listen ad-free** — Return to your podcast app and play the episode
 
-Processing happens on-demand when you click "Process" or when your podcast app requests an episode.
+### On-Demand Processing
+
+Episodes are processed **only when you explicitly request it** by tapping the trigger link in the episode description. This prevents accidental processing from RSS readers or podcast app prefetching.
+
+When you tap "Process this episode" in your podcast app:
+1. A progress page opens showing processing status
+2. When complete, close the tab and return to your podcast app
+3. Refresh the feed and play the ad-free episode
 
 ---
 
