@@ -246,20 +246,20 @@ export default function TriggerPage() {
   if (status?.state === 'ready') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-800 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
           <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-center">
             <h1 className="text-2xl font-bold text-white">Podly Unicorn</h1>
             <p className="text-purple-200 text-sm mt-1">Ad-free podcast processing</p>
           </div>
           <div className="p-6">
             <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-emerald-600 dark:text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
               </div>
-              <h2 className="text-2xl font-bold text-emerald-600 mb-3">Episode Ready</h2>
-              <p className="text-gray-700 text-base leading-relaxed">
+              <h2 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-3">Episode Ready</h2>
+              <p className="text-gray-700 dark:text-gray-200 text-base leading-relaxed">
                 Return to your podcast app and refresh the feed.
                 <br />
                 The processed episode will download there.
@@ -267,20 +267,20 @@ export default function TriggerPage() {
             </div>
 
             {/* Primary instruction - not a button, just prominent text */}
-            <div className="bg-purple-50 rounded-xl p-4 mb-4 text-center">
-              <p className="text-purple-800 font-semibold text-lg mb-1">
+            <div className="bg-purple-50 dark:bg-purple-900/50 rounded-xl p-4 mb-4 text-center">
+              <p className="text-purple-800 dark:text-purple-200 font-semibold text-lg mb-1">
                 Close this tab now
               </p>
-              <p className="text-purple-600 text-sm">
+              <p className="text-purple-600 dark:text-purple-300 text-sm">
                 and return to your podcast app
               </p>
             </div>
 
             {/* Secondary actions */}
-            <div className="border-t border-gray-100 pt-4">
+            <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
               <button
                 onClick={handleCopyFeedUrl}
-                className="w-full py-2 px-4 text-purple-600 text-sm font-medium hover:bg-purple-50 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full py-2 px-4 text-purple-600 dark:text-purple-300 text-sm font-medium hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 {copiedFeedUrl ? (
                   <>
