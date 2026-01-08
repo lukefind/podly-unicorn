@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -9,6 +10,8 @@ from app.auth.feed_tokens import FeedTokenAuthResult, authenticate_feed_token
 from app.auth.service import AuthenticatedUser
 from app.auth.state import failure_rate_limiter
 from app.models import User
+
+logger = logging.getLogger("global_logger")
 
 SESSION_USER_KEY = "user_id"
 
@@ -95,10 +98,23 @@ def init_auth_middleware(app: Any) -> None:
         if _is_token_protected_endpoint(request.path):
             retry_after = failure_rate_limiter.retry_after(client_identifier)
             if retry_after:
+                logger.info(
+                    "TRIGGER_AUTH_RATELIMIT path=%s client=%s retry_after=%d",
+                    request.path, client_identifier, retry_after
+                )
                 return _too_many_requests(retry_after)
 
             token_result = _authenticate_feed_token_from_query()
             if token_result is None:
+                # Log auth failure with safe token prefix/suffix
+                feed_token = request.args.get("feed_token") or ""
+                token_prefix = feed_token[:6] if len(feed_token) >= 6 else feed_token
+                token_suffix = feed_token[-4:] if len(feed_token) >= 4 else ""
+                guid = request.args.get("guid") or ""
+                logger.info(
+                    "TRIGGER_AUTH_FAIL path=%s guid=%s token=%s...%s",
+                    request.path, guid, token_prefix, token_suffix
+                )
                 backoff = failure_rate_limiter.register_failure(client_identifier)
                 response = _token_unauthorized()
                 if backoff:
@@ -163,11 +179,17 @@ def _json_unauthorized(message: str = "Authentication required.") -> Response:
 
 
 def _token_unauthorized() -> Response:
-    response = Response("Invalid or missing feed token", status=401)
+    """Return JSON 401 for invalid/missing feed token (not HTML/text)."""
+    response = jsonify({"state": "error", "message": "Invalid or missing feed token"})
+    response.status_code = 401
+    response.headers["Cache-Control"] = "no-store"
     return response
 
 
 def _too_many_requests(retry_after: int) -> Response:
-    response = Response("Too Many Authentication Attempts", status=429)
+    """Return JSON 429 for rate limiting (not HTML/text)."""
+    response = jsonify({"state": "error", "message": "Too many authentication attempts"})
+    response.status_code = 429
     response.headers["Retry-After"] = str(retry_after)
+    response.headers["Cache-Control"] = "no-store"
     return response
