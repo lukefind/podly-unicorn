@@ -50,7 +50,12 @@ export default function TriggerPage() {
     if (!url) return;
 
     try {
-      const response = await fetch(url, { cache: 'no-store' });
+      const response = await fetch(url, {
+        method: 'GET',
+        cache: 'no-store',
+        credentials: 'omit',  // Don't send cookies - this is feed-token auth only
+        headers: { Accept: 'application/json' },
+      });
       const data = await response.json().catch(() => ({ state: 'error', message: 'Invalid response' }));
       
       // Handle temporary errors - keep last known status, show warning, continue polling
