@@ -1365,16 +1365,16 @@ def trigger_status() -> flask.Response:
         print(f"[TRIGGER_STATUS_500] guid={guid} token={token_prefix}...{token_suffix} error={e}", file=sys.stderr, flush=True)
         print(f"[TRIGGER_STATUS_500] traceback:\n{traceback.format_exc()}", file=sys.stderr, flush=True)
         
-        # Return 200 with error state so UI keeps rendering
+        # Return 503 for temporary server errors - UI will show banner and retry
         response = flask.jsonify({
             "state": "error",
-            "message": "Temporary error, retrying...",
+            "message": "Temporarily unavailable",
             "processed": False,
             "download_url": None,
             "job": None
         })
         response.headers["Cache-Control"] = "no-store"
-        return response
+        return response, 503
 
 
 def _handle_trigger_status() -> flask.Response:
