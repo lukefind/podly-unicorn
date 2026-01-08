@@ -1111,9 +1111,11 @@ def _handle_trigger_processing() -> flask.Response:
             status_code=400
         )
     
-    # Authenticate the token
+    # Authenticate the token - use actual request path so _resolve_feed_id can extract guid
     try:
-        auth_result = authenticate_feed_token(token_id, secret, f"/api/posts/{guid}/download")
+        auth_result = authenticate_feed_token(
+            token_id, secret, flask.request.path, req=flask.request
+        )
     except Exception as e:
         logger.error(f"Token authentication failed for guid={guid}: {e}", exc_info=True)
         print(f"[TRIGGER_RETURN] status=401 reason=auth_exception error={e}", file=sys.stderr, flush=True)
@@ -1394,9 +1396,11 @@ def _handle_trigger_status() -> flask.Response:
         response.headers["Cache-Control"] = "no-store"
         return response, 400
     
-    # Authenticate the token
+    # Authenticate the token - use actual request path so _resolve_feed_id can extract guid
     try:
-        auth_result = authenticate_feed_token(token_id, secret, f"/api/posts/{guid}/download")
+        auth_result = authenticate_feed_token(
+            token_id, secret, flask.request.path, req=flask.request
+        )
     except Exception as auth_err:
         logger.error(f"Token auth exception for guid={guid}: {auth_err}", exc_info=True)
         print(f"[TRIGGER_STATUS_RETURN] status=401 reason=auth_exception", file=sys.stderr, flush=True)

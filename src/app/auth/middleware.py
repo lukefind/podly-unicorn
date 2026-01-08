@@ -156,7 +156,7 @@ def _authenticate_feed_token_from_query() -> FeedTokenAuthResult | None:
     if not token_id or not secret:
         return None
 
-    return authenticate_feed_token(token_id, secret, request.path)
+    return authenticate_feed_token(token_id, secret, request.path, req=request)
 
 
 def _is_public_request(path: str) -> bool:
