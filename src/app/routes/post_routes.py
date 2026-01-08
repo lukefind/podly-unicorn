@@ -1356,14 +1356,16 @@ def trigger_status() -> flask.Response:
     try:
         return _handle_trigger_status()
     except Exception as e:
-        # Detailed logging for debugging - never log secrets
+        # Mandatory traceback logging - never log secrets
         import traceback
-        token_prefix = token_id[:6] if token_id and len(token_id) >= 6 else token_id
-        token_suffix = token_id[-4:] if token_id and len(token_id) >= 4 else ""
-        logger.error(f"[TRIGGER_STATUS_500] guid={guid} token={token_prefix}...{token_suffix} error={e}")
-        logger.error(f"[TRIGGER_STATUS_500] traceback:\n{traceback.format_exc()}")
-        print(f"[TRIGGER_STATUS_500] guid={guid} token={token_prefix}...{token_suffix} error={e}", file=sys.stderr, flush=True)
-        print(f"[TRIGGER_STATUS_500] traceback:\n{traceback.format_exc()}", file=sys.stderr, flush=True)
+        flask.current_app.logger.error(
+            "[TRIGGER_STATUS_500] guid=%s path=%s args=%s err=%r\n%s",
+            guid,
+            flask.request.path,
+            {k: v for k, v in flask.request.args.items() if k != "feed_secret"},
+            e,
+            traceback.format_exc(),
+        )
         
         # Return 503 for temporary server errors - UI will show banner and retry
         response = flask.jsonify({

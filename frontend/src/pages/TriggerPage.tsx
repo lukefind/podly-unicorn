@@ -5,14 +5,20 @@
  * (not session auth). It displays the canonical processing progress UI.
  * 
  * URL: /trigger?guid=X&token_id=Y&secret=Z
+ * 
+ * Polling rules:
+ * - Single interval owner (intervalRef)
+ * - Stops permanently on terminal states (ready, failed, error)
+ * - HTTP-driven: 200=valid, 4xx=permanent error, 5xx=temporary
+ * - "Temporary error" only for 5xx/network failures
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProcessingProgressUI from '../components/ProcessingProgressUI';
 
-const isTerminal = (s?: string) =>
-  s === 'ready' || s === 'completed' || s === 'failed' || s === 'error';
+const TERMINAL_STATES = ['ready', 'completed', 'failed', 'error'];
+const POLL_INTERVAL_MS = 2000;
 
 interface TriggerStatus {
   state: 'ready' | 'processing' | 'queued' | 'failed' | 'not_found' | 'error' | 'not_started';
@@ -38,31 +44,33 @@ export default function TriggerPage() {
 
   const [status, setStatus] = useState<TriggerStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isTemporarilyUnavailable, setIsTemporarilyUnavailable] = useState(false);
 
-  // Refs to avoid recreating fetchStatus on every status change
-  const statusRef = useRef<typeof status>(null);
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
+  // Single polling owner - only one interval ever exists
+  const intervalRef = useRef<number | null>(null);
+  const stoppedRef = useRef(false);
 
-  const pollingStopRef = useRef(false);
-  useEffect(() => {
-    pollingStopRef.current = isTerminal(status?.state ?? undefined);
-  }, [status?.state]);
+  // Stop polling permanently
+  const stopPolling = () => {
+    stoppedRef.current = true;
+    if (intervalRef.current !== null) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  };
 
-  // Build status URL with cache buster
-  const buildStatusUrl = useCallback(() => {
+  // Build status URL
+  const buildStatusUrl = () => {
     if (!guid || !tokenId || !secret) return null;
     return `/api/trigger/status?guid=${encodeURIComponent(guid)}&feed_token=${encodeURIComponent(tokenId)}&feed_secret=${encodeURIComponent(secret)}&t=${Date.now()}`;
-  }, [guid, tokenId, secret]);
+  };
 
-  // Fetch status - resilient to temporary failures
-  const fetchStatus = useCallback(async () => {
+  // Fetch status - HTTP-driven logic
+  const fetchStatus = async () => {
+    if (stoppedRef.current) return;
+
     const url = buildStatusUrl();
     if (!url) return;
-    if (pollingStopRef.current) return;
 
     try {
       const response = await fetch(url, {
@@ -75,85 +83,71 @@ export default function TriggerPage() {
         },
       });
 
-      // Parse JSON safely
       const data = await response.json().catch(() => null);
 
-      // 2xx responses: must be valid status (queued|processing|ready)
+      // 2xx: valid response
       if (response.ok) {
-        // 200 + invalid/error state = treat as permanent error, stop polling
+        // 200 + error/failed state should never happen after backend fix
+        // but treat as permanent error if it does
         if (!data || data.state === 'error' || data.state === 'failed') {
           setError(data?.message || 'Unexpected status response');
           setIsTemporarilyUnavailable(false);
-          pollingStopRef.current = true;
+          stopPolling();
           return;
         }
 
-        // Valid status
+        // Valid status - update UI
         setStatus(data);
         setError(null);
         setIsTemporarilyUnavailable(false);
 
-        // Stop polling on terminal states
-        if (isTerminal(data?.state)) {
-          pollingStopRef.current = true;
-        }
-
-        if (isInitialLoad) {
-          setIsInitialLoad(false);
+        // Terminal state - stop polling permanently
+        if (TERMINAL_STATES.includes(data.state)) {
+          stopPolling();
         }
         return;
       }
 
-      // 5xx: temporary (keep last known status, show banner, keep polling)
+      // 5xx: temporary server error - show banner, keep polling
       if (response.status >= 500) {
-        if (statusRef.current !== null) {
-          setIsTemporarilyUnavailable(true);
-        }
-        console.warn('Trigger status temporarily unavailable, retrying...', data?.message);
+        setIsTemporarilyUnavailable(true);
+        console.warn('[TriggerPage] 5xx response, retrying...', response.status, data?.message);
         return;
       }
 
-      // 4xx: permanent error, stop polling
+      // 4xx: permanent error - stop polling
       setError(data?.message || `Error: ${response.status}`);
       setIsTemporarilyUnavailable(false);
-      pollingStopRef.current = true;
+      stopPolling();
     } catch (err) {
-      console.error('Failed to fetch trigger status:', err);
-      if (statusRef.current !== null) {
-        setIsTemporarilyUnavailable(true);
-      }
+      // Network error - temporary, keep polling
+      console.error('[TriggerPage] Network error:', err);
+      setIsTemporarilyUnavailable(true);
     }
-  }, [buildStatusUrl, isInitialLoad]);
+  };
 
-  // Initial trigger (start processing if needed)
+  // Single effect for polling lifecycle
   useEffect(() => {
     if (!guid || !tokenId || !secret) {
       setError('Missing required parameters: guid, token_id, secret');
       return;
     }
 
-    // We're already on the trigger page, so just start polling
+    // Reset state for fresh mount
+    stoppedRef.current = false;
+
+    // Initial fetch
     fetchStatus();
-  }, [guid, tokenId, secret, fetchStatus]);
 
-  // Ref to avoid interval recreation on fetchStatus changes
-  const fetchStatusRef = useRef(fetchStatus);
-  useEffect(() => {
-    fetchStatusRef.current = fetchStatus;
-  }, [fetchStatus]);
+    // Start single polling interval
+    intervalRef.current = window.setInterval(fetchStatus, POLL_INTERVAL_MS);
 
-  // Poll for status updates
-  useEffect(() => {
-    if (!guid || !tokenId || !secret) return;
-    if (error) return;
-    if (isTerminal(status?.state)) return;
-
-    const id = window.setInterval(() => {
-      fetchStatusRef.current();
-    }, 2000);
-
-    return () => window.clearInterval(id);
-  }, [guid, tokenId, secret, error, status?.state]);
+    // Cleanup on unmount
+    return () => {
+      stopPolling();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guid, tokenId, secret]);
 
   // Adapt trigger status to ProcessingProgressUI props
   const getProgressProps = () => {
