@@ -696,17 +696,14 @@ def _cleanup_feed_directories(feed: Feed) -> None:
                 )
 
 
-@feed_bp.route("/<path:something_or_rss>", methods=["GET"])
-def get_feed_by_alt_or_url(something_or_rss: str) -> Response:
-    # first try to serve ANY static file matching the path
-    if current_app.static_folder is not None:
-        # Use Flask's safe helper to prevent directory traversal outside static_folder
-        try:
-            return send_from_directory(current_app.static_folder, something_or_rss)
-        except Exception:
-            # Not a valid static file; fall through to RSS/DB lookup
-            pass
-    feed = Feed.query.filter_by(rss_url=something_or_rss).first()
+@feed_bp.route("/rss/<path:rss_url>", methods=["GET"])
+def get_feed_by_rss_url(rss_url: str) -> Response:
+    """Legacy endpoint: Look up a feed by its RSS URL.
+    
+    This route was previously a catch-all that intercepted ALL paths,
+    breaking SPA routing. Now it only matches /rss/<url> paths.
+    """
+    feed = Feed.query.filter_by(rss_url=rss_url).first()
     if feed:
         xml_content = generate_feed_xml(feed)
         response = make_response(xml_content)
