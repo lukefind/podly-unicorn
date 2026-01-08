@@ -348,10 +348,7 @@ export default function TriggerPage() {
 
           {/* Canonical progress UI */}
           {progressProps && (
-            <ProcessingProgressUI
-              {...progressProps}
-              jobLinkHref={progressProps.jobId ? `/jobs?job=${progressProps.jobId}` : undefined}
-            />
+            <ProcessingProgressUI {...progressProps} />
           )}
 
           <div className="mt-6 text-center text-sm text-gray-500">
