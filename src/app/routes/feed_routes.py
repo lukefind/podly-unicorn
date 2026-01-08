@@ -35,6 +35,7 @@ from app.models import (
     PromptPreset,
     TranscriptSegment,
     User,
+    UserDownload,
 )
 from podcast_processor.podcast_downloader import sanitize_title
 from shared.processing_paths import get_in_root, get_srv_root
@@ -43,6 +44,35 @@ logger = logging.getLogger("global_logger")
 
 
 feed_bp = Blueprint("feed", __name__)
+
+
+def _record_rss_read(
+    feed_id: int,
+    user_id: int | None,
+    auth_type: str = "feed_scoped",
+) -> None:
+    """Record an RSS feed read event (podcast app polling for updates).
+    
+    This is separate from audio downloads - RSS reads are when the podcast app
+    fetches the feed XML to check for new episodes.
+    """
+    try:
+        event = UserDownload(
+            user_id=user_id,
+            post_id=None,  # Feed-level event, not episode-specific
+            feed_id=feed_id,
+            is_processed=False,
+            file_size_bytes=None,
+            download_source="rss",
+            event_type="RSS_READ",
+            auth_type=auth_type,
+            decision="SERVED",
+        )
+        db.session.add(event)
+        db.session.commit()
+    except Exception as exc:
+        logger.error(f"Failed to record RSS_READ for feed {feed_id}: {exc}")
+        db.session.rollback()
 
 
 def _require_admin() -> ResponseReturnValue | None:
@@ -420,6 +450,9 @@ def get_combined_feed() -> Response:
     if not user:
         return make_response(("User not found", 404))
     
+    # Record RSS_READ event for combined feed (feed_id=None for combined)
+    _record_rss_read(feed_id=None, user_id=user.id, auth_type="combined")
+    
     # Generate the combined XML
     xml_content = generate_combined_feed_xml(user.id, user.username)
     
@@ -431,6 +464,13 @@ def get_combined_feed() -> Response:
 @feed_bp.route("/feed/<int:f_id>", methods=["GET"])
 def get_feed(f_id: int) -> Response:
     feed = Feed.query.get_or_404(f_id)
+    
+    # Get current user for tracking (may be None for unauthenticated access)
+    current = getattr(g, "current_user", None)
+    user_id = current.id if current else None
+    
+    # Record RSS_READ event
+    _record_rss_read(feed_id=f_id, user_id=user_id, auth_type="feed_scoped" if current else "none")
 
     # Try to refresh the feed, but don't fail if upstream is unavailable
     try:

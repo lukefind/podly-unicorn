@@ -752,18 +752,20 @@ def _format_duration(seconds: float) -> str:
         return f"{hours}h {mins}m" if mins else f"{hours}h"
 
 
-@auth_bp.route("/api/admin/download-attempts", methods=["GET"])
-def get_download_attempts() -> ResponseReturnValue:
-    """Get all download attempts with full details for admin audit.
+@auth_bp.route("/api/admin/user-activity", methods=["GET"])
+def get_user_activity() -> ResponseReturnValue:
+    """Get all user activity events with full details for admin audit.
     
     Query params:
     - user_id: Filter by user ID (optional)
     - limit: Max records to return (default 500)
     - offset: Pagination offset (default 0)
-    - decision: Filter by decision type (optional)
+    - event_type: Filter by event type (RSS_READ, AUDIO_DOWNLOAD, TRIGGER_OPEN, PROCESS_STARTED, FAILED)
+    - decision: Filter by decision type (optional, legacy)
     """
     from app.models import UserDownload, Post, Feed, User
     from app.extensions import db
+    from sqlalchemy import case, func
     
     settings = current_app.config.get("AUTH_SETTINGS")
     if settings and settings.require_auth:
@@ -775,26 +777,42 @@ def get_download_attempts() -> ResponseReturnValue:
     user_id = request.args.get("user_id", type=int)
     limit = min(request.args.get("limit", 500, type=int), 5000)
     offset = request.args.get("offset", 0, type=int)
+    event_type_filter = request.args.get("event_type")
     decision_filter = request.args.get("decision")
     
-    # Build query
+    # Alias for feed join - need to handle both post.feed_id and direct feed_id
+    FeedFromPost = db.aliased(Feed)
+    FeedDirect = db.aliased(Feed)
+    
+    # Build query - handle both post-level and feed-level events
     query = db.session.query(
         UserDownload,
         Post.guid.label("post_guid"),
         Post.title.label("post_title"),
-        Feed.id.label("feed_id"),
-        Feed.title.label("feed_title"),
+        # Use direct feed_id if available, otherwise get from post
+        case(
+            (UserDownload.feed_id.isnot(None), UserDownload.feed_id),
+            else_=FeedFromPost.id
+        ).label("feed_id"),
+        case(
+            (UserDownload.feed_id.isnot(None), FeedDirect.title),
+            else_=FeedFromPost.title
+        ).label("feed_title"),
         User.username.label("username"),
     ).outerjoin(
         Post, UserDownload.post_id == Post.id
     ).outerjoin(
-        Feed, Post.feed_id == Feed.id
+        FeedFromPost, Post.feed_id == FeedFromPost.id
+    ).outerjoin(
+        FeedDirect, UserDownload.feed_id == FeedDirect.id
     ).outerjoin(
         User, UserDownload.user_id == User.id
     )
     
     if user_id:
         query = query.filter(UserDownload.user_id == user_id)
+    if event_type_filter:
+        query = query.filter(UserDownload.event_type == event_type_filter)
     if decision_filter:
         query = query.filter(UserDownload.decision == decision_filter)
     
@@ -836,3 +854,10 @@ def get_download_attempts() -> ResponseReturnValue:
         "limit": limit,
         "offset": offset,
     })
+
+
+# Backward-compatible alias for old endpoint name
+@auth_bp.route("/api/admin/download-attempts", methods=["GET"])
+def get_download_attempts() -> ResponseReturnValue:
+    """Alias for get_user_activity - kept for backward compatibility."""
+    return get_user_activity()

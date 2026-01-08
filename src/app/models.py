@@ -176,9 +176,10 @@ class User(db.Model):  # type: ignore[name-defined, misc]
 
 
 class UserDownload(db.Model):  # type: ignore[name-defined, misc]
-    """Tracks user activity events for episodes.
+    """Tracks user activity events for episodes and feeds.
     
     Event types:
+    - RSS_READ: RSS feed XML was served (podcast app polling)
     - AUDIO_DOWNLOAD: Actual media file served to user
     - TRIGGER_OPEN: User opened /trigger page
     - PROCESS_STARTED: Processing job queued
@@ -189,27 +190,31 @@ class UserDownload(db.Model):  # type: ignore[name-defined, misc]
     - Usage statistics (successful downloads)
     - Audit trail for all user actions
     - Debugging and understanding real usage patterns
+    - Distinguishing RSS polling from actual audio downloads
     """
     __tablename__ = "user_download"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)  # nullable for unauthenticated
-    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False, index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=True, index=True)  # nullable for feed-level events like RSS_READ
+    feed_id = db.Column(db.Integer, db.ForeignKey("feed.id"), nullable=True, index=True)  # For feed-level events like RSS_READ
     downloaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     file_size_bytes = db.Column(db.Integer, nullable=True)  # Size of downloaded file
     is_processed = db.Column(db.Boolean, default=True)  # Was it a processed (ad-free) version?
     download_source = db.Column(db.String(20), nullable=False, default="web")
     # Event tracking fields
-    event_type = db.Column(db.String(20), nullable=True, index=True)  # AUDIO_DOWNLOAD/TRIGGER_OPEN/PROCESS_STARTED/PROCESS_COMPLETE/FAILED
+    event_type = db.Column(db.String(20), nullable=True, index=True)  # RSS_READ/AUDIO_DOWNLOAD/TRIGGER_OPEN/PROCESS_STARTED/PROCESS_COMPLETE/FAILED
     auth_type = db.Column(db.String(20), nullable=True)  # combined/feed_scoped/session/none
-    decision = db.Column(db.String(30), nullable=True)  # Legacy field for backwards compat, maps to event_type
+    decision = db.Column(db.String(30), nullable=True)  # Legacy field for backwards compat
 
     # Relationships
     user = db.relationship("User", backref=db.backref("downloads", lazy="dynamic"))
     post = db.relationship("Post", backref=db.backref("user_downloads", lazy="dynamic"))
+    feed = db.relationship("Feed", backref=db.backref("user_activity", lazy="dynamic"))
 
     __table_args__ = (
         db.Index("ix_user_download_user_date", "user_id", "downloaded_at"),
+        db.Index("ix_user_download_event_type", "event_type", "downloaded_at"),
     )
 
     def __repr__(self) -> str:
