@@ -45,7 +45,6 @@ export default function TriggerPage() {
   const [status, setStatus] = useState<TriggerStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isTemporarilyUnavailable, setIsTemporarilyUnavailable] = useState(false);
-  const [showCloseInstruction, setShowCloseInstruction] = useState(false);
   const [copiedFeedUrl, setCopiedFeedUrl] = useState(false);
 
   // Single polling owner - only one interval ever exists
@@ -226,14 +225,6 @@ export default function TriggerPage() {
     );
   }
 
-  // Handle "Return to podcast app" button click
-  const handleReturnClick = () => {
-    // Attempt to close the tab (only works if opened by script)
-    window.close();
-    // Immediately show close instruction since window.close() usually won't work
-    setShowCloseInstruction(true);
-  };
-
   // Copy RSS feed URL to clipboard
   const handleCopyFeedUrl = async () => {
     if (!tokenId || !secret) return;
@@ -267,30 +258,23 @@ export default function TriggerPage() {
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
               </div>
-              <h2 className="text-xl font-semibold text-emerald-700 mb-2">Episode Ready</h2>
-              <p className="text-gray-600">
-                Return to your podcast app and refresh the feed. The processed episode will download there.
+              <h2 className="text-2xl font-bold text-emerald-600 mb-3">Episode Ready</h2>
+              <p className="text-gray-700 text-base leading-relaxed">
+                Return to your podcast app and refresh the feed.
+                <br />
+                The processed episode will download there.
               </p>
             </div>
 
-            {/* Primary CTA */}
-            <button
-              onClick={handleReturnClick}
-              className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-center font-semibold text-lg rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all mb-3"
-            >
-              Return to your podcast app
-            </button>
-
-            {/* Close instruction hint */}
-            {showCloseInstruction ? (
-              <p className="text-center text-purple-700 font-medium text-sm mb-4">
-                Now close this tab.
+            {/* Primary instruction - not a button, just prominent text */}
+            <div className="bg-purple-50 rounded-xl p-4 mb-4 text-center">
+              <p className="text-purple-800 font-semibold text-lg mb-1">
+                Close this tab now
               </p>
-            ) : (
-              <p className="text-center text-gray-500 text-sm mb-4">
-                Close this tab and return to your podcast app.
+              <p className="text-purple-600 text-sm">
+                and return to your podcast app
               </p>
-            )}
+            </div>
 
             {/* Secondary actions */}
             <div className="border-t border-gray-100 pt-4">
