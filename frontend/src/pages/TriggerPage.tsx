@@ -45,6 +45,8 @@ export default function TriggerPage() {
   const [status, setStatus] = useState<TriggerStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isTemporarilyUnavailable, setIsTemporarilyUnavailable] = useState(false);
+  const [showCloseInstruction, setShowCloseInstruction] = useState(false);
+  const [copiedFeedUrl, setCopiedFeedUrl] = useState(false);
 
   // Single polling owner - only one interval ever exists
   const intervalRef = useRef<number | null>(null);
@@ -224,7 +226,32 @@ export default function TriggerPage() {
     );
   }
 
-  // Ready state - show download instructions
+  // Handle "Return to podcast app" button click
+  const handleReturnClick = () => {
+    // Attempt to close the tab (only works if opened by script)
+    window.close();
+    // Immediately show close instruction since window.close() usually won't work
+    setShowCloseInstruction(true);
+  };
+
+  // Copy RSS feed URL to clipboard
+  const handleCopyFeedUrl = async () => {
+    if (!tokenId || !secret) return;
+    
+    // Build the RSS feed URL (not the download URL)
+    const feedUrl = `${window.location.origin}/feed/combined?feed_token=${tokenId}&feed_secret=${secret}`;
+    
+    try {
+      await navigator.clipboard.writeText(feedUrl);
+      setCopiedFeedUrl(true);
+      setTimeout(() => setCopiedFeedUrl(false), 2000);
+    } catch {
+      // Fallback: show in prompt
+      window.prompt('Copy this RSS feed URL:', feedUrl);
+    }
+  };
+
+  // Ready state - show return instructions
   if (status?.state === 'ready') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-800 flex items-center justify-center p-4">
@@ -240,36 +267,54 @@ export default function TriggerPage() {
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
               </div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">Episode Ready!</h2>
-              <p className="text-gray-600">The ad-free version is ready to download.</p>
+              <h2 className="text-xl font-semibold text-emerald-700 mb-2">Episode Ready</h2>
+              <p className="text-gray-600">
+                Return to your podcast app and refresh the feed. The processed episode will download there.
+              </p>
             </div>
 
-            <div className="bg-purple-50 rounded-xl p-4 mb-4">
-              <h3 className="font-medium text-purple-900 mb-2">Next steps:</h3>
-              <ol className="text-sm text-purple-700 space-y-2">
-                <li className="flex items-start gap-2">
-                  <span className="bg-purple-200 text-purple-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium flex-shrink-0">1</span>
-                  <span>Return to your podcast app</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="bg-purple-200 text-purple-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium flex-shrink-0">2</span>
-                  <span>Download or stream the episode as normal</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="bg-purple-200 text-purple-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium flex-shrink-0">3</span>
-                  <span>Enjoy your ad-free listening!</span>
-                </li>
-              </ol>
-            </div>
+            {/* Primary CTA */}
+            <button
+              onClick={handleReturnClick}
+              className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-center font-semibold text-lg rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all mb-3"
+            >
+              Return to your podcast app
+            </button>
 
-            {status.download_url && (
-              <a
-                href={status.download_url}
-                className="block w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-center font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all"
-              >
-                Download Now
-              </a>
+            {/* Close instruction hint */}
+            {showCloseInstruction ? (
+              <p className="text-center text-purple-700 font-medium text-sm mb-4">
+                Now close this tab.
+              </p>
+            ) : (
+              <p className="text-center text-gray-500 text-sm mb-4">
+                Close this tab and return to your podcast app.
+              </p>
             )}
+
+            {/* Secondary actions */}
+            <div className="border-t border-gray-100 pt-4">
+              <button
+                onClick={handleCopyFeedUrl}
+                className="w-full py-2 px-4 text-purple-600 text-sm font-medium hover:bg-purple-50 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                {copiedFeedUrl ? (
+                  <>
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Copy processed feed link
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
