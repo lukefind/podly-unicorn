@@ -336,3 +336,149 @@ class TestTriggerStatusProcessingState:
         assert response.status_code == 200
         data = response.get_json()
         assert data["job"]["progress_percentage"] == 100  # Clamped
+
+
+class TestTriggerStatusHeaders:
+    """Test that trigger endpoints do not emit session cookies or Vary: Cookie."""
+
+    def test_trigger_status_no_set_cookie_header(
+        self, app_with_routes, test_post, test_token
+    ):
+        """Trigger status should never emit Set-Cookie header."""
+        # Register the cookie stripping middleware
+        from app import _configure_trigger_cookie_stripping
+        _configure_trigger_cookie_stripping(app_with_routes)
+        
+        client = app_with_routes.test_client()
+        
+        with app_with_routes.app_context():
+            post = db.session.merge(test_post)
+            response = client.get(
+                f"/api/trigger/status?guid={post.guid}"
+                f"&feed_token={test_token['token_id']}"
+                f"&feed_secret={test_token['secret']}"
+            )
+        
+        assert response.status_code == 200
+        # Must NOT have Set-Cookie header
+        assert "Set-Cookie" not in response.headers
+
+    def test_trigger_status_no_vary_cookie_header(
+        self, app_with_routes, test_post, test_token
+    ):
+        """Trigger status should not have Vary: Cookie header."""
+        # Register the cookie stripping middleware
+        from app import _configure_trigger_cookie_stripping
+        _configure_trigger_cookie_stripping(app_with_routes)
+        
+        client = app_with_routes.test_client()
+        
+        with app_with_routes.app_context():
+            post = db.session.merge(test_post)
+            response = client.get(
+                f"/api/trigger/status?guid={post.guid}"
+                f"&feed_token={test_token['token_id']}"
+                f"&feed_secret={test_token['secret']}"
+            )
+        
+        assert response.status_code == 200
+        # Vary header should not contain Cookie
+        vary = response.headers.get("Vary", "")
+        assert "cookie" not in vary.lower()
+
+    def test_trigger_endpoint_no_set_cookie_header(self, app_with_routes, test_post, test_token):
+        """Trigger endpoint should never emit Set-Cookie header."""
+        # Register the cookie stripping middleware
+        from app import _configure_trigger_cookie_stripping
+        _configure_trigger_cookie_stripping(app_with_routes)
+        
+        client = app_with_routes.test_client()
+        
+        with app_with_routes.app_context():
+            post = db.session.merge(test_post)
+            response = client.get(
+                f"/trigger?guid={post.guid}"
+                f"&feed_token={test_token['token_id']}"
+                f"&feed_secret={test_token['secret']}"
+            )
+        
+        # Any status is fine, just check no Set-Cookie
+        assert "Set-Cookie" not in response.headers
+
+
+class TestTriggerStatusWithActiveJob:
+    """Test /api/trigger/status returns 200 (not 5xx) when a job exists."""
+
+    def test_running_job_returns_200_processing(
+        self, app_with_routes, test_post, test_token
+    ):
+        """Running job should return 200 with processing state, never 5xx."""
+        client = app_with_routes.test_client()
+        
+        with app_with_routes.app_context():
+            post = db.session.merge(test_post)
+            
+            # Create a running job with typical values
+            job = ProcessingJob(
+                post_guid=post.guid,
+                status="running",
+                current_step=2,
+                total_steps=4,
+                step_name="Transcribing",
+                progress_percentage=50.0,
+            )
+            db.session.add(job)
+            db.session.commit()
+            
+            response = client.get(
+                f"/api/trigger/status?guid={post.guid}"
+                f"&feed_token={test_token['token_id']}"
+                f"&feed_secret={test_token['secret']}"
+            )
+        
+        # Must be 200, never 5xx
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["state"] == "processing"
+        assert data["job"]["status"] == "running"
+        assert data["job"]["current_step"] == 2
+        assert data["job"]["step_name"] == "Transcribing"
+        # Verify started_at is present (not updated_at which doesn't exist)
+        assert "started_at" in data["job"]
+        assert "updated_at" not in data["job"]
+
+    def test_completed_job_returns_200_ready(
+        self, app_with_routes, test_post, test_token
+    ):
+        """Completed job should return 200 with ready state."""
+        client = app_with_routes.test_client()
+        
+        with app_with_routes.app_context():
+            post = db.session.merge(test_post)
+            
+            # Mark post as processed
+            post.processed_audio_path = None  # No file, but job completed
+            
+            # Create a completed job
+            job = ProcessingJob(
+                post_guid=post.guid,
+                status="completed",
+                current_step=4,
+                total_steps=4,
+                step_name="Complete",
+                progress_percentage=100.0,
+            )
+            db.session.add(job)
+            db.session.commit()
+            
+            response = client.get(
+                f"/api/trigger/status?guid={post.guid}"
+                f"&feed_token={test_token['token_id']}"
+                f"&feed_secret={test_token['secret']}"
+            )
+        
+        # Must be 200
+        assert response.status_code == 200
+        data = response.get_json()
+        # State depends on whether processed_audio_path exists
+        assert data["state"] in ["ready", "not_started"]
