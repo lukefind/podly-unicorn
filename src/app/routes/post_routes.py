@@ -1328,7 +1328,7 @@ def _normalize_job(job: ProcessingJob, download_url: str | None = None) -> dict:
             "step_name": step_name,
             "progress_percentage": progress,
             "created_at": job.created_at.isoformat() if job.created_at else None,
-            "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
             "error_message": getattr(job, 'error_message', None),
         }
     }
@@ -1355,16 +1355,13 @@ def trigger_status() -> flask.Response:
     
     try:
         return _handle_trigger_status()
-    except Exception as e:
-        # Mandatory traceback logging - never log secrets
-        import traceback
-        flask.current_app.logger.error(
-            "[TRIGGER_STATUS_500] guid=%s path=%s args=%s err=%r\n%s",
+    except Exception:
+        # Use logger.exception for automatic full traceback - never log secrets
+        flask.current_app.logger.exception(
+            "[TRIGGER_STATUS_500] guid=%s path=%s args=%s",
             guid,
             flask.request.path,
             {k: v for k, v in flask.request.args.items() if k != "feed_secret"},
-            e,
-            traceback.format_exc(),
         )
         
         # Return 503 for temporary server errors - UI will show banner and retry
