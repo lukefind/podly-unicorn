@@ -260,10 +260,11 @@ def _configure_cors(app: Flask) -> None:
 
 
 def _configure_trigger_cookie_stripping(app: Flask) -> None:
-    """Strip Set-Cookie headers from trigger endpoints to prevent cookie churn.
+    """Strip Set-Cookie and Vary: Cookie headers from trigger endpoints.
     
     Trigger endpoints use feed-token auth, not session cookies. Removing
     Set-Cookie prevents unnecessary cookie refresh on every poll request.
+    Removing Vary: Cookie prevents caching issues with these stateless endpoints.
     """
     from flask import request  # pylint: disable=import-outside-toplevel
 
@@ -272,6 +273,14 @@ def _configure_trigger_cookie_stripping(app: Flask) -> None:
         path = request.path
         if path.startswith("/api/trigger/") or path == "/trigger":
             resp.headers.pop("Set-Cookie", None)
+            # Strip Vary: Cookie, keep other Vary values if present
+            vary = resp.headers.get("Vary", "")
+            if vary:
+                vary_parts = [v.strip() for v in vary.split(",") if v.strip().lower() != "cookie"]
+                if vary_parts:
+                    resp.headers["Vary"] = ", ".join(vary_parts)
+                else:
+                    resp.headers.pop("Vary", None)
         return resp
 
 
