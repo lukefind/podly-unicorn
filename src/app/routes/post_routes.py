@@ -1274,6 +1274,64 @@ def _handle_trigger_processing() -> flask.Response:
         )
 
 
+def _normalize_job(job: ProcessingJob, download_url: str | None = None) -> dict:
+    """Normalize a ProcessingJob to a safe JSON-serializable dict with defaults.
+    
+    Handles NULL fields that can occur during early processing stages.
+    """
+    # Step name mapping for when step_name is NULL
+    STEP_NAMES = {
+        0: "Initializing",
+        1: "Downloading",
+        2: "Transcribing", 
+        3: "Detecting Ads",
+        4: "Processing Audio",
+    }
+    
+    # Safe defaults for potentially NULL fields
+    current_step = job.current_step if job.current_step is not None else 0
+    total_steps = job.total_steps if job.total_steps and job.total_steps > 0 else 4
+    step_name = job.step_name or STEP_NAMES.get(current_step, "Processing")
+    
+    # Calculate progress percentage with guards
+    if job.progress_percentage is not None:
+        progress = max(0, min(100, int(job.progress_percentage)))
+    elif total_steps > 0:
+        progress = min(100, int((current_step / total_steps) * 100))
+    else:
+        progress = 0
+    
+    # Determine state from job status
+    if job.status == "running":
+        state = "processing"
+    elif job.status == "pending":
+        state = "queued"
+    elif job.status == "completed":
+        state = "ready"
+    elif job.status == "failed":
+        state = "failed"
+    else:
+        state = "processing"  # Default for unknown status
+    
+    return {
+        "state": state,
+        "processed": job.status == "completed",
+        "download_url": download_url,
+        "message": f"Step {current_step}/{total_steps}: {step_name}",
+        "job": {
+            "id": job.id,
+            "status": job.status or "unknown",
+            "current_step": current_step,
+            "total_steps": total_steps,
+            "step_name": step_name,
+            "progress_percentage": progress,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+            "error_message": getattr(job, 'error_message', None),
+        }
+    }
+
+
 @post_bp.route("/api/trigger/status", methods=["GET"])
 def trigger_status() -> flask.Response:
     """Get processing status for an episode (JSON endpoint for polling).
@@ -1283,14 +1341,31 @@ def trigger_status() -> flask.Response:
     - feed_token: The feed-scoped token ID
     - feed_secret: The feed-scoped token secret
     """
+    guid = flask.request.args.get("guid")
+    token_id = flask.request.args.get("feed_token")
+    
     try:
         return _handle_trigger_status()
     except Exception as e:
-        logger.error(f"Unexpected error in trigger_status: {e}", exc_info=True)
-        print(f"[TRIGGER_STATUS_ERROR] unexpected_exception: {e}", file=sys.stderr, flush=True)
-        response = flask.jsonify({"state": "error", "message": "Internal server error"})
+        # Detailed logging for debugging - never log secrets
+        import traceback
+        token_prefix = token_id[:6] if token_id and len(token_id) >= 6 else token_id
+        token_suffix = token_id[-4:] if token_id and len(token_id) >= 4 else ""
+        logger.error(f"[TRIGGER_STATUS_500] guid={guid} token={token_prefix}...{token_suffix} error={e}")
+        logger.error(f"[TRIGGER_STATUS_500] traceback:\n{traceback.format_exc()}")
+        print(f"[TRIGGER_STATUS_500] guid={guid} token={token_prefix}...{token_suffix} error={e}", file=sys.stderr, flush=True)
+        print(f"[TRIGGER_STATUS_500] traceback:\n{traceback.format_exc()}", file=sys.stderr, flush=True)
+        
+        # Return 200 with error state so UI keeps rendering
+        response = flask.jsonify({
+            "state": "error",
+            "message": "Temporary error, retrying...",
+            "processed": False,
+            "download_url": None,
+            "job": None
+        })
         response.headers["Cache-Control"] = "no-store"
-        return response, 500
+        return response
 
 
 def _handle_trigger_status() -> flask.Response:
@@ -1374,22 +1449,9 @@ def _handle_trigger_status() -> flask.Response:
     ).first()
     
     if job:
-        response = flask.jsonify({
-            "state": "processing" if job.status == "running" else "queued",
-            "processed": False,
-            "download_url": download_url,
-            "message": f"Step {job.current_step}/{job.total_steps}: {job.step_name or 'Processing'}",
-            "job": {
-                "id": job.id,
-                "status": job.status,
-                "current_step": job.current_step,
-                "total_steps": job.total_steps,
-                "step_name": job.step_name,
-                "progress_percentage": job.progress_percentage,
-                "created_at": job.created_at.isoformat() if job.created_at else None,
-                "updated_at": job.updated_at.isoformat() if job.updated_at else None,
-            }
-        })
+        # Use normalize_job for safe defaults on potentially NULL fields
+        normalized = _normalize_job(job, download_url)
+        response = flask.jsonify(normalized)
         response.headers["Cache-Control"] = "no-store"
         return response
     
@@ -1399,18 +1461,10 @@ def _handle_trigger_status() -> flask.Response:
     ).order_by(ProcessingJob.created_at.desc()).first()
     
     if last_job and last_job.status == "failed":
-        response = flask.jsonify({
-            "state": "failed",
-            "processed": False,
-            "download_url": None,
-            "message": f"Processing failed: {last_job.error_message or 'Unknown error'}",
-            "job": {
-                "id": last_job.id,
-                "status": last_job.status,
-                "error_message": last_job.error_message,
-                "created_at": last_job.created_at.isoformat() if last_job.created_at else None,
-            }
-        })
+        # Use normalize_job for consistent response structure
+        normalized = _normalize_job(last_job, None)
+        normalized["message"] = f"Processing failed: {last_job.error_message or 'Unknown error'}"
+        response = flask.jsonify(normalized)
         response.headers["Cache-Control"] = "no-store"
         return response
     

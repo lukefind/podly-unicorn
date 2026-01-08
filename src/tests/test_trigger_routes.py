@@ -15,7 +15,7 @@ import pytest
 from flask import Flask
 
 from app.extensions import db
-from app.models import Feed, FeedAccessToken, Post, User
+from app.models import Feed, FeedAccessToken, Post, ProcessingJob, User
 from app.routes.main_routes import main_bp
 from app.routes.post_routes import post_bp
 
@@ -222,3 +222,117 @@ class TestTriggerEndpoint:
         assert response.status_code in [401, 403]
         assert response.content_type == "text/html; charset=utf-8"
         assert b"Podly Unicorn" in response.data  # Themed error page
+
+
+class TestTriggerStatusProcessingState:
+    """Test /api/trigger/status with processing jobs that have NULL fields.
+    
+    This is a regression test for the 500 error that occurred when polling
+    status while a job was actively processing with NULL current_step/total_steps.
+    """
+
+    def test_processing_job_with_null_fields_returns_200(
+        self, app_with_routes, test_post, test_token
+    ):
+        """Processing job with NULL fields should return 200, not 500."""
+        client = app_with_routes.test_client()
+        
+        with app_with_routes.app_context():
+            post = db.session.merge(test_post)
+            
+            # Create a processing job with NULL fields (simulates early processing)
+            job = ProcessingJob(
+                post_guid=post.guid,
+                status="running",
+                current_step=None,  # NULL - this was causing crashes
+                total_steps=None,   # NULL
+                step_name=None,     # NULL
+                progress_percentage=None,  # NULL
+            )
+            db.session.add(job)
+            db.session.commit()
+            
+            response = client.get(
+                f"/api/trigger/status?guid={post.guid}"
+                f"&feed_token={test_token['token_id']}"
+                f"&feed_secret={test_token['secret']}"
+            )
+        
+        # Must return 200, not 500
+        assert response.status_code == 200
+        assert response.content_type == "application/json"
+        
+        data = response.get_json()
+        assert data is not None
+        assert data["state"] in ["processing", "queued"]
+        
+        # Job object must have safe defaults
+        assert data["job"] is not None
+        assert isinstance(data["job"]["current_step"], int)
+        assert isinstance(data["job"]["total_steps"], int)
+        assert isinstance(data["job"]["progress_percentage"], int)
+        assert 0 <= data["job"]["progress_percentage"] <= 100
+        assert data["job"]["step_name"] is not None
+
+    def test_pending_job_with_null_fields_returns_200(
+        self, app_with_routes, test_post, test_token
+    ):
+        """Pending job with NULL fields should return 200 with queued state."""
+        client = app_with_routes.test_client()
+        
+        with app_with_routes.app_context():
+            post = db.session.merge(test_post)
+            
+            # Create a pending job with NULL fields
+            job = ProcessingJob(
+                post_guid=post.guid,
+                status="pending",
+                current_step=None,
+                total_steps=None,
+                step_name=None,
+                progress_percentage=None,
+            )
+            db.session.add(job)
+            db.session.commit()
+            
+            response = client.get(
+                f"/api/trigger/status?guid={post.guid}"
+                f"&feed_token={test_token['token_id']}"
+                f"&feed_secret={test_token['secret']}"
+            )
+        
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["state"] == "queued"
+        assert data["job"]["progress_percentage"] == 0  # Default for step 0
+
+    def test_processing_job_progress_percentage_clamped(
+        self, app_with_routes, test_post, test_token
+    ):
+        """Progress percentage should be clamped to 0-100 range."""
+        client = app_with_routes.test_client()
+        
+        with app_with_routes.app_context():
+            post = db.session.merge(test_post)
+            
+            # Create a job with out-of-range progress
+            job = ProcessingJob(
+                post_guid=post.guid,
+                status="running",
+                current_step=2,
+                total_steps=4,
+                step_name="Transcribing",
+                progress_percentage=150,  # Invalid - should be clamped to 100
+            )
+            db.session.add(job)
+            db.session.commit()
+            
+            response = client.get(
+                f"/api/trigger/status?guid={post.guid}"
+                f"&feed_token={test_token['token_id']}"
+                f"&feed_secret={test_token['secret']}"
+            )
+        
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["job"]["progress_percentage"] == 100  # Clamped

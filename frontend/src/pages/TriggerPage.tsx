@@ -36,6 +36,7 @@ export default function TriggerPage() {
   const [status, setStatus] = useState<TriggerStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isTemporarilyUnavailable, setIsTemporarilyUnavailable] = useState(false);
 
   // Build status URL with cache buster
   const buildStatusUrl = useCallback(() => {
@@ -43,31 +44,47 @@ export default function TriggerPage() {
     return `/api/trigger/status?guid=${encodeURIComponent(guid)}&feed_token=${encodeURIComponent(tokenId)}&feed_secret=${encodeURIComponent(secret)}&t=${Date.now()}`;
   }, [guid, tokenId, secret]);
 
-  // Fetch status
+  // Fetch status - resilient to temporary failures
   const fetchStatus = useCallback(async () => {
     const url = buildStatusUrl();
     if (!url) return;
 
     try {
       const response = await fetch(url, { cache: 'no-store' });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+      const data = await response.json().catch(() => ({ state: 'error', message: 'Invalid response' }));
+      
+      // Handle temporary errors - keep last known status, show warning, continue polling
+      if (data.state === 'error' && status !== null) {
+        // We have previous status - show temporary unavailable but keep polling
+        setIsTemporarilyUnavailable(true);
+        console.warn('Trigger status temporarily unavailable, retrying...', data.message);
+        return;
+      }
+      
+      // Handle permanent errors (auth failures, not found) - stop polling
+      if (!response.ok && response.status >= 400 && response.status < 500) {
         setError(data.message || `Error: ${response.status}`);
+        setIsTemporarilyUnavailable(false);
         return;
       }
 
-      const data: TriggerStatus = await response.json();
+      // Success - update status and clear any temporary error
       setStatus(data);
       setError(null);
+      setIsTemporarilyUnavailable(false);
 
       // Extract episode info from first successful response
       if (isInitialLoad && data.message) {
         setIsInitialLoad(false);
       }
     } catch (err) {
+      // Network error - keep last status, show warning, continue polling
       console.error('Failed to fetch trigger status:', err);
+      if (status !== null) {
+        setIsTemporarilyUnavailable(true);
+      }
     }
-  }, [buildStatusUrl, isInitialLoad]);
+  }, [buildStatusUrl, isInitialLoad, status]);
 
   // Initial trigger (start processing if needed)
   useEffect(() => {
@@ -228,6 +245,13 @@ export default function TriggerPage() {
           <p className="text-purple-200 text-sm mt-1">Ad-free podcast processing</p>
         </div>
         <div className="p-6">
+          {/* Temporary unavailable warning - shown when polling fails but we have previous status */}
+          {isTemporarilyUnavailable && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm text-center">
+              Temporarily unavailable, retrying...
+            </div>
+          )}
+          
           <div className="text-center mb-6">
             <h2 className="text-xl font-semibold text-gray-800 mb-2">
               {status?.state === 'queued' ? 'Queued for Processing' : 'Processing Episode'}
