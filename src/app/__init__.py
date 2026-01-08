@@ -80,6 +80,7 @@ def create_app() -> Flask:
     _configure_external_loggers()
     _initialize_extensions(app)
     _register_routes_and_middleware(app)
+    _configure_trigger_cookie_stripping(app)
 
     with app.app_context():
         _run_app_startup(auth_settings)
@@ -210,6 +211,8 @@ def _configure_session(app: Flask, auth_settings: AuthSettings) -> None:
     )
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    # Don't refresh session cookie on every request - prevents cookie churn on polling
+    app.config["SESSION_REFRESH_EACH_REQUEST"] = False
 
     # Default to False for HTTP reverse proxies; set SESSION_COOKIE_SECURE=true for HTTPS.
     app.config["SESSION_COOKIE_SECURE"] = (
@@ -254,6 +257,22 @@ def _configure_cors(app: Flask) -> None:
         vary_header=True,
         max_age=600,
     )
+
+
+def _configure_trigger_cookie_stripping(app: Flask) -> None:
+    """Strip Set-Cookie headers from trigger endpoints to prevent cookie churn.
+    
+    Trigger endpoints use feed-token auth, not session cookies. Removing
+    Set-Cookie prevents unnecessary cookie refresh on every poll request.
+    """
+    from flask import request  # pylint: disable=import-outside-toplevel
+
+    @app.after_request
+    def _strip_session_cookie_for_trigger(resp):
+        path = request.path
+        if path.startswith("/api/trigger/") or path == "/trigger":
+            resp.headers.pop("Set-Cookie", None)
+        return resp
 
 
 def _configure_scheduler(app: Flask) -> None:
