@@ -689,6 +689,7 @@ export interface DownloadAttempt {
   post_title: string;
   feed_id: number | null;
   feed_title: string;
+  event_type: string | null;
   auth_type: string | null;
   decision: string | null;
   download_source: string;

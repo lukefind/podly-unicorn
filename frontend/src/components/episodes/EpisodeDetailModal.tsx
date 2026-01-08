@@ -308,11 +308,14 @@ export default function EpisodeDetailModal({
                 {episode.whitelisted ? 'Disable' : 'Enable'}
               </button>
             </div>
-            {/* Helper text for unprocessed episodes */}
+            {/* Workflow explanation for unprocessed episodes */}
             {!episode.has_processed_audio && episode.whitelisted && (
-              <p className="text-xs text-purple-500 dark:text-purple-400 mt-3">
-                Open processing page to queue ad removal. Wait 1-2 minutes, then download.
-              </p>
+              <div className="mt-4 p-3 rounded-lg bg-purple-100/50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700">
+                <p className="text-sm text-purple-700 dark:text-purple-300">
+                  <strong>How it works:</strong> Click "Open processing page" to queue ad removal. 
+                  Once complete (usually 1-2 minutes), return to your podcast app and download the episode as normal.
+                </p>
+              </div>
             )}
           </div>
         </div>

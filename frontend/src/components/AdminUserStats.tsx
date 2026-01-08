@@ -95,23 +95,6 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
     return date.toLocaleString();
   };
 
-  const getDecisionBadge = (decision: string | null) => {
-    switch (decision) {
-      case 'SERVED_AUDIO':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">Served</span>;
-      case 'TRIGGERED':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">Triggered</span>;
-      case 'NOT_READY_NO_TRIGGER':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300">Not Ready</span>;
-      case 'JOB_EXISTS':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">Job Exists</span>;
-      case 'COOLDOWN_ACTIVE':
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300">Cooldown</span>;
-      default:
-        return <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{decision || 'Legacy'}</span>;
-    }
-  };
-
   const getAuthTypeBadge = (authType: string | null) => {
     switch (authType) {
       case 'combined':
@@ -122,6 +105,25 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
         return <span className="px-2 py-0.5 rounded-full text-xs bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">Session</span>;
       default:
         return <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{authType || 'Unknown'}</span>;
+    }
+  };
+
+  const getEventTypeBadge = (eventType: string | null, decision: string | null) => {
+    // Use event_type if available, otherwise fall back to decision for legacy records
+    const type = eventType || (decision === 'SERVED_AUDIO' ? 'AUDIO_DOWNLOAD' : decision === 'TRIGGERED' ? 'PROCESS_STARTED' : null);
+    switch (type) {
+      case 'AUDIO_DOWNLOAD':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">Download</span>;
+      case 'TRIGGER_OPEN':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">Trigger Open</span>;
+      case 'PROCESS_STARTED':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">Process Started</span>;
+      case 'PROCESS_COMPLETE':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">Complete</span>;
+      case 'FAILED':
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">Failed</span>;
+      default:
+        return <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{type || 'Legacy'}</span>;
     }
   };
 
@@ -215,7 +217,7 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
                 <div key={attempt.id} className="rounded-lg p-3 border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-gray-800">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="text-purple-900 dark:text-purple-100 text-sm font-medium line-clamp-2">{attempt.post_title}</div>
-                    {getDecisionBadge(attempt.decision)}
+                    {getEventTypeBadge(attempt.event_type, attempt.decision)}
                   </div>
                   <div className="text-purple-700 dark:text-purple-300 text-xs mb-2">{attempt.feed_title}</div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">

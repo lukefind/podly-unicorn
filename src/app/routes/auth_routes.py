@@ -822,6 +822,7 @@ def get_download_attempts() -> ResponseReturnValue:
             "post_title": row.post_title or "Unknown",
             "feed_id": row.feed_id,
             "feed_title": row.feed_title or "Unknown",
+            "event_type": download.event_type,
             "auth_type": download.auth_type,
             "decision": download.decision,
             "download_source": download.download_source,
