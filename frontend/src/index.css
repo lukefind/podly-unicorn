@@ -448,6 +448,16 @@ html.dark .bg-green-100.text-green-700 {
   color: #86efac !important;
 }
 
+/* Emerald colors for dark mode (success states) */
+html.dark .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+html.dark .text-emerald-600,
+html.dark .text-emerald-700 {
+  color: #34d399 !important;
+}
+
 html.dark .bg-cyan-100.text-cyan-700 {
   background-color: rgba(6, 182, 212, 0.25) !important;
   color: #67e8f9 !important;
