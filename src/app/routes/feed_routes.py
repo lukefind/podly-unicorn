@@ -367,7 +367,7 @@ def get_combined_episodes() -> Response:
             "id": post.id,
             "guid": post.guid,
             "title": post.title,
-            "description": post.description[:200] if post.description else None,
+            "description": post.description,
             "release_date": post.release_date.isoformat() if post.release_date else None,
             "duration": post.duration,
             "feed_id": post.feed_id,
