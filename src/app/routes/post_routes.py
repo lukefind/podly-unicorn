@@ -1332,7 +1332,7 @@ def _normalize_job(job: ProcessingJob, download_url: str | None = None) -> dict:
     }
 
 
-@post_bp.route("/api/trigger/status", methods=["GET"])
+@post_bp.route("/api/trigger/status", methods=["GET", "OPTIONS"])
 def trigger_status() -> flask.Response:
     """Get processing status for an episode (JSON endpoint for polling).
     
@@ -1340,7 +1340,14 @@ def trigger_status() -> flask.Response:
     - guid: The episode GUID
     - feed_token: The feed-scoped token ID
     - feed_secret: The feed-scoped token secret
+    
+    Supports OPTIONS for CORS preflight from podcast app webviews.
     """
+    # Handle CORS preflight
+    if flask.request.method == "OPTIONS":
+        response = flask.make_response()
+        response.headers["Cache-Control"] = "no-store"
+        return response
     guid = flask.request.args.get("guid")
     token_id = flask.request.args.get("feed_token")
     
