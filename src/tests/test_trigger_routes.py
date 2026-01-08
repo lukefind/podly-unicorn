@@ -120,20 +120,23 @@ class TestTriggerRouteOrder:
 class TestTriggerStatusEndpoint:
     """Test /api/trigger/status endpoint."""
 
-    def test_missing_params_returns_400(self, app_with_routes):
-        """Missing params should return 400, not 500."""
+    def test_missing_params_returns_400_with_cache_control(self, app_with_routes):
+        """Missing params should return 400 with Cache-Control: no-store."""
         client = app_with_routes.test_client()
         
         response = client.get("/api/trigger/status")
         assert response.status_code == 400
+        
+        # Must have Cache-Control even on errors
+        assert response.headers.get("Cache-Control") == "no-store"
         
         data = response.get_json()
         assert data is not None
         assert data["state"] == "error"
         assert "Missing" in data["message"] or "required" in data["message"].lower()
 
-    def test_invalid_token_returns_401(self, app_with_routes, test_post):
-        """Invalid token should return 401, not 500."""
+    def test_invalid_token_returns_401_with_cache_control(self, app_with_routes, test_post):
+        """Invalid token should return 401 with Cache-Control: no-store."""
         client = app_with_routes.test_client()
         
         with app_with_routes.app_context():
@@ -143,6 +146,9 @@ class TestTriggerStatusEndpoint:
             )
         
         assert response.status_code == 401
+        # Must have Cache-Control even on errors
+        assert response.headers.get("Cache-Control") == "no-store"
+        
         data = response.get_json()
         assert data is not None
         assert data["state"] == "error"
