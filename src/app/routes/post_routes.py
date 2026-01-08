@@ -1097,7 +1097,10 @@ def _handle_trigger_processing() -> flask.Response:
     token_id = flask.request.args.get("feed_token")
     secret = flask.request.args.get("feed_secret")
     
-    print(f"[TRIGGER_HIT] guid={guid} token_id={token_id}", file=sys.stderr, flush=True)
+    # Safe logging - never log secrets
+    token_prefix = token_id[:6] if token_id and len(token_id) >= 6 else token_id
+    token_suffix = token_id[-4:] if token_id and len(token_id) >= 4 else ""
+    print(f"[TRIGGER_HIT] guid={guid} token={token_prefix}...{token_suffix}", file=sys.stderr, flush=True)
     
     # Validate required parameters
     if not guid or not token_id or not secret:
@@ -1298,29 +1301,54 @@ def _handle_trigger_status() -> flask.Response:
     token_id = flask.request.args.get("feed_token")
     secret = flask.request.args.get("feed_secret")
     
-    print(f"[TRIGGER_STATUS] guid={guid} token_id={token_id}", file=sys.stderr, flush=True)
+    # Safe logging - never log secrets
+    token_prefix = token_id[:6] if token_id and len(token_id) >= 6 else token_id
+    token_suffix = token_id[-4:] if token_id and len(token_id) >= 4 else ""
+    print(f"[TRIGGER_STATUS] guid={guid} token={token_prefix}...{token_suffix}", file=sys.stderr, flush=True)
     
     if not guid or not token_id or not secret:
-        return flask.jsonify({"state": "error", "message": "Missing required parameters"}), 400
+        print(f"[TRIGGER_STATUS_RETURN] status=400 reason=missing_params", file=sys.stderr, flush=True)
+        response = flask.jsonify({"state": "error", "message": "Missing required parameters"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 400
     
     # Authenticate the token
-    auth_result = authenticate_feed_token(token_id, secret, f"/api/posts/{guid}/download")
+    try:
+        auth_result = authenticate_feed_token(token_id, secret, f"/api/posts/{guid}/download")
+    except Exception as auth_err:
+        logger.error(f"Token auth exception for guid={guid}: {auth_err}", exc_info=True)
+        print(f"[TRIGGER_STATUS_RETURN] status=401 reason=auth_exception", file=sys.stderr, flush=True)
+        response = flask.jsonify({"state": "error", "message": "Authentication failed"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 401
     
     if not auth_result:
-        return flask.jsonify({"state": "error", "message": "Invalid or expired token"}), 401
+        print(f"[TRIGGER_STATUS_RETURN] status=401 reason=invalid_token", file=sys.stderr, flush=True)
+        response = flask.jsonify({"state": "error", "message": "Invalid or expired token"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 401
     
     # Combined tokens cannot access status
     if auth_result.feed_id is None:
-        return flask.jsonify({"state": "error", "message": "Combined tokens not allowed"}), 403
+        print(f"[TRIGGER_STATUS_RETURN] status=403 reason=combined_token", file=sys.stderr, flush=True)
+        response = flask.jsonify({"state": "error", "message": "Combined tokens not allowed"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 403
     
     # Look up the post
     post = Post.query.filter_by(guid=guid).first()
     if not post:
-        return flask.jsonify({"state": "not_found", "message": "Episode not found"}), 404
+        print(f"[TRIGGER_STATUS_RETURN] status=404 reason=post_not_found", file=sys.stderr, flush=True)
+        response = flask.jsonify({"state": "not_found", "message": "Episode not found"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 404
     
     # Verify feed match
     if post.feed_id != auth_result.feed_id:
-        return flask.jsonify({"state": "error", "message": "Token not authorized for this episode"}), 403
+        print(f"[TRIGGER_STATUS_RETURN] status=403 reason=feed_mismatch", file=sys.stderr, flush=True)
+        response = flask.jsonify({"state": "error", "message": "Token not authorized for this episode"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 403
     
     # Build download URL
     download_url = f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
