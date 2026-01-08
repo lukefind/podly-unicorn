@@ -1,5 +1,6 @@
 import datetime
 import logging
+import re
 import uuid
 import xml.dom.minidom
 from email.utils import format_datetime, parsedate_to_datetime
@@ -9,6 +10,14 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import feedparser  # type: ignore[import-untyped]
 import PyRSS2Gen  # type: ignore[import-untyped]
 from flask import current_app, g, request
+
+# Markers for idempotent CTA injection - never append blindly, always replace by marker
+PODLY_CTA_START = "<!-- PODLY_TRIGGER_START -->"
+PODLY_CTA_END = "<!-- PODLY_TRIGGER_END -->"
+_CTA_PATTERN = re.compile(
+    rf"{re.escape(PODLY_CTA_START)}.*?{re.escape(PODLY_CTA_END)}",
+    re.DOTALL,
+)
 
 
 class ITunesImage:
@@ -157,6 +166,63 @@ from app.runtime_config import config
 from podcast_processor.podcast_downloader import find_audio_link
 
 logger = logging.getLogger("global_logger")
+
+
+def build_trigger_cta(trigger_url: str, html: bool = True) -> str:
+    """Build a canonical CTA block with markers for idempotent injection.
+    
+    Args:
+        trigger_url: The URL to the trigger page
+        html: If True, include HTML formatting; if False, plain text only
+    
+    Returns:
+        CTA block wrapped in PODLY_TRIGGER_START/END markers
+    """
+    if html:
+        # HTML version with styled box - for description and content:encoded
+        inner = (
+            f'<p style="margin-top: 16px; padding: 12px; background: #f3e8ff; '
+            f'border-radius: 8px; border: 1px solid #c4b5fd;">'
+            f'<strong>Process this episode (remove ads)</strong><br/>'
+            f'<a href="{trigger_url}" style="color: #7c3aed;">Tap here to queue ad removal</a><br/>'
+            f'<small>Or copy: {trigger_url}</small>'
+            f'</p>'
+        )
+    else:
+        # Plain text version - for itunes:summary
+        inner = (
+            f"---\n"
+            f"Process this episode (remove ads):\n"
+            f"{trigger_url}\n"
+            f"---"
+        )
+    
+    return f"{PODLY_CTA_START}\n{inner}\n{PODLY_CTA_END}"
+
+
+def inject_trigger_cta(original: str, trigger_url: str, html: bool = True) -> str:
+    """Inject or replace the trigger CTA in a description string.
+    
+    This is idempotent - calling it multiple times produces the same result.
+    If a CTA block already exists (detected by markers), it is replaced.
+    Otherwise, the CTA is appended.
+    
+    Args:
+        original: The original description text
+        trigger_url: The URL to the trigger page
+        html: If True, use HTML formatting; if False, plain text only
+    
+    Returns:
+        Description with exactly one CTA block
+    """
+    cta_block = build_trigger_cta(trigger_url, html=html)
+    
+    if PODLY_CTA_START in original:
+        # Replace existing block (idempotent)
+        return _CTA_PATTERN.sub(cta_block, original)
+    else:
+        # Append once, cleanly
+        return original.rstrip() + "\n\n" + cta_block
 
 
 def _get_base_url() -> str:
@@ -387,35 +453,15 @@ def feed_item(
         trigger_url = _append_feed_token_params(f"{base_url}/trigger?guid={post.guid}")
 
     # Build description with trigger link for podcast apps
-    # This allows users to tap a link in the episode description to queue processing
+    # Uses idempotent injection - exactly one CTA block, detectable by markers
     original_description = post.description or ""
     
-    # Create plain text CTA with URL on its own line (for apps that strip HTML)
-    # Many podcast apps sanitize HTML or only detect plain URLs
-    plain_text_cta = (
-        f"\n\n---\n"
-        f"Process this episode (remove ads):\n"
-        f"{trigger_url}\n"
-        f"---"
-    )
-    
-    # Create HTML CTA block for apps that render HTML
-    html_cta = (
-        f'<p style="margin-top: 16px; padding: 12px; background: #f3e8ff; border-radius: 8px; border: 1px solid #c4b5fd;">'
-        f'<strong>Process this episode (remove ads)</strong><br/>'
-        f'<a href="{trigger_url}" style="color: #7c3aed;">Tap here to queue ad removal</a><br/>'
-        f'<small>Or copy this URL: {trigger_url}</small>'
-        f'</p>'
-    )
-    
-    # description: include both HTML and plain URL for maximum compatibility
-    description = f"{original_description}\n\n{html_cta}{plain_text_cta}"
-    
-    # content:encoded: same as description (HTML + plain URL)
+    # description and content:encoded: HTML CTA (single canonical block)
+    description = inject_trigger_cta(original_description, trigger_url, html=True)
     content_encoded = description
     
-    # itunes:summary: plain text only (no HTML), many apps prefer this field
-    itunes_summary = f"{original_description}{plain_text_cta}"
+    # itunes:summary: plain text CTA (many apps prefer this field, no HTML)
+    itunes_summary = inject_trigger_cta(original_description, trigger_url, html=False)
 
     # Get the original show name if requested (for combined feeds)
     itunes_author = None
