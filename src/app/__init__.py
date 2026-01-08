@@ -221,6 +221,7 @@ def _configure_cors(app: Flask) -> None:
     default_cors = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "https://your-domain.com",
     ]
     cors_origins_env = os.environ.get("CORS_ORIGINS")
     if cors_origins_env:
@@ -229,12 +230,29 @@ def _configure_cors(app: Flask) -> None:
         ]
     else:
         cors_origins = default_cors
+
+    # Token-based trigger endpoints must work from Origin: null webviews (podcast apps)
+    # These use wildcard origin and no credentials
+    public_resources = [
+        r"/api/trigger/status",
+        r"/trigger",
+    ]
+
+    resources = {
+        # Public endpoints (no credentials, wildcard origin for podcast app webviews)
+        **{pat: {"origins": "*", "supports_credentials": False} for pat in public_resources},
+        # Everything else (credentialed / whitelisted origins)
+        r"/*": {"origins": cors_origins, "supports_credentials": True},
+    }
+
     CORS(
         app,
-        resources={r"/*": {"origins": cors_origins}},
+        resources=resources,
         allow_headers=["Content-Type", "Authorization", "Range"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        supports_credentials=True,
+        always_send=False,  # Don't emit dev ACAO when Origin is missing
+        vary_header=True,
+        max_age=600,
     )
 
 
