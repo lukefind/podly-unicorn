@@ -14,8 +14,6 @@ interface ProcessingProgressUIProps {
   totalSteps: number;
   jobId?: string;
   error?: string;
-  /** If provided, renders as an anchor tag. Otherwise uses react-router Link */
-  jobLinkHref?: string;
 }
 
 const STEP_NAMES = ['Download', 'Transcribe', 'Detect Ads', 'Process Audio'];
@@ -25,10 +23,10 @@ export default function ProcessingProgressUI({
   step,
   stepName,
   totalSteps,
-  jobId,
+  jobId: _jobId,
   error,
-  jobLinkHref,
 }: ProcessingProgressUIProps) {
+  void _jobId; // Unused but kept for API compatibility
   const isActive = status === 'running' || status === 'pending';
   const isFailed = status === 'failed' || status === 'error';
   const progressPercent = totalSteps > 0 ? (step / totalSteps) * 100 : 0;
@@ -54,7 +52,7 @@ export default function ProcessingProgressUI({
           <span className={`text-sm font-medium ${
             isFailed ? 'text-red-600 dark:text-red-400' : 
             status === 'completed' ? 'text-emerald-600 dark:text-emerald-400' : 
-            'text-purple-700 dark:text-purple-300'
+            'text-purple-900 dark:text-purple-100'
           }`}>
             {status === 'pending' ? 'Queued' : 
              status === 'running' ? 'Processing' : 
@@ -64,17 +62,6 @@ export default function ProcessingProgressUI({
           </span>
         </div>
         
-        {jobId && jobLinkHref && (
-          <a
-            href={jobLinkHref}
-            className="text-xs text-purple-500 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:underline flex items-center gap-1"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-            </svg>
-            View Job
-          </a>
-        )}
       </div>
 
       {/* Progress bar */}
@@ -105,7 +92,7 @@ export default function ProcessingProgressUI({
                     ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'
                     : isCurrent
                     ? 'bg-purple-200 dark:bg-purple-700 text-purple-800 dark:text-purple-200 font-medium'
-                    : 'bg-purple-50 dark:bg-purple-800/50 text-purple-400 dark:text-purple-500'
+                    : 'bg-purple-50 dark:bg-purple-800/50 text-purple-700 dark:text-purple-200'
                 }`}
               >
                 <div className="flex items-center justify-center gap-1">
@@ -128,7 +115,7 @@ export default function ProcessingProgressUI({
 
       {/* Current step name */}
       {isActive && stepName && (
-        <div className="mt-3 text-sm text-purple-600 dark:text-purple-300 text-center">
+        <div className="mt-3 text-sm text-purple-900 dark:text-purple-100 text-center">
           {stepName}
         </div>
       )}

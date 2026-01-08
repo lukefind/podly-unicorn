@@ -97,7 +97,6 @@ export default function EpisodeProcessingStatus({
         totalSteps={status.total_steps}
         jobId={status.job_id}
         error={status.error}
-        jobLinkHref={status.job_id ? `/jobs?job=${status.job_id}` : undefined}
       />
     </div>
   );
