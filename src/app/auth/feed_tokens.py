@@ -6,7 +6,10 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from flask import Request
 
 from app.auth.service import AuthenticatedUser
 from app.extensions import db
@@ -65,7 +68,7 @@ def create_feed_access_token(user: User, feed: Optional[Feed] = None) -> tuple[s
 
 
 def authenticate_feed_token(
-    token_id: str, secret: str, path: str
+    token_id: str, secret: str, path: str, *, req: Optional[Request] = None
 ) -> Optional[FeedTokenAuthResult]:
     if not token_id:
         return None
@@ -90,7 +93,7 @@ def authenticate_feed_token(
         elif path.startswith("/api/posts/") or path.startswith("/post/"):
             # Check if the post belongs to a feed the user is subscribed to
             from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
-            post_feed_id = _resolve_feed_id(path)
+            post_feed_id = _resolve_feed_id(path, req=req)
             if post_feed_id is None:
                 return None
             # Verify user is subscribed to this feed
@@ -103,7 +106,7 @@ def authenticate_feed_token(
             return None
     else:
         # Regular feed token - verify feed_id matches exactly
-        feed_id = _resolve_feed_id(path)
+        feed_id = _resolve_feed_id(path, req=req)
         if feed_id is None or feed_id != token.feed_id:
             return None
 
@@ -128,7 +131,7 @@ def authenticate_feed_token(
     )
 
 
-def _resolve_feed_id(path: str) -> Optional[int]:
+def _resolve_feed_id(path: str, *, req: Optional[Request] = None) -> Optional[int]:
     if path.startswith("/feed/"):
         remainder = path[len("/feed/") :]
         try:
@@ -141,6 +144,16 @@ def _resolve_feed_id(path: str) -> Optional[int]:
         if len(parts) < 4:
             return None
         guid = parts[3]
+        post = Post.query.filter_by(guid=guid).first()
+        return post.feed_id if post else None
+
+    # Trigger endpoints are feed-scoped via guid query param
+    if path == "/api/trigger/status" or path == "/trigger":
+        if req is None:
+            return None
+        guid = req.args.get("guid")
+        if not guid:
+            return None
         post = Post.query.filter_by(guid=guid).first()
         return post.feed_id if post else None
 
