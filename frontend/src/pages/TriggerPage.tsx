@@ -76,28 +76,36 @@ export default function TriggerPage() {
       });
 
       // Parse JSON safely
-      const data = await response
-        .json()
-        .catch(() => ({ state: 'error', message: 'Invalid response' }));
+      const data = await response.json().catch(() => null);
 
-      // Permanent client/auth errors: stop polling + show error
-      if (response.status === 401 || response.status === 403 || response.status === 404) {
-        setError(data.message || `Error: ${response.status}`);
+      // 2xx responses: must be valid status (queued|processing|ready)
+      if (response.ok) {
+        // 200 + invalid/error state = treat as permanent error, stop polling
+        if (!data || data.state === 'error' || data.state === 'failed') {
+          setError(data?.message || 'Unexpected status response');
+          setIsTemporarilyUnavailable(false);
+          pollingStopRef.current = true;
+          return;
+        }
+
+        // Valid status
+        setStatus(data);
+        setError(null);
         setIsTemporarilyUnavailable(false);
-        setStatus({ ...(data || {}), state: 'error' });
+
+        // Stop polling on terminal states
+        if (isTerminal(data?.state)) {
+          pollingStopRef.current = true;
+        }
+
+        if (isInitialLoad) {
+          setIsInitialLoad(false);
+        }
         return;
       }
 
-      // Other 4xx: permanent
-      if (!response.ok && response.status >= 400 && response.status < 500) {
-        setError(data.message || `Error: ${response.status}`);
-        setIsTemporarilyUnavailable(false);
-        setStatus({ ...(data || {}), state: 'error' });
-        return;
-      }
-
-      // 5xx: temporary (keep last known status if we have one)
-      if (!response.ok) {
+      // 5xx: temporary (keep last known status, show banner, keep polling)
+      if (response.status >= 500) {
         if (statusRef.current !== null) {
           setIsTemporarilyUnavailable(true);
         }
@@ -105,19 +113,10 @@ export default function TriggerPage() {
         return;
       }
 
-      // Success
-      setStatus(data);
-      setError(null);
+      // 4xx: permanent error, stop polling
+      setError(data?.message || `Error: ${response.status}`);
       setIsTemporarilyUnavailable(false);
-
-      // Stop condition (next tick effect also stops interval)
-      if (isTerminal(data?.state)) {
-        pollingStopRef.current = true;
-      }
-
-      if (isInitialLoad) {
-        setIsInitialLoad(false);
-      }
+      pollingStopRef.current = true;
     } catch (err) {
       console.error('Failed to fetch trigger status:', err);
       if (statusRef.current !== null) {
