@@ -176,12 +176,19 @@ class User(db.Model):  # type: ignore[name-defined, misc]
 
 
 class UserDownload(db.Model):  # type: ignore[name-defined, misc]
-    """Tracks episode downloads and download attempts per user.
+    """Tracks user activity events for episodes.
+    
+    Event types:
+    - AUDIO_DOWNLOAD: Actual media file served to user
+    - TRIGGER_OPEN: User opened /trigger page
+    - PROCESS_STARTED: Processing job queued
+    - PROCESS_COMPLETE: Processing finished successfully
+    - FAILED: Any error (auth, processing, expired token, etc.)
     
     Used for:
     - Usage statistics (successful downloads)
-    - Audit trail for download attempts (auth_type, decision)
-    - DB-backed cooldown for on-demand processing triggers
+    - Audit trail for all user actions
+    - Debugging and understanding real usage patterns
     """
     __tablename__ = "user_download"
 
@@ -192,9 +199,10 @@ class UserDownload(db.Model):  # type: ignore[name-defined, misc]
     file_size_bytes = db.Column(db.Integer, nullable=True)  # Size of downloaded file
     is_processed = db.Column(db.Boolean, default=True)  # Was it a processed (ad-free) version?
     download_source = db.Column(db.String(20), nullable=False, default="web")
-    # New fields for download attempt tracking
+    # Event tracking fields
+    event_type = db.Column(db.String(20), nullable=True, index=True)  # AUDIO_DOWNLOAD/TRIGGER_OPEN/PROCESS_STARTED/PROCESS_COMPLETE/FAILED
     auth_type = db.Column(db.String(20), nullable=True)  # combined/feed_scoped/session/none
-    decision = db.Column(db.String(30), nullable=True)  # SERVED_AUDIO/TRIGGERED/NOT_READY_NO_TRIGGER/etc
+    decision = db.Column(db.String(30), nullable=True)  # Legacy field for backwards compat, maps to event_type
 
     # Relationships
     user = db.relationship("User", backref=db.backref("downloads", lazy="dynamic"))

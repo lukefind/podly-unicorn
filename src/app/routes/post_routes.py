@@ -40,7 +40,7 @@ def _increment_download_count(post: Post) -> None:
 
 
 def _track_user_download(post: Post, is_processed: bool = True) -> None:
-    """Track a successful download for the current user if authenticated."""
+    """Track a successful audio download for the current user if authenticated."""
     try:
         current_user = getattr(g, "current_user", None)
         if not current_user:
@@ -65,8 +65,9 @@ def _track_user_download(post: Post, is_processed: bool = True) -> None:
             is_processed=is_processed,
             file_size_bytes=file_size,
             download_source=download_source,
+            event_type="AUDIO_DOWNLOAD",
             auth_type=auth_type,
-            decision="SERVED_AUDIO",
+            decision="SERVED_AUDIO",  # Legacy field for backwards compat
         )
         db.session.add(download)
         db.session.commit()
@@ -79,15 +80,22 @@ def _track_user_download(post: Post, is_processed: bool = True) -> None:
         )
 
 
-def _record_download_attempt(
-    post: Post, current_user: Any, auth_type: str, decision: str
+def _record_user_event(
+    post: Post,
+    current_user: Any,
+    event_type: str,
+    auth_type: str = "session",
+    decision: str = "",
+    download_source: str = "web",
 ) -> None:
-    """Record a download attempt for audit trail (not necessarily a successful download).
+    """Record a user activity event for audit trail.
     
-    This is used to track:
-    - Combined token attempts that didn't trigger processing
-    - Triggered processing attempts
-    - Job-exists responses
+    Event types:
+    - AUDIO_DOWNLOAD: Actual media file served
+    - TRIGGER_OPEN: User opened /trigger page
+    - PROCESS_STARTED: Processing job queued
+    - PROCESS_COMPLETE: Processing finished successfully
+    - FAILED: Any error (auth, processing, expired token, etc.)
     """
     try:
         download = UserDownload(
@@ -95,15 +103,17 @@ def _record_download_attempt(
             post_id=post.id,
             is_processed=False,
             file_size_bytes=None,
-            download_source="rss",
+            download_source=download_source,
+            event_type=event_type,
             auth_type=auth_type,
-            decision=decision,
+            decision=decision,  # Legacy field for backwards compat
         )
         db.session.add(download)
         db.session.commit()
     except Exception as exc:  # pylint: disable=broad-except
         logger.error(
-            "Failed to record download attempt for post %s: %s",
+            "Failed to record event %s for post %s: %s",
+            event_type,
             post.guid,
             exc,
         )
@@ -894,8 +904,8 @@ def api_download_post(p_guid: str) -> flask.Response:
         if not can_trigger_processing:
             _log_decision("NO_TRIGGER_COMBINED", 503)
             # Record the attempt for audit trail
-            _record_download_attempt(
-                post, current_user, auth_type, "NOT_READY_NO_TRIGGER"
+            _record_user_event(
+                post, current_user, "FAILED", auth_type, "NOT_READY_NO_TRIGGER", "rss"
             )
             # Return 503 Service Unavailable (NOT 202 which confuses podcast apps)
             # The episode must be processed via per-feed access or manual UI
@@ -1164,6 +1174,9 @@ def _handle_trigger_processing() -> flask.Response:
     # Build download URL for when ready
     download_url = f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
     
+    # Record trigger page open event
+    _record_user_event(post, auth_result.user, "TRIGGER_OPEN", "feed_scoped", "", "trigger")
+    
     # Check if already processed
     if post.processed_audio_path and Path(post.processed_audio_path).exists():
         print(f"[TRIGGER_RETURN] status=200 reason=already_processed", file=sys.stderr, flush=True)
@@ -1230,6 +1243,9 @@ def _handle_trigger_processing() -> flask.Response:
         )
         job_id = result.get("job_id")
         print(f"[TRIGGER_JOB] guid={guid} action=created job_id={job_id}", file=sys.stderr, flush=True)
+        
+        # Record process started event
+        _record_user_event(post, auth_result.user, "PROCESS_STARTED", "feed_scoped", "TRIGGERED", "trigger")
         
         # Fetch the job we just created
         job = ProcessingJob.query.get(job_id) if job_id else None
