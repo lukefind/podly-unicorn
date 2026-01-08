@@ -1280,6 +1280,18 @@ def trigger_status() -> flask.Response:
     - feed_token: The feed-scoped token ID
     - feed_secret: The feed-scoped token secret
     """
+    try:
+        return _handle_trigger_status()
+    except Exception as e:
+        logger.error(f"Unexpected error in trigger_status: {e}", exc_info=True)
+        print(f"[TRIGGER_STATUS_ERROR] unexpected_exception: {e}", file=sys.stderr, flush=True)
+        response = flask.jsonify({"state": "error", "message": "Internal server error"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 500
+
+
+def _handle_trigger_status() -> flask.Response:
+    """Internal handler for trigger status - separated for cleaner error handling."""
     from app.auth.feed_tokens import authenticate_feed_token
     
     guid = flask.request.args.get("guid")
