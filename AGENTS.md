@@ -32,6 +32,31 @@ The assistant may generate or modify Alembic/Flask‑Migrate migrations, but mus
 - Never drop or rename tables/columns that contain production data unless explicitly requested and the intent is documented.
 - Prefer additive changes (new tables/columns/indexes) over destructive ones.
 
+### SQLite Table Recreation Safety Rules (CRITICAL)
+
+**NEVER use `SELECT *` when copying data between tables in SQLite migrations.**
+
+SQLite doesn't support `ALTER COLUMN` or `DROP CONSTRAINT`. To modify constraints, you must recreate the table. When doing so:
+
+1. **ALWAYS use explicit column names** in both INSERT and SELECT:
+   ```sql
+   -- WRONG - column order may not match, causing data corruption
+   INSERT INTO table_new SELECT * FROM table_old
+   
+   -- CORRECT - explicit columns guarantee correct mapping
+   INSERT INTO table_new (id, name, created_at)
+   SELECT id, name, created_at FROM table_old
+   ```
+
+2. **Before running any table recreation migration on production:**
+   - Back up the database FIRST: `cp sqlite3.db sqlite3.db.backup`
+   - Verify the backup has data: `SELECT COUNT(*) FROM <table>`
+   - Test the migration on a copy of production data locally
+
+3. **Never provide manual SQL commands to run on production** without explicit column names.
+
+**Why this matters:** A migration using `SELECT *` caused complete data loss in production (Jan 2026). Column order mismatch corrupted all rows, and the "backup" was made after corruption.
+
 After editing models, the assistant should:
 - **Immediately create the migration file** - do not wait for the user to ask
 - Ensure migrations are idempotent, reversible, and match the updated models
