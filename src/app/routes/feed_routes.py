@@ -102,8 +102,11 @@ def fix_url(url: str) -> str:
 def add_feed() -> ResponseReturnValue:
     from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
     
+    logger.info(f"[FEED_ADD] POST /feed received, form data: {dict(request.form)}")
+    
     url = request.form.get("url")
     if not url:
+        logger.warning("[FEED_ADD] No URL provided in request")
         return make_response(("URL is required", 400))
 
     url = fix_url(url)
