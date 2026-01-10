@@ -112,7 +112,9 @@ def add_feed() -> ResponseReturnValue:
         return make_response(("Invalid URL", 400))
 
     try:
+        logger.info(f"[FEED_ADD] Attempting to add feed: {url}")
         feed = add_or_refresh_feed(url)
+        logger.info(f"[FEED_ADD] Successfully added/refreshed feed: {feed.title} (id={feed.id})")
         
         # Auto-subscribe the user who added the feed
         settings = current_app.config.get("AUTH_SETTINGS")
@@ -140,7 +142,9 @@ def add_feed() -> ResponseReturnValue:
             return jsonify({"status": "success", "feed_id": feed.id, "title": feed.title})
         return redirect(url_for("main.index"))
     except Exception as e:  # pylint: disable=broad-except
-        logger.error(f"Error adding feed: {e}")
+        import traceback
+        logger.error(f"[FEED_ADD] Error adding feed {url}: {e}")
+        logger.error(f"[FEED_ADD] Traceback: {traceback.format_exc()}")
         if request.headers.get('Accept', '').startswith('application/json') or request.is_json:
             return jsonify({"error": str(e)}), 500
         return make_response((f"Error adding feed: {e}", 500))
