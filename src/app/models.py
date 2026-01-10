@@ -79,8 +79,8 @@ class Post(db.Model):  # type: ignore[name-defined, misc]
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     guid = db.Column(db.Text, unique=True, nullable=False)
     download_url = db.Column(
-        db.Text, unique=True, nullable=False
-    )  # remote download URL, not podly url
+        db.Text, nullable=False
+    )  # remote download URL, not podly url (not unique - some feeds reuse URLs)
     title = db.Column(db.Text, nullable=False)
     unprocessed_audio_path = db.Column(db.Text)
     processed_audio_path = db.Column(db.Text)
