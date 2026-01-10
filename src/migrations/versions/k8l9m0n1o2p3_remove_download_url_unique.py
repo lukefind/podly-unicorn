@@ -21,15 +21,9 @@ depends_on = None
 def upgrade():
     # SQLite doesn't support ALTER COLUMN or DROP CONSTRAINT directly.
     # We need to recreate the table without the unique constraint on download_url.
-    # The batch_alter_table with recreate="always" handles this by:
-    # 1. Creating a new table with the desired schema
-    # 2. Copying data from old table
-    # 3. Dropping old table
-    # 4. Renaming new table
     #
-    # Since we can't easily drop an unnamed constraint, we use raw SQL to recreate.
+    # IMPORTANT: Use explicit column names in INSERT to avoid column order issues.
     
-    # Get connection for raw SQL
     conn = op.get_bind()
     
     # Create new table without unique constraint on download_url
@@ -54,9 +48,20 @@ def upgrade():
         )
     """))
     
-    # Copy data
+    # Copy data with EXPLICIT column names to avoid order mismatch
     conn.execute(sa.text("""
-        INSERT INTO post_new SELECT * FROM post
+        INSERT INTO post_new (
+            id, feed_id, guid, download_url, title,
+            unprocessed_audio_path, processed_audio_path, description,
+            release_date, duration, whitelisted, image_url,
+            download_count, processed_with_preset_id
+        )
+        SELECT 
+            id, feed_id, guid, download_url, title,
+            unprocessed_audio_path, processed_audio_path, description,
+            release_date, duration, whitelisted, image_url,
+            download_count, processed_with_preset_id
+        FROM post
     """))
     
     # Drop old table
