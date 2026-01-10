@@ -378,12 +378,22 @@ def add_or_refresh_feed(url: str) -> Feed:
 def add_feed(feed_data: feedparser.FeedParserDict) -> Feed:
     logger.info(f"Storing feed: {feed_data.feed.title}")
     try:
+        # Extract image URL with fallbacks for different RSS formats
+        image_url = None
+        if hasattr(feed_data.feed, 'image') and hasattr(feed_data.feed.image, 'href'):
+            image_url = feed_data.feed.image.href
+        elif 'image' in feed_data.feed and isinstance(feed_data.feed.image, dict):
+            image_url = feed_data.feed.image.get('href') or feed_data.feed.image.get('url')
+        # Fallback to itunes:image if standard image not found
+        if not image_url:
+            image_url = feed_data.feed.get('itunes_image', {}).get('href', '')
+        
         feed = Feed(
             title=feed_data.feed.title,
             description=feed_data.feed.get("description", ""),
             author=feed_data.feed.get("author", ""),
             rss_url=feed_data.href,
-            image_url=feed_data.feed.image.href,
+            image_url=image_url or "",
         )
         db.session.add(feed)
         db.session.commit()
