@@ -542,8 +542,8 @@ export const feedsApi = {
   },
 
   getJobs: async (): Promise<Job[]> => {
-    const response = await api.get('/api/jobs');
-    return response.data.jobs || [];
+    const response = await api.get('/api/jobs/active');
+    return response.data || [];
   },
 };
 
