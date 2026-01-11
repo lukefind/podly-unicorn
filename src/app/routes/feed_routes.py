@@ -140,7 +140,8 @@ def add_feed() -> ResponseReturnValue:
             return jsonify({"status": "success", "feed_id": feed.id, "title": feed.title})
         return redirect(url_for("main.index"))
     except Exception as e:  # pylint: disable=broad-except
-        logger.error(f"Error adding feed: {e}")
+        import traceback
+        logger.error(f"Error adding feed: {e}\n{traceback.format_exc()}")
         if request.headers.get('Accept', '').startswith('application/json') or request.is_json:
             return jsonify({"error": str(e)}), 500
         return make_response((f"Error adding feed: {e}", 500))

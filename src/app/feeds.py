@@ -389,21 +389,22 @@ def add_feed(feed_data: feedparser.FeedParserDict) -> Feed:
         db.session.commit()
 
         num_posts_added = 0
+        limit = config.number_of_episodes_to_whitelist_from_archive_of_new_feed
+        logger.info(f"Adding feed with {len(feed_data.entries)} entries, whitelist limit={limit}, auto_whitelist={config.automatically_whitelist_new_episodes}")
         for entry in feed_data.entries:
             p = make_post(feed, entry)
             if (
-                config.number_of_episodes_to_whitelist_from_archive_of_new_feed
-                is not None
-                and num_posts_added
-                >= config.number_of_episodes_to_whitelist_from_archive_of_new_feed
+                limit is not None
+                and num_posts_added >= limit
             ):
-                logger.info(
-                    f"Number of episodes to load from archive reached: {num_posts_added}"
+                logger.debug(
+                    f"Whitelist limit reached ({num_posts_added} >= {limit}), disabling: {entry.title}"
                 )
                 p.whitelisted = False
             else:
                 num_posts_added += 1
                 p.whitelisted = config.automatically_whitelist_new_episodes
+                logger.debug(f"Whitelisting episode {num_posts_added}/{limit}: {entry.title}")
             # Don't auto-create jobs - processing is triggered on-demand via UI or RSS request
             db.session.add(p)
         db.session.commit()
