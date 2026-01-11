@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
@@ -19,7 +19,7 @@ import { copyTextToClipboard } from '../services/clipboard';
 export default function FeedDetailView() {
   const navigate = useNavigate();
   const { feeds, selectedFeedId, queryClient } = usePodcastsContext();
-  const [_showShowSettingsModal, setShowShowSettingsModal] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [processingPollTriggers, setProcessingPollTriggers] = useState<Record<string, number>>({});
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
   const { requireAuth, isAuthenticated } = useAuth();
@@ -50,6 +50,66 @@ export default function FeedDetailView() {
       queryClient.invalidateQueries({ queryKey: ['episodes', selectedFeedId] });
     },
   });
+
+  const bulkWhitelistMutation = useMutation({
+    mutationFn: () => feedsApi.toggleAllPostsWhitelist(selectedFeedId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['episodes', selectedFeedId] });
+    },
+  });
+
+  const refreshFeedMutation = useMutation({
+    mutationFn: () => feedsApi.refreshFeed(selectedFeedId!),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      queryClient.invalidateQueries({ queryKey: ['episodes', selectedFeedId] });
+      toast.success(data?.message ?? 'Feed refreshed');
+    },
+    onError: () => {
+      toast.error('Failed to refresh feed');
+    },
+  });
+
+  const autoDownloadMutation = useMutation({
+    mutationFn: (enabled: boolean) => feedsApi.setFeedAutoDownload(selectedFeedId!, enabled),
+    onSuccess: (data: { auto_download_enabled: boolean }) => {
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      toast.success(data.auto_download_enabled ? 'Auto-process enabled' : 'Auto-process disabled');
+    },
+    onError: () => {
+      toast.error('Failed to update auto-process setting');
+    },
+  });
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showSettingsMenu && !(event.target as Element).closest('.settings-menu-container')) {
+        setShowSettingsMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSettingsMenu]);
+
+  const handleCopyOriginalRss = async () => {
+    const rssUrl = selectedFeed?.rss_url || '';
+    if (!rssUrl) {
+      toast.error('No RSS URL available');
+      return;
+    }
+    try {
+      await copyTextToClipboard(rssUrl);
+      toast.success('Original RSS URL copied');
+    } catch {
+      window.prompt('Copy this RSS feed URL:', rssUrl);
+    }
+  };
+
+  // Calculate whitelist status for bulk button (same as FeedDetail.tsx)
+  const whitelistedCount = episodes ? episodes.filter((ep: Episode) => ep.whitelisted).length : 0;
+  const totalCount = episodes ? episodes.length : 0;
+  const allWhitelisted = totalCount > 0 && whitelistedCount === totalCount;
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Unknown date';
@@ -164,18 +224,122 @@ export default function FeedDetailView() {
                 </svg>
                 Podly RSS
               </button>
-              <button
-                onClick={() => setShowShowSettingsModal(true)}
-                className="px-3 py-2 text-sm font-medium rounded-xl transition-colors"
-                style={{
-                  backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-                  borderWidth: 1,
-                  borderColor: isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(196, 181, 253, 0.5)',
-                  color: isDark ? '#c4b5fd' : '#7c3aed'
-                }}
-              >
-                Settings
-              </button>
+              {/* Settings Menu */}
+              <div className="relative settings-menu-container">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowSettingsMenu(!showSettingsMenu); }}
+                  className="px-3 py-2 text-sm font-medium rounded-xl transition-colors"
+                  style={{
+                    backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(196, 181, 253, 0.5)',
+                    color: isDark ? '#c4b5fd' : '#7c3aed'
+                  }}
+                >
+                  Settings
+                </button>
+
+                {/* Dropdown Menu */}
+                {showSettingsMenu && (
+                  <div 
+                    className="absolute top-full left-0 mt-1 w-56 rounded-lg shadow-lg border py-1 z-20"
+                    style={{
+                      backgroundColor: isDark ? '#1f2937' : '#ffffff',
+                      borderColor: isDark ? '#374151' : '#e5e7eb',
+                    }}
+                  >
+                    {/* Auto-process toggle - only when auth is enabled */}
+                    {requireAuth && (
+                      <button
+                        onClick={() => {
+                          const isEnabled = selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user;
+                          const isEnabledByOther = selectedFeed.auto_download_enabled_by_other && !selectedFeed.auto_download_enabled_by_user;
+                          if (!isEnabledByOther) {
+                            autoDownloadMutation.mutate(!isEnabled);
+                          }
+                          setShowSettingsMenu(false);
+                        }}
+                        disabled={autoDownloadMutation.isPending || (selectedFeed.auto_download_enabled_by_other && !selectedFeed.auto_download_enabled_by_user)}
+                        className="w-full px-4 py-2 text-left text-sm flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ color: isDark ? '#e5e7eb' : '#374151' }}
+                      >
+                        <span className="flex items-center gap-3">
+                          <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          Auto-process
+                        </span>
+                        <span className={`inline-block w-8 h-4 rounded-full transition-colors ${
+                          (selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user) ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'
+                        }`}>
+                          <span className={`inline-block w-3 h-3 mt-0.5 rounded-full bg-white transition-transform ${
+                            (selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user) ? 'translate-x-4' : 'translate-x-0.5'
+                          }`} />
+                        </span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        if (!allWhitelisted) {
+                          bulkWhitelistMutation.mutate();
+                        }
+                        setShowSettingsMenu(false);
+                      }}
+                      disabled={bulkWhitelistMutation.isPending || totalCount === 0 || allWhitelisted}
+                      className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80"
+                      style={{ color: isDark ? '#e5e7eb' : '#374151' }}
+                    >
+                      <span className="text-green-600">✓</span>
+                      Enable all episodes
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (allWhitelisted) {
+                          bulkWhitelistMutation.mutate();
+                        }
+                        setShowSettingsMenu(false);
+                      }}
+                      disabled={bulkWhitelistMutation.isPending || totalCount === 0 || !allWhitelisted}
+                      className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80"
+                      style={{ color: isDark ? '#e5e7eb' : '#374151' }}
+                    >
+                      <span className="text-red-600">⛔</span>
+                      Disable all episodes
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        refreshFeedMutation.mutate();
+                        setShowSettingsMenu(false);
+                      }}
+                      disabled={refreshFeedMutation.isPending}
+                      className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80"
+                      style={{ color: isDark ? '#e5e7eb' : '#374151' }}
+                    >
+                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh feed
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        handleCopyOriginalRss();
+                        setShowSettingsMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 hover:opacity-80"
+                      style={{ color: isDark ? '#e5e7eb' : '#374151' }}
+                    >
+                      <svg className="w-4 h-4 text-orange-500" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1Z"/>
+                      </svg>
+                      Original RSS feed
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             {requireAuth && (
               <button

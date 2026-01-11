@@ -36,7 +36,7 @@ export default function CombinedEpisodesView() {
   const [selectedEpisode, setSelectedEpisode] = useState<CombinedEpisode | null>(null);
   const [processingPollTriggers, setProcessingPollTriggers] = useState<Record<string, number>>({});
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['combined-episodes', showUnprocessedOnly],
     queryFn: () => feedsApi.getCombinedEpisodes({
       limit: 100,
@@ -49,6 +49,18 @@ export default function CombinedEpisodesView() {
       feedsApi.togglePostWhitelist(guid, whitelisted),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['combined-episodes'] });
+    },
+  });
+
+  const refreshAllMutation = useMutation({
+    mutationFn: () => feedsApi.refreshAllFeeds(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      queryClient.invalidateQueries({ queryKey: ['combined-episodes'] });
+      toast.success(`Refreshed ${data.feeds_refreshed} feeds`);
+    },
+    onError: () => {
+      toast.error('Failed to refresh feeds');
     },
   });
 
@@ -158,10 +170,11 @@ export default function CombinedEpisodesView() {
             Podly RSS
           </button>
           <button
-            onClick={() => refetch()}
-            className="px-3 py-2 text-sm font-medium rounded-xl transition-colors bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50"
+            onClick={() => refreshAllMutation.mutate()}
+            disabled={refreshAllMutation.isPending}
+            className="px-3 py-2 text-sm font-medium rounded-xl transition-colors bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Refresh
+            {refreshAllMutation.isPending ? 'Refreshing...' : 'Refresh All Feeds'}
           </button>
           {/* Filter in header - Prompt 3 */}
           <label className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 cursor-pointer ml-auto">

@@ -23,16 +23,27 @@ interface EpisodeProcessingStatusProps {
 
 export default function EpisodeProcessingStatus({
   episodeGuid,
-  isWhitelisted,
+  isWhitelisted: _isWhitelisted,
   hasProcessedAudio,
   onProcessingComplete,
   pollTrigger,
 }: EpisodeProcessingStatusProps) {
   const [status, setStatus] = useState<ProcessingStatus | null>(null);
 
-  // Poll for status updates
+  // Poll for status updates - ONLY when explicitly triggered by pollTrigger
+  // This prevents polling for all whitelisted episodes (which would cause thousands of requests)
   useEffect(() => {
-    if (!isWhitelisted || (hasProcessedAudio && !pollTrigger)) {
+    // Only poll if:
+    // 1. pollTrigger is set (user clicked Process button), OR
+    // 2. We already have a status showing processing in progress
+    const shouldStartPolling = pollTrigger || (status && (status.status === 'pending' || status.status === 'running'));
+    
+    if (!shouldStartPolling) {
+      return;
+    }
+
+    // Don't poll if already processed (unless just triggered)
+    if (hasProcessedAudio && !pollTrigger) {
       setStatus(null);
       return;
     }
@@ -74,14 +85,14 @@ export default function EpisodeProcessingStatus({
     // Initial check
     checkStatus();
 
-    // Set up polling interval - always poll initially, then stop based on status
+    // Set up polling interval
     const interval = setInterval(checkStatus, 2000);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [episodeGuid, isWhitelisted, hasProcessedAudio, onProcessingComplete, pollTrigger]);
+  }, [episodeGuid, hasProcessedAudio, onProcessingComplete, pollTrigger, status]);
 
   // Don't show anything if not processing
   if (!status || status.status === 'not_started' || status.status === 'completed' || status.status === 'skipped') {

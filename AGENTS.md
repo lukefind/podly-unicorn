@@ -210,15 +210,15 @@ The Podcasts page (`/podcasts`) displays subscribed feeds and their episodes.
 - Action buttons: **Podly RSS** (gradient), **Settings**, **Unsubscribe**
 - Feed description below header
 
-**Show Settings Modal:**
-Accessed via the "Settings" button. Contains:
-- **Original RSS** - Copy/open the source RSS URL
-- **Auto process new episodes** - Toggle for auto-processing (auth required)
-- **Choose custom preset** - Admin-only dropdown to override server preset
-- **Footer buttons**: Enable all, Refresh feed, Disable all, Help
-- **Unsubscribe** - Full-width button at bottom
+**Show Settings Dropdown:**
+Accessed via the "Settings" button. Opens a dropdown menu with:
+- **Auto-process** - Toggle for auto-processing new episodes (auth required)
+- **Enable all episodes** - Whitelist all episodes in the feed
+- **Disable all episodes** - Remove all episodes from whitelist
+- **Refresh feed** - Fetch new episodes from upstream RSS
+- **Original RSS feed** - Copy the source RSS URL
 
-The modal uses `createPortal` and has proper dark mode support with inline styles.
+The dropdown uses inline styles for solid backgrounds to avoid CSS override issues in dark mode.
 
 ### User Statistics
 Admin users can view per-user statistics in Settings → User Statistics section:
@@ -468,14 +468,15 @@ docker restart <container-name>
 
 ### Current Migration Head
 
-**Revision:** `c3d4e5f6a7b8` (Add is_hidden to feed)
+**Revision:** `k8l9m0n1o2p3` (Remove unique constraint from post.download_url)
 
 ### Migration History (recent)
 
 | Revision | Description |
 |----------|-------------|
+| `k8l9m0n1o2p3` | Remove unique constraint from `post.download_url` (allows duplicate audio URLs) |
+| `j7k8l9m0n1o2` | Add `feed_id` to `user_download` and make `post_id` nullable |
+| `i6j7k8l9m0n1` | Add `event_type` to `user_download` |
+| `g4h5i6j7k8l9` | Add `auth_type` and `decision` columns to `user_download` |
+| `h5i6j7k8l9m0` | Add `trigger_source` to `processing_job` |
 | `c3d4e5f6a7b8` | Add `is_hidden` to `feed` table |
-| `b2c3d4e5f6a7` | Add `default_prompt_preset_id` to `feed` table |
-| `a1b2c3d4e5f6` | Add `auto_download_new_episodes` to `user_feed_subscription` |
-| `f3a4b5c6d7e8` | Add `user_feed_subscription` table |
-| `e2f3a4b5c6d7` | Add `processed_with_preset_id` to `post` table |
