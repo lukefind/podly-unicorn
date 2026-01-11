@@ -83,7 +83,8 @@ export default function CombinedEpisodesView() {
       const shareData = await feedsApi.getCombinedFeedShareLink();
       await copyTextToClipboard(shareData.url);
       toast.success('Combined RSS URL copied!');
-    } catch {
+    } catch (err) {
+      console.error('Failed to get combined feed share link:', err);
       toast.error('Failed to copy RSS URL');
     }
   };
