@@ -1498,8 +1498,10 @@ export default function ConfigPage() {
                 <input
                   className="input"
                   type="number"
+                  min="0"
                   value={pending?.app?.number_of_episodes_to_whitelist_from_archive_of_new_feed ?? 1}
-                  onChange={(e) => setField(['app', 'number_of_episodes_to_whitelist_from_archive_of_new_feed'], Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setField(['app', 'number_of_episodes_to_whitelist_from_archive_of_new_feed'], e.target.value === '' ? 0 : Number(e.target.value))}
                 />
               </Field>
             </div>
