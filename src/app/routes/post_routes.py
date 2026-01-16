@@ -72,6 +72,7 @@ def _track_user_download(post: Post, is_processed: bool = True) -> None:
         db.session.add(download)
         db.session.commit()
     except Exception as exc:  # pylint: disable=broad-except
+        db.session.rollback()
         logger.error(
             "Failed to track download for user %s post %s: %s",
             getattr(getattr(g, "current_user", None), "id", "?"),
@@ -1080,6 +1081,7 @@ def trigger_processing() -> flask.Response:
         return _handle_trigger_processing()
     except Exception as e:
         # Catch-all for any unexpected exceptions
+        db.session.rollback()
         logger.error(f"Unexpected error in trigger_processing: {e}", exc_info=True)
         print(f"[TRIGGER_ERROR] unexpected_exception: {e}", file=sys.stderr, flush=True)
         return _render_trigger_error_page(
