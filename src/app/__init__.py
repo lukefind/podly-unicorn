@@ -224,7 +224,6 @@ def _configure_cors(app: Flask) -> None:
     default_cors = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "https://your-domain.com",
     ]
     cors_origins_env = os.environ.get("CORS_ORIGINS")
     if cors_origins_env:
