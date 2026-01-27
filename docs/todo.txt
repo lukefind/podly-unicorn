@@ -10,3 +10,5 @@ podcast rss search
 also show if api key is set or blank
 
 test hide 'local' whisper in lite build
+
+TODO: Add documented proxy options for download failures (e.g., Podtrac 403 due to datacenter IP blocks).

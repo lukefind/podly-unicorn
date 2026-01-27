@@ -30,7 +30,8 @@
 
 ### 🐛 Minor Issues
 
-- None reported
+- Some hosts (e.g., Podtrac) can return HTTP 403 when running on datacenter IPs, blocking downloads.  
+  See: docs/PROXY_DOWNLOADS.md
 
 ### 🚧 Limitations
 

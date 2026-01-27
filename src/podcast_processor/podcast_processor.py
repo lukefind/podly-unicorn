@@ -11,7 +11,11 @@ from app.extensions import db
 from app.models import Post, ProcessingJob, TranscriptSegment
 from podcast_processor.ad_classifier import AdClassifier
 from podcast_processor.audio_processor import AudioProcessor
-from podcast_processor.podcast_downloader import PodcastDownloader, sanitize_title
+from podcast_processor.podcast_downloader import (
+    DownloadError,
+    PodcastDownloader,
+    sanitize_title,
+)
 from podcast_processor.processing_status_manager import ProcessingStatusManager
 from podcast_processor.prompt import (
     DEFAULT_SYSTEM_PROMPT_PATH,
@@ -425,11 +429,12 @@ class PodcastProcessor:
             job, "running", 1, "Downloading episode", 25.0
         )
         self.logger.info(f"Downloading post: {post.title}")
-        download_path = self.downloader.download_episode(
-            post, dest_path=str(expected_unprocessed_path)
-        )
-        if download_path is None:
-            raise ProcessorException("Download failed")
+        try:
+            download_path = self.downloader.download_episode(
+                post, dest_path=str(expected_unprocessed_path)
+            )
+        except DownloadError as exc:
+            raise ProcessorException(str(exc)) from exc
         post.unprocessed_audio_path = download_path
         self.db_session.commit()
 

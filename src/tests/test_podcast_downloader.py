@@ -4,6 +4,7 @@ import pytest
 
 from app.models import Feed, Post
 from podcast_processor.podcast_downloader import (
+    DownloadError,
     PodcastDownloader,
     find_audio_link,
     sanitize_title,
@@ -145,7 +146,8 @@ def test_download_episode_download_failed(mock_get, test_post, downloader, app):
         mock_get.return_value = mock_response
 
         expected_path = downloader.get_and_make_download_path(test_post.title)
-        result = downloader.download_episode(test_post, dest_path=str(expected_path))
+        with pytest.raises(DownloadError):
+            downloader.download_episode(test_post, dest_path=str(expected_path))
 
         # Check that we tried to download the file
         mock_get.assert_called_once_with(
@@ -156,8 +158,8 @@ def test_download_episode_download_failed(mock_get, test_post, downloader, app):
         expected_path = downloader.get_and_make_download_path(test_post.title)
         assert not expected_path.exists()
 
-        # Check that None was returned
-        assert result is None
+        # Ensure no file was created
+        assert not expected_path.exists()
 
 
 @mock.patch("podcast_processor.podcast_downloader.validators.url")

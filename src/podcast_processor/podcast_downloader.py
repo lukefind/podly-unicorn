@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 DOWNLOAD_DIR = str(get_in_root())
 
 
+class DownloadError(Exception):
+    def __init__(self, message: str, status_code: Optional[int] = None, url: str | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.url = url
+
+
 class PodcastDownloader:
     """
     Handles downloading podcast episodes with robust file checking and path management.
@@ -78,10 +85,31 @@ class PodcastDownloader:
                         file.write(chunk)
                 self.logger.info("Download complete.")
             else:
+                status_code = response.status_code
                 self.logger.info(
-                    f"Failed to download the podcast episode, response: {response.status_code}"
+                    "Failed to download the podcast episode, response: %s",
+                    status_code,
                 )
-                return None
+                parsed_url = None
+                try:
+                    parsed_url = requests.utils.urlparse(audio_link)
+                except Exception:
+                    pass
+
+                host = parsed_url.hostname if parsed_url else None
+                if status_code == 403 and host and "podtrac.com" in host:
+                    raise DownloadError(
+                        "Download blocked by host (HTTP 403). Podtrac often blocks datacenter IPs. "
+                        "Use a proxy/egress IP or a different source.",
+                        status_code=status_code,
+                        url=audio_link,
+                    )
+
+                raise DownloadError(
+                    f"Download failed (HTTP {status_code}).",
+                    status_code=status_code,
+                    url=audio_link,
+                )
 
         return download_path
 
