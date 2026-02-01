@@ -76,8 +76,14 @@ class ProcessingStatusManager:
         step: int,
         step_name: str,
         progress: Optional[float] = None,
+        error_message: Optional[str] = None,
     ) -> None:
-        """Update job status in database."""
+        """Update job status in database.
+
+        For failed jobs, error_message should contain the error details.
+        If error_message is not provided but status is 'failed', step_name
+        will be used as the error message for backward compatibility.
+        """
         self.logger.debug(
             ("update_job_status enter: job_id=%s status=%s step=%s bound=%s"),
             getattr(job, "id", None),
@@ -88,6 +94,14 @@ class ProcessingStatusManager:
         job.status = status
         job.current_step = step
         job.step_name = step_name
+
+        # Set error_message for failed jobs
+        if status == "failed":
+            # Use explicit error_message if provided, otherwise fall back to step_name
+            job.error_message = error_message if error_message else step_name
+        elif status in ["completed", "skipped"]:
+            # Clear error_message on success
+            job.error_message = None
 
         if progress is not None:
             job.progress_percentage = progress
