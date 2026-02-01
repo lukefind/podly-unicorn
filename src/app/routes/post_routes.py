@@ -1278,9 +1278,155 @@ def _handle_trigger_processing() -> flask.Response:
         )
 
 
+def _format_error_for_user(raw_error: str | None) -> dict:
+    """Format a raw error message into user-friendly and technical components.
+
+    Returns:
+        dict with 'friendly' (user-readable) and 'technical' (debug details) keys
+    """
+    if not raw_error:
+        return {
+            "friendly": "An unknown error occurred.",
+            "technical": None,
+            "retry_suggested": True
+        }
+
+    error_lower = raw_error.lower()
+
+    # Groq/Whisper API errors (500, internal server error)
+    if "500" in raw_error or "internal server error" in error_lower or "internal_server_error" in error_lower:
+        return {
+            "friendly": "The transcription service is temporarily unavailable.",
+            "technical": raw_error,
+            "retry_suggested": True
+        }
+
+    # Rate limiting errors
+    if "rate limit" in error_lower or "rate_limit" in error_lower or "429" in raw_error:
+        return {
+            "friendly": "The service is busy. Please wait a few minutes and try again.",
+            "technical": raw_error,
+            "retry_suggested": True
+        }
+
+    # Timeout errors
+    if "timeout" in error_lower or "timed out" in error_lower:
+        return {
+            "friendly": "The request timed out. The episode may be too long or the service is slow.",
+            "technical": raw_error,
+            "retry_suggested": True
+        }
+
+    # Service unavailable (503)
+    if "503" in raw_error or "service unavailable" in error_lower:
+        return {
+            "friendly": "The service is temporarily unavailable for maintenance.",
+            "technical": raw_error,
+            "retry_suggested": True
+        }
+
+    # Podtrac/datacenter IP blocking (403)
+    if "podtrac" in error_lower and "403" in raw_error:
+        return {
+            "friendly": "Download blocked by the podcast host. Podtrac blocks datacenter IPs.",
+            "technical": raw_error,
+            "retry_suggested": False
+        }
+
+    # Generic download failures
+    if "download failed" in error_lower or "download blocked" in error_lower:
+        return {
+            "friendly": "Failed to download the podcast episode from the source.",
+            "technical": raw_error,
+            "retry_suggested": True
+        }
+
+    # Authentication errors (401, 403)
+    if "401" in raw_error or "403" in raw_error or "unauthorized" in error_lower or "forbidden" in error_lower:
+        return {
+            "friendly": "Access denied. The API key may be invalid or expired.",
+            "technical": raw_error,
+            "retry_suggested": False
+        }
+
+    # Invalid API key
+    if "api key" in error_lower or "api_key" in error_lower or "authentication" in error_lower:
+        return {
+            "friendly": "API authentication failed. Check the API key configuration.",
+            "technical": raw_error,
+            "retry_suggested": False
+        }
+
+    # Token limit exceeded
+    if "token limit" in error_lower or "exceeds" in error_lower and "token" in error_lower:
+        return {
+            "friendly": "The episode is too long to process with current settings.",
+            "technical": raw_error,
+            "retry_suggested": False
+        }
+
+    # FFmpeg/audio processing errors
+    if "ffmpeg" in error_lower or "audio" in error_lower and "duration" in error_lower:
+        return {
+            "friendly": "Failed to process the audio file. The file may be corrupted.",
+            "technical": raw_error,
+            "retry_suggested": True
+        }
+
+    # No audio segments to keep
+    if "no audio segments" in error_lower:
+        return {
+            "friendly": "All audio was detected as ads. This may be a detection error.",
+            "technical": raw_error,
+            "retry_suggested": False
+        }
+
+    # Processing job in progress (lock contention)
+    if "processing job in progress" in error_lower:
+        return {
+            "friendly": "Another processing job is already running for this episode.",
+            "technical": raw_error,
+            "retry_suggested": True
+        }
+
+    # Post not found
+    if "post not found" in error_lower or "episode not found" in error_lower:
+        return {
+            "friendly": "The episode could not be found. It may have been removed.",
+            "technical": raw_error,
+            "retry_suggested": False
+        }
+
+    # Whisper library not available
+    if "whisper library" in error_lower:
+        return {
+            "friendly": "Local transcription is not available. Configure cloud transcription instead.",
+            "technical": raw_error,
+            "retry_suggested": False
+        }
+
+    # Generic "Unexpected error" wrapper - try to extract the inner message
+    if raw_error.startswith("Unexpected error:"):
+        inner_error = raw_error.replace("Unexpected error:", "").strip()
+        # Recursively format the inner error
+        inner_result = _format_error_for_user(inner_error)
+        return {
+            "friendly": inner_result["friendly"],
+            "technical": raw_error,  # Keep full error for technical
+            "retry_suggested": inner_result["retry_suggested"]
+        }
+
+    # Default fallback - unknown error
+    return {
+        "friendly": "Processing failed due to an unexpected error.",
+        "technical": raw_error,
+        "retry_suggested": True
+    }
+
+
 def _normalize_job(job: ProcessingJob, download_url: str | None = None) -> dict:
     """Normalize a ProcessingJob to a safe JSON-serializable dict with defaults.
-    
+
     Handles NULL fields that can occur during early processing stages.
     """
     # Step name mapping for when step_name is NULL
@@ -1475,7 +1621,14 @@ def _handle_trigger_status() -> flask.Response:
     if last_job and last_job.status == "failed":
         # Use normalize_job for consistent response structure
         normalized = _normalize_job(last_job, None)
-        normalized["message"] = f"Processing failed: {last_job.error_message or 'Unknown error'}"
+        # Format error for user-friendly display with technical details
+        formatted_error = _format_error_for_user(last_job.error_message)
+        normalized["message"] = formatted_error["friendly"]
+        normalized["error_details"] = {
+            "friendly": formatted_error["friendly"],
+            "technical": formatted_error["technical"],
+            "retry_suggested": formatted_error["retry_suggested"],
+        }
         response = flask.jsonify(normalized)
         response.headers["Cache-Control"] = "no-store"
         return response

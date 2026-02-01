@@ -20,11 +20,18 @@ import ProcessingProgressUI from '../components/ProcessingProgressUI';
 const TERMINAL_STATES = ['ready', 'completed', 'failed', 'error'];
 const POLL_INTERVAL_MS = 2000;
 
+interface ErrorDetails {
+  friendly: string;
+  technical: string | null;
+  retry_suggested: boolean;
+}
+
 interface TriggerStatus {
   state: 'ready' | 'processing' | 'queued' | 'failed' | 'not_found' | 'error' | 'not_started';
   processed: boolean;
   download_url: string | null;
   message: string;
+  error_details?: ErrorDetails;
   job: {
     id: string;
     status: string;
@@ -44,8 +51,10 @@ export default function TriggerPage() {
 
   const [status, setStatus] = useState<TriggerStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<ErrorDetails | null>(null);
   const [isTemporarilyUnavailable, setIsTemporarilyUnavailable] = useState(false);
   const [copiedFeedUrl, setCopiedFeedUrl] = useState(false);
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
   // Single polling owner - only one interval ever exists
   const intervalRef = useRef<number | null>(null);
@@ -88,10 +97,20 @@ export default function TriggerPage() {
 
       // 2xx: valid response
       if (response.ok) {
-        // 200 + error/failed state should never happen after backend fix
-        // but treat as permanent error if it does
-        if (!data || data.state === 'error' || data.state === 'failed') {
+        // Handle failed state with error details
+        if (data?.state === 'failed') {
+          setStatus(data);
+          setError(data?.message || 'Processing failed');
+          setErrorDetails(data?.error_details || null);
+          setIsTemporarilyUnavailable(false);
+          stopPolling();
+          return;
+        }
+
+        // Handle error state
+        if (!data || data.state === 'error') {
           setError(data?.message || 'Unexpected status response');
+          setErrorDetails(null);
           setIsTemporarilyUnavailable(false);
           stopPolling();
           return;
@@ -100,6 +119,7 @@ export default function TriggerPage() {
         // Valid status - update UI
         setStatus(data);
         setError(null);
+        setErrorDetails(null);
         setIsTemporarilyUnavailable(false);
 
         // Terminal state - stop polling permanently
@@ -217,8 +237,35 @@ export default function TriggerPage() {
           </div>
           <div className="p-6 text-center">
             <div className="text-4xl mb-4 text-red-500">&#10060;</div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">Error</h2>
-            <p className="text-gray-600">{error}</p>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Processing Failed</h2>
+            <p className="text-gray-600 mb-4">{errorDetails?.friendly || error}</p>
+
+            {/* Retry suggestion */}
+            {errorDetails?.retry_suggested && (
+              <p className="text-sm text-purple-600 mb-4">
+                This may be a temporary issue. Please try again in a few minutes.
+              </p>
+            )}
+
+            {/* Technical details toggle */}
+            {errorDetails?.technical && (
+              <div className="mt-4 text-left">
+                <button
+                  onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+                  className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 mx-auto"
+                >
+                  <span>{showTechnicalDetails ? '▼' : '▶'}</span>
+                  <span>Technical details</span>
+                </button>
+                {showTechnicalDetails && (
+                  <div className="mt-2 p-3 bg-gray-100 rounded-lg text-left">
+                    <code className="text-xs text-gray-600 break-all whitespace-pre-wrap">
+                      {errorDetails.technical}
+                    </code>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
