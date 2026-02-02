@@ -8,6 +8,7 @@ import PyRSS2Gen
 import pytest
 
 from app.feeds import (
+    _extract_description,
     _get_base_url,
     add_feed,
     db,
@@ -626,3 +627,92 @@ def test_get_base_url_fallback_http_without_sts():
 
     # Should use HTTP when no HTTPS indicators present
     assert result == "http://insecure.example.com"
+
+
+class TestExtractDescription:
+    """Tests for _extract_description function."""
+
+    def test_content_encoded_takes_priority(self):
+        """content:encoded should be preferred over other fields."""
+        entry = mock.MagicMock()
+        entry.content = [{"value": "<p>Rich HTML content</p>"}]
+        entry.get = mock.MagicMock(side_effect=lambda k, d="": {
+            "description": "Plain description",
+            "summary": "Summary text",
+        }.get(k, d))
+        entry.itunes_summary = "iTunes summary"
+        
+        result = _extract_description(entry)
+        assert result == "<p>Rich HTML content</p>"
+
+    def test_description_fallback(self):
+        """description should be used when content:encoded is empty."""
+        entry = mock.MagicMock()
+        entry.content = None
+        entry.get = mock.MagicMock(side_effect=lambda k, d="": {
+            "description": "Plain description",
+            "summary": "Summary text",
+        }.get(k, d))
+        entry.itunes_summary = "iTunes summary"
+        
+        result = _extract_description(entry)
+        assert result == "Plain description"
+
+    def test_summary_fallback(self):
+        """summary should be used when description is empty."""
+        entry = mock.MagicMock()
+        entry.content = None
+        entry.get = mock.MagicMock(side_effect=lambda k, d="": {
+            "description": "",
+            "summary": "Summary text",
+        }.get(k, d))
+        entry.itunes_summary = "iTunes summary"
+        
+        result = _extract_description(entry)
+        assert result == "Summary text"
+
+    def test_itunes_summary_fallback(self):
+        """itunes_summary should be used when all other fields are empty."""
+        entry = mock.MagicMock()
+        entry.content = None
+        entry.get = mock.MagicMock(return_value="")
+        entry.itunes_summary = "iTunes summary"
+        
+        result = _extract_description(entry)
+        assert result == "iTunes summary"
+
+    def test_empty_description_tag_uses_fallback(self):
+        """Empty <description/> tag should fall back to other fields (Mac Power Users case)."""
+        entry = mock.MagicMock()
+        entry.content = [{"value": "<p>Full show notes from content:encoded</p>"}]
+        entry.get = mock.MagicMock(side_effect=lambda k, d="": {
+            "description": "",  # Empty description tag
+            "summary": "",
+        }.get(k, d))
+        entry.itunes_summary = "Short iTunes summary"
+        
+        result = _extract_description(entry)
+        assert result == "<p>Full show notes from content:encoded</p>"
+
+    def test_whitespace_only_description_uses_fallback(self):
+        """Whitespace-only description should fall back to other fields."""
+        entry = mock.MagicMock()
+        entry.content = None
+        entry.get = mock.MagicMock(side_effect=lambda k, d="": {
+            "description": "   \n\t  ",
+            "summary": "Actual summary",
+        }.get(k, d))
+        entry.itunes_summary = ""
+        
+        result = _extract_description(entry)
+        assert result == "Actual summary"
+
+    def test_all_empty_returns_empty_string(self):
+        """Returns empty string when all fields are empty."""
+        entry = mock.MagicMock()
+        entry.content = None
+        entry.get = mock.MagicMock(return_value="")
+        entry.itunes_summary = ""
+        
+        result = _extract_description(entry)
+        assert result == ""

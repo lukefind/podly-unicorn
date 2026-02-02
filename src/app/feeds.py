@@ -321,7 +321,7 @@ def refresh_feed(feed: Feed) -> list[str]:
             feed.image_url = new_image_url
             db.session.add(feed)
 
-    existing_posts = {post.guid for post in feed.posts}  # type: ignore[attr-defined]
+    existing_posts = {post.guid: post for post in feed.posts}  # type: ignore[attr-defined]
     oldest_post = min(
         (post for post in feed.posts if post.release_date),  # type: ignore[attr-defined]
         key=lambda p: p.release_date,
@@ -351,6 +351,14 @@ number_of_episodes_to_whitelist_from_archive_of_new_feed setting: {entry.title}"
                     p.whitelisted = config.automatically_whitelist_new_episodes
             # Don't auto-create jobs by default; auto-processing is managed by callers.
             db.session.add(p)
+        else:
+            # Update existing post's description if it was empty or has changed
+            existing_post = existing_posts[entry.id]
+            new_description = _extract_description(entry)
+            if new_description and (not existing_post.description or existing_post.description.strip() == ""):
+                existing_post.description = new_description
+                db.session.add(existing_post)
+                logger.debug(f"Updated description for existing post: {entry.title}")
     db.session.commit()
     logger.info(f"Feed with ID: {feed.id} refreshed")
     return auto_process_post_guids
@@ -622,6 +630,40 @@ def _append_feed_token_params(url: str) -> str:
     return urlunparse(parsed._replace(query=new_query))
 
 
+def _extract_description(entry: feedparser.FeedParserDict) -> str:
+    """Extract episode description from various RSS fields with fallback.
+    
+    Priority order:
+    1. content:encoded (richest HTML content, exposed as entry.content by feedparser)
+    2. description (standard RSS)
+    3. summary (Atom/feedparser normalized field)
+    4. itunes_summary (iTunes-specific)
+    """
+    # Try content:encoded first (feedparser exposes as entry.content list)
+    content = getattr(entry, "content", None)
+    if content and isinstance(content, list) and len(content) > 0:
+        value = content[0].get("value", "")
+        if value and value.strip():
+            return value.strip()
+    
+    # Try standard description
+    description = entry.get("description", "")
+    if description and description.strip():
+        return description.strip()
+    
+    # Try summary (feedparser normalized field)
+    summary = entry.get("summary", "")
+    if summary and summary.strip():
+        return summary.strip()
+    
+    # Try itunes_summary
+    itunes_summary = getattr(entry, "itunes_summary", "")
+    if itunes_summary and itunes_summary.strip():
+        return itunes_summary.strip()
+    
+    return ""
+
+
 def make_post(feed: Feed, entry: feedparser.FeedParserDict) -> Post:
     # Extract episode image URL, fallback to feed image
     episode_image_url = None
@@ -654,7 +696,7 @@ def make_post(feed: Feed, entry: feedparser.FeedParserDict) -> Post:
         guid=get_guid(entry),
         download_url=find_audio_link(entry),
         title=entry.title,
-        description=entry.get("description", ""),
+        description=_extract_description(entry),
         release_date=_parse_release_date(entry),
         duration=get_duration(entry),
         image_url=episode_image_url,
