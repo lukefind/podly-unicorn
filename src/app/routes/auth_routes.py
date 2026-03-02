@@ -82,21 +82,14 @@ def login() -> RouteResult:
             {"Retry-After": str(retry_after)},
         )
 
-    # Provide a more explicit message if the account exists but is not active.
-    candidate = User.query.filter_by(email=username.strip().lower()).first()
-    if candidate is not None and getattr(candidate, "account_status", "active") != "active":
-        status = getattr(candidate, "account_status", "pending")
-        if status == "pending":
-            return jsonify({"error": "Your account is pending admin approval."}), 403
-        return jsonify({"error": "Your account is not active."}), 403
-
     authenticated = authenticate(username, password)
     if authenticated is None:
         backoff = failure_rate_limiter.register_failure(client_identifier)
         response_headers: dict[str, str] = {}
         if backoff:
             response_headers["Retry-After"] = str(backoff)
-        response = jsonify({"error": "Invalid username or password."})
+
+        response = jsonify({"error": "Invalid email or password."})
         if response_headers:
             return response, 401, response_headers
         return response, 401

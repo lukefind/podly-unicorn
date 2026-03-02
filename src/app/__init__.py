@@ -214,9 +214,11 @@ def _configure_session(app: Flask, auth_settings: AuthSettings) -> None:
     # Don't refresh session cookie on every request - prevents cookie churn on polling
     app.config["SESSION_REFRESH_EACH_REQUEST"] = False
 
-    # Default to False for HTTP reverse proxies; set SESSION_COOKIE_SECURE=true for HTTPS.
+    # Default to True when auth is enabled (production should use HTTPS).
+    # Explicitly set SESSION_COOKIE_SECURE=false for HTTP-only dev setups.
+    secure_default = "true" if auth_settings.require_auth else "false"
     app.config["SESSION_COOKIE_SECURE"] = (
-        os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
+        os.environ.get("SESSION_COOKIE_SECURE", secure_default).lower() == "true"
     )
 
 

@@ -312,9 +312,15 @@ def get_combined_episodes() -> Response:
     if not user:
         return jsonify({"error": "User not found"}), 404
     
-    # Parse query params
-    limit = min(int(request.args.get("limit", 100)), 200)
-    offset = int(request.args.get("offset", 0))
+    # Parse query params (safe defaults on bad input)
+    try:
+        limit = min(max(int(request.args.get("limit", 100)), 1), 200)
+    except (ValueError, TypeError):
+        limit = 100
+    try:
+        offset = max(int(request.args.get("offset", 0)), 0)
+    except (ValueError, TypeError):
+        offset = 0
     unprocessed_only = request.args.get("unprocessed_only", "").lower() == "true"
     queued_only = request.args.get("queued_only", "").lower() == "true"
     
@@ -522,10 +528,6 @@ def delete_feed(f_id: int) -> Response:
         logger.info(f"Feed {f_id} has no remaining subscribers. Proceeding with full deletion.")
     
     # Full deletion (admin or no auth)
-    from app.models import FeedAccessToken, ProcessingStatistics, UserDownload  # pylint: disable=import-outside-toplevel
-    from sqlalchemy import text  # pylint: disable=import-outside-toplevel
-    
-    # Store info before we start deleting
     feed_id_to_delete = feed.id
     feed_title = feed.title
     
@@ -554,55 +556,9 @@ def delete_feed(f_id: int) -> Response:
     # Clean up directory structures
     _cleanup_feed_directories(feed)
     
-    # Rollback any pending changes and use raw SQL to avoid ORM cascade issues
+    # Rollback any pending changes and use parameterized SQL to avoid ORM cascade issues
     db.session.rollback()
-
-    # Delete all related records using raw SQL in correct order
-    if post_ids:
-        post_ids_str = ','.join(str(pid) for pid in post_ids)
-        
-        # Get transcript segment IDs for this feed's posts
-        segment_ids_result = db.session.execute(
-            text(f"SELECT id FROM transcript_segment WHERE post_id IN ({post_ids_str})")
-        ).fetchall()
-        segment_ids = [r[0] for r in segment_ids_result]
-        
-        if segment_ids:
-            segment_ids_str = ','.join(str(sid) for sid in segment_ids)
-            # Delete identifications
-            db.session.execute(
-                text(f"DELETE FROM identification WHERE transcript_segment_id IN ({segment_ids_str})")
-            )
-        
-        # Delete transcript segments
-        db.session.execute(text(f"DELETE FROM transcript_segment WHERE post_id IN ({post_ids_str})"))
-        
-        # Delete model calls
-        db.session.execute(text(f"DELETE FROM model_call WHERE post_id IN ({post_ids_str})"))
-        
-        # Delete processing statistics
-        db.session.execute(text(f"DELETE FROM processing_statistics WHERE post_id IN ({post_ids_str})"))
-        
-        # Delete user downloads
-        db.session.execute(text(f"DELETE FROM user_download WHERE post_id IN ({post_ids_str})"))
-    
-    # Delete processing jobs by guid
-    if post_guids:
-        guids_str = ','.join(f"'{g}'" for g in post_guids)
-        db.session.execute(text(f"DELETE FROM processing_job WHERE post_guid IN ({guids_str})"))
-    
-    # Delete posts
-    db.session.execute(text(f"DELETE FROM post WHERE feed_id = {feed_id_to_delete}"))
-    
-    # Delete subscriptions
-    db.session.execute(text(f"DELETE FROM user_feed_subscription WHERE feed_id = {feed_id_to_delete}"))
-    
-    # Delete feed access tokens
-    db.session.execute(text(f"DELETE FROM feed_access_token WHERE feed_id = {feed_id_to_delete}"))
-    
-    # Delete the feed
-    db.session.execute(text(f"DELETE FROM feed WHERE id = {feed_id_to_delete}"))
-    
+    _delete_feed_records(feed_id_to_delete, post_ids, post_guids)
     db.session.commit()
 
     logger.info(f"Deleted feed: {feed_title} (ID: {feed_id_to_delete}) with {len(post_ids)} posts")
@@ -681,6 +637,61 @@ def _enqueue_pending_jobs_async(app: Flask) -> None:
             get_jobs_manager().enqueue_pending_jobs(trigger="feed_refresh")
         except Exception as exc:  # pylint: disable=broad-except
             logger.error("Failed to enqueue pending jobs asynchronously: %s", exc)
+
+
+def _delete_feed_records(feed_id: int, post_ids: list[int], post_guids: list[str]) -> None:
+    """Delete all database records associated with a feed using parameterized queries.
+
+    Must be called after db.session.rollback() to avoid ORM cascade issues.
+    The caller is responsible for committing the transaction afterwards.
+    """
+    from sqlalchemy import text  # pylint: disable=import-outside-toplevel
+
+    if post_ids:
+        # SQLite doesn't support array binds, so use individual placeholders
+        id_placeholders = ",".join([":pid_%d" % i for i in range(len(post_ids))])
+        id_params = {"pid_%d" % i: pid for i, pid in enumerate(post_ids)}
+
+        # Get transcript segment IDs for this feed's posts
+        segment_ids_result = db.session.execute(
+            text(f"SELECT id FROM transcript_segment WHERE post_id IN ({id_placeholders})"),
+            id_params,
+        ).fetchall()
+        segment_ids = [r[0] for r in segment_ids_result]
+
+        if segment_ids:
+            seg_placeholders = ",".join([":sid_%d" % i for i in range(len(segment_ids))])
+            seg_params = {"sid_%d" % i: sid for i, sid in enumerate(segment_ids)}
+            db.session.execute(
+                text(f"DELETE FROM identification WHERE transcript_segment_id IN ({seg_placeholders})"),
+                seg_params,
+            )
+
+        db.session.execute(
+            text(f"DELETE FROM transcript_segment WHERE post_id IN ({id_placeholders})"), id_params
+        )
+        db.session.execute(
+            text(f"DELETE FROM model_call WHERE post_id IN ({id_placeholders})"), id_params
+        )
+        db.session.execute(
+            text(f"DELETE FROM processing_statistics WHERE post_id IN ({id_placeholders})"), id_params
+        )
+        db.session.execute(
+            text(f"DELETE FROM user_download WHERE post_id IN ({id_placeholders})"), id_params
+        )
+
+    if post_guids:
+        guid_placeholders = ",".join([":guid_%d" % i for i in range(len(post_guids))])
+        guid_params = {"guid_%d" % i: g for i, g in enumerate(post_guids)}
+        db.session.execute(
+            text(f"DELETE FROM processing_job WHERE post_guid IN ({guid_placeholders})"),
+            guid_params,
+        )
+
+    db.session.execute(text("DELETE FROM post WHERE feed_id = :fid"), {"fid": feed_id})
+    db.session.execute(text("DELETE FROM user_feed_subscription WHERE feed_id = :fid"), {"fid": feed_id})
+    db.session.execute(text("DELETE FROM feed_access_token WHERE feed_id = :fid"), {"fid": feed_id})
+    db.session.execute(text("DELETE FROM feed WHERE id = :fid"), {"fid": feed_id})
 
 
 def _cleanup_feed_directories(feed: Feed) -> None:
@@ -1584,39 +1595,9 @@ def admin_delete_feed(feed_id: int) -> ResponseReturnValue:
     # Clean up directory structures
     _cleanup_feed_directories(feed)
     
-    # Rollback any pending changes and use raw SQL
+    # Rollback any pending changes and use parameterized SQL to avoid ORM cascade issues
     db.session.rollback()
-    
-    # Delete all related records using raw SQL
-    if post_ids:
-        post_ids_str = ','.join(str(pid) for pid in post_ids)
-        
-        # Get transcript segment IDs
-        segment_ids_result = db.session.execute(
-            text(f"SELECT id FROM transcript_segment WHERE post_id IN ({post_ids_str})")
-        ).fetchall()
-        segment_ids = [r[0] for r in segment_ids_result]
-        
-        if segment_ids:
-            segment_ids_str = ','.join(str(sid) for sid in segment_ids)
-            db.session.execute(
-                text(f"DELETE FROM identification WHERE transcript_segment_id IN ({segment_ids_str})")
-            )
-        
-        db.session.execute(text(f"DELETE FROM transcript_segment WHERE post_id IN ({post_ids_str})"))
-        db.session.execute(text(f"DELETE FROM model_call WHERE post_id IN ({post_ids_str})"))
-        db.session.execute(text(f"DELETE FROM processing_statistics WHERE post_id IN ({post_ids_str})"))
-        db.session.execute(text(f"DELETE FROM user_download WHERE post_id IN ({post_ids_str})"))
-    
-    if post_guids:
-        guids_str = ','.join(f"'{g}'" for g in post_guids)
-        db.session.execute(text(f"DELETE FROM processing_job WHERE post_guid IN ({guids_str})"))
-    
-    db.session.execute(text(f"DELETE FROM post WHERE feed_id = {feed_id}"))
-    db.session.execute(text(f"DELETE FROM user_feed_subscription WHERE feed_id = {feed_id}"))
-    db.session.execute(text(f"DELETE FROM feed_access_token WHERE feed_id = {feed_id}"))
-    db.session.execute(text(f"DELETE FROM feed WHERE id = {feed_id}"))
-    
+    _delete_feed_records(feed_id, post_ids, post_guids)
     db.session.commit()
     
     logger.info(f"Admin {user.username} deleted feed: {feed_title} (ID: {feed_id}) with {len(post_ids)} posts")

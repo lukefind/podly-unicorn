@@ -29,6 +29,18 @@ class LastAdminRemovalError(AuthServiceError):
 
 ALLOWED_ROLES: set[str] = {"admin", "user"}
 
+_MIN_PASSWORD_LENGTH = 8
+
+
+def _validate_password(password: str) -> None:
+    """Raise PasswordValidationError if the password is too weak."""
+    if not password or not password.strip():
+        raise PasswordValidationError("Password cannot be empty.")
+    if len(password) < _MIN_PASSWORD_LENGTH:
+        raise PasswordValidationError(
+            f"Password must be at least {_MIN_PASSWORD_LENGTH} characters."
+        )
+
 
 @dataclass(slots=True)
 class AuthenticatedUser:
@@ -78,6 +90,7 @@ def create_pending_user(email: str, password: str) -> User:
     if User.query.filter_by(email=normalized_email).first():
         raise DuplicateUserError("A user with that email already exists.")
 
+    _validate_password(password)
     # Use the email as the username for uniqueness and simplicity.
     user = User(username=normalized_email, email=normalized_email, role="user")
     user.set_password(password)
@@ -103,6 +116,7 @@ def create_user(username: str, password: str, role: str = "user") -> User:
     if User.query.filter_by(username=normalized_username).first():
         raise DuplicateUserError("A user with that username already exists.")
 
+    _validate_password(password)
     user = User(username=normalized_username, role=role)
     user.set_password(password)
 
@@ -119,6 +133,7 @@ def change_password(user: User, current_password: str, new_password: str) -> Non
 
 
 def update_password(user: User, new_password: str) -> None:
+    _validate_password(new_password)
     user.set_password(new_password)
     db.session.add(user)
     db.session.commit()

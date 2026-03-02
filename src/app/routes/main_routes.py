@@ -2,7 +2,8 @@ import logging
 import os
 
 import flask
-from flask import Blueprint, current_app, send_from_directory
+import werkzeug.exceptions
+from flask import Blueprint, current_app, g, send_from_directory
 
 from app.extensions import db
 from app.models import Feed, Post
@@ -12,6 +13,18 @@ logger = logging.getLogger("global_logger")
 
 
 main_bp = Blueprint("main", __name__)
+
+
+def _require_legacy_endpoint_auth() -> flask.Response | None:
+    """Legacy mutating routes are only allowed when session auth is enabled."""
+    settings = current_app.config.get("AUTH_SETTINGS")
+    if not settings or not settings.require_auth:
+        return flask.make_response(("Authentication required.", 401))
+
+    if getattr(g, "current_user", None) is None:
+        return flask.make_response(("Authentication required.", 401))
+
+    return None
 
 
 @main_bp.route("/")
@@ -36,21 +49,28 @@ def catch_all(path: str) -> flask.Response:
 
     static_folder = current_app.static_folder
     if static_folder:
-        # First try to serve a static file if it exists
-        static_file_path = os.path.join(static_folder, path)
-        if os.path.exists(static_file_path) and os.path.isfile(static_file_path):
+        # Try to serve a static file; send_from_directory validates path safety
+        try:
             return send_from_directory(static_folder, path)
+        except werkzeug.exceptions.NotFound:
+            pass
 
-        # If it's not a static file and index.html exists, serve the React app
-        if os.path.exists(os.path.join(static_folder, "index.html")):
+        # If it's not a static file, serve the React SPA shell
+        try:
             return send_from_directory(static_folder, "index.html")
+        except werkzeug.exceptions.NotFound:
+            pass
 
     # Fallback to 404
     flask.abort(404)
 
 
 @main_bp.route("/feed/<int:f_id>/toggle-whitelist-all/<val>", methods=["POST"])
-def whitelist_all(f_id: str, val: str) -> flask.Response:
+def whitelist_all(f_id: int, val: str) -> flask.Response:
+    auth_error = _require_legacy_endpoint_auth()
+    if auth_error is not None:
+        return auth_error
+
     feed = Feed.query.get_or_404(f_id)
     for post in feed.posts:
         post.whitelisted = val.lower() == "true"
@@ -58,8 +78,12 @@ def whitelist_all(f_id: str, val: str) -> flask.Response:
     return flask.make_response("", 200)
 
 
-@main_bp.route("/set_whitelist/<string:p_guid>/<val>", methods=["GET"])
+@main_bp.route("/set_whitelist/<string:p_guid>/<val>", methods=["POST"])
 def set_whitelist(p_guid: str, val: str) -> flask.Response:
+    auth_error = _require_legacy_endpoint_auth()
+    if auth_error is not None:
+        return auth_error
+
     logger.info(f"Setting whitelist status for post with GUID: {p_guid} to {val}")
     post = Post.query.filter_by(guid=p_guid).first()
     if post is None:

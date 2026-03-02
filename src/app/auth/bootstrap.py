@@ -34,6 +34,11 @@ def bootstrap_admin_user(auth_settings: AuthSettings) -> None:
             "Authentication bootstrap failed: PODLY_ADMIN_PASSWORD is required."
         )
 
+    if len(password) < 8:
+        raise RuntimeError(
+            "Authentication bootstrap failed: PODLY_ADMIN_PASSWORD must be at least 8 characters."
+        )
+
     username = auth_settings.admin_username
     user = User(username=username, role="admin")
     user.set_password(password)

@@ -434,11 +434,9 @@ def api_put_config() -> flask.Response:
         try:
             db_cfg = to_pydantic_config()
         except Exception as hydrate_err:  # pylint: disable=broad-except
-            logger.error(f"Post-update config hydration failed: {hydrate_err}")
+            logger.error("Post-update config hydration failed: %s", hydrate_err)
             return flask.make_response(
-                jsonify(
-                    {"error": "Invalid configuration", "details": str(hydrate_err)}
-                ),
+                jsonify({"error": "Invalid configuration."}),
                 400,
             )
 
@@ -450,7 +448,7 @@ def api_put_config() -> flask.Response:
     except Exception as e:  # pylint: disable=broad-except
         logger.error(f"Failed to update configuration: {e}")
         return flask.make_response(
-            jsonify({"error": "Failed to update configuration", "details": str(e)}), 400
+            jsonify({"error": "Failed to update configuration."}), 400
         )
 
 
@@ -488,11 +486,6 @@ def api_test_llm() -> flask.Response:
         )
 
     try:
-        # Configure litellm for this probe
-        litellm.api_key = api_key
-        if base_url:
-            litellm.api_base = base_url
-
         # Minimal completion to validate connectivity and credentials
         messages = [
             {"role": "system", "content": "You are a healthcheck probe."},
@@ -530,7 +523,9 @@ def api_test_llm() -> flask.Response:
         )
     except Exception as e:  # pylint: disable=broad-except
         logger.error(f"LLM connection test failed: {e}")
-        return flask.make_response(jsonify({"ok": False, "error": str(e)}), 400)
+        return flask.make_response(
+            jsonify({"ok": False, "error": "LLM connection test failed."}), 400
+        )
 
 
 def _make_error_response(error_msg: str, status_code: int = 400) -> flask.Response:
@@ -674,7 +669,7 @@ def api_test_whisper() -> flask.Response:
         return _make_error_response(f"Unknown whisper_type '{wtype}'")
     except Exception as e:  # pylint: disable=broad-except
         logger.error(f"Whisper connection test failed: {e}")
-        return _make_error_response(str(e))
+        return _make_error_response("Whisper connection test failed.")
 
 
 @config_bp.route("/api/config/whisper-capabilities", methods=["GET"])
@@ -753,7 +748,8 @@ def api_test_email() -> flask.Response:
         )
         return _make_success_response(f"Test email sent to {to_email}")
     except EmailSendError as e:
-        return _make_error_response(str(e))
+        logger.error(f"Failed to send test email: {e}")
+        return _make_error_response("Failed to send test email.")
     except Exception as e:  # pylint: disable=broad-except
         logger.error(f"Failed to send test email: {e}")
-        return _make_error_response(f"Failed to send test email: {e}")
+        return _make_error_response("Failed to send test email.")

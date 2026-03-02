@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import hashlib
+import hmac
+import os
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -10,6 +12,8 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from flask import Request
+
+from flask import current_app, has_app_context
 
 from app.auth.service import AuthenticatedUser
 from app.extensions import db
@@ -29,6 +33,35 @@ def _hash_token(secret: str) -> str:
     return hashlib.sha256(secret.encode("utf-8")).hexdigest()
 
 
+def _derive_token_secret(token_id: str) -> str:
+    """Derive a deterministic, URL-safe token secret from app secret + token_id."""
+    if has_app_context():
+        key_any = current_app.config.get("SECRET_KEY")
+    else:
+        key_any = os.environ.get("PODLY_SECRET_KEY")
+    key = key_any if isinstance(key_any, str) and key_any else None
+    if not key:
+        raise RuntimeError("SECRET_KEY is required to derive feed token secrets.")
+
+    digest = hmac.new(
+        key.encode("utf-8"),
+        token_id.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return digest[:36]
+
+
+def _lookup_existing_token_secret(token: FeedAccessToken) -> Optional[str]:
+    """Return reusable token secret when it can be determined, else None."""
+    if token.token_secret:
+        return token.token_secret
+
+    derived_secret = _derive_token_secret(token.token_id)
+    if secrets.compare_digest(token.token_hash, _hash_token(derived_secret)):
+        return derived_secret
+    return None
+
+
 def create_feed_access_token(user: User, feed: Optional[Feed] = None) -> tuple[str, str]:
     """Create or retrieve a feed access token.
     
@@ -38,26 +71,21 @@ def create_feed_access_token(user: User, feed: Optional[Feed] = None) -> tuple[s
     """
     feed_id = feed.id if feed else None
     
-    existing = FeedAccessToken.query.filter_by(
-        user_id=user.id, feed_id=feed_id, revoked=False
-    ).first()
-    if existing is not None:
-        if existing.token_secret:
-            return existing.token_id, existing.token_secret
-
-        secret = secrets.token_urlsafe(18)
-        existing.token_hash = _hash_token(secret)
-        existing.token_secret = secret
-        db.session.add(existing)
-        db.session.commit()
-        return existing.token_id, secret
+    existing_tokens = (
+        FeedAccessToken.query.filter_by(user_id=user.id, feed_id=feed_id, revoked=False)
+        .order_by(FeedAccessToken.created_at.desc(), FeedAccessToken.id.desc())
+        .all()
+    )
+    for existing in existing_tokens:
+        existing_secret = _lookup_existing_token_secret(existing)
+        if existing_secret is not None:
+            return existing.token_id, existing_secret
 
     token_id = uuid.uuid4().hex
-    secret = secrets.token_urlsafe(18)
+    secret = _derive_token_secret(token_id)
     token = FeedAccessToken(
         token_id=token_id,
         token_hash=_hash_token(secret),
-        token_secret=secret,
         feed_id=feed_id,
         user_id=user.id,
     )
@@ -65,6 +93,23 @@ def create_feed_access_token(user: User, feed: Optional[Feed] = None) -> tuple[s
     db.session.commit()
 
     return token_id, secret
+
+
+@dataclass(slots=True)
+class FeedTokenValue:
+    id: str
+    secret: str
+
+
+def get_or_create_feed_token(user_id: int, feed_id: int) -> Optional[FeedTokenValue]:
+    """Compatibility helper for legacy call sites that expect id/secret attributes."""
+    user = User.query.get(user_id)
+    feed = Feed.query.get(feed_id)
+    if user is None or feed is None:
+        return None
+
+    token_id, secret = create_feed_access_token(user, feed)
+    return FeedTokenValue(id=token_id, secret=secret)
 
 
 def authenticate_feed_token(
@@ -115,8 +160,6 @@ def authenticate_feed_token(
         return None
 
     token.last_used_at = datetime.utcnow()
-    if token.token_secret is None:
-        token.token_secret = secret
     db.session.add(token)
     try:
         db.session.commit()
