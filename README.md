@@ -208,6 +208,57 @@ git pull
 docker compose up -d --build
 ```
 
+Database migrations run automatically on startup — no manual steps needed.
+
+---
+
+## Upgrading from Podly Pure Podcasts / Earlier Versions
+
+If you're migrating from [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podcasts) or an older version of Podly Unicorn, your `.env.local` likely has LLM settings that will **override** the new Settings UI.
+
+### Clean up your `.env.local`
+
+**Before (old-style — env vars control everything):**
+```bash
+GROQ_API_KEY=gsk_...
+LLM_API_KEY=xai-...
+LLM_MODEL=xai/grok-3
+OPENAI_BASE_URL=https://api.x.ai/v1
+WHISPER_TYPE=groq
+```
+
+**After (recommended — let the UI manage LLM config):**
+```bash
+GROQ_API_KEY=gsk_...
+WHISPER_TYPE=groq
+
+# Auth (keep as-is)
+REQUIRE_AUTH=true
+PODLY_ADMIN_USERNAME=...
+PODLY_ADMIN_PASSWORD=...
+PODLY_SECRET_KEY=...
+```
+
+**What changed and why:**
+
+| Env var | Action | Reason |
+|---------|--------|--------|
+| `GROQ_API_KEY` | **Keep** | Still needed for Whisper transcription. Also auto-detected as an LLM key source in the UI. |
+| `LLM_API_KEY` | **Remove** | Manage your LLM API key in **Settings → LLM Configuration** instead. You can save encrypted key profiles and switch providers without restarting. |
+| `LLM_MODEL` | **Remove** | Select your model in the Settings UI. Env var overrides the UI if present. |
+| `OPENAI_BASE_URL` | **Remove** | No longer needed — models with a provider prefix (e.g. `xai/grok-3`, `groq/...`) are routed automatically by LiteLLM. |
+| `WHISPER_TYPE` | **Keep** | Still controls transcription backend. |
+
+> **Note:** If you prefer env vars over the UI, that still works — just be aware that any `LLM_MODEL`, `LLM_API_KEY`, or `OPENAI_BASE_URL` set in `.env.local` will override what you configure in Settings, and the UI will show a warning.
+
+### After editing `.env.local`
+
+```bash
+docker compose restart
+```
+
+Then open **Settings → LLM Configuration** to select your provider, model, and API key source.
+
 ---
 
 ## Common Commands

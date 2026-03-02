@@ -103,6 +103,19 @@ docker compose down             # Stop
 
 ---
 
+## Upgrading from an Older Version?
+
+If you previously had `LLM_API_KEY`, `LLM_MODEL`, or `OPENAI_BASE_URL` in your `.env.local`, those env vars now **override** the Settings UI. To use the new LLM Configuration UI:
+
+1. Remove `LLM_API_KEY`, `LLM_MODEL`, and `OPENAI_BASE_URL` from `.env.local`
+2. Keep `GROQ_API_KEY` and `WHISPER_TYPE=groq`
+3. Restart: `docker compose restart`
+4. Open **Settings → LLM Configuration** to select your provider and key
+
+See the [full upgrade guide](../README.md#upgrading-from-podly-pure-podcasts--earlier-versions) in the README.
+
+---
+
 ## Getting Help
 
 - [GitHub Issues](https://github.com/lukefind/podly-unicorn/issues)
