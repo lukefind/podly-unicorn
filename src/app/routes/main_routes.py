@@ -16,10 +16,10 @@ main_bp = Blueprint("main", __name__)
 
 
 def _require_legacy_endpoint_auth() -> flask.Response | None:
-    """Legacy mutating routes are only allowed when session auth is enabled."""
+    """Require authentication for legacy mutating routes when auth is enabled."""
     settings = current_app.config.get("AUTH_SETTINGS")
     if not settings or not settings.require_auth:
-        return flask.make_response(("Authentication required.", 401))
+        return None  # Auth disabled — allow without login
 
     if getattr(g, "current_user", None) is None:
         return flask.make_response(("Authentication required.", 401))

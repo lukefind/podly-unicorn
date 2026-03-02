@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime
 from typing import Any, Dict
 
 import flask
@@ -9,9 +10,21 @@ from groq import Groq
 from openai import OpenAI
 
 from app.config_store import read_combined, to_pydantic_config, update_combined
-from app.models import User
+from app.extensions import db
+from app.llm_key_profiles import (
+    build_llm_options_payload,
+    infer_provider_from_model,
+    is_llm_key_reference,
+    mask_secret_preview,
+    normalize_provider,
+    parse_llm_profile_ref,
+    resolve_llm_api_key_reference,
+    serialize_saved_key_profile,
+)
+from app.models import LLMKeyProfile, LLMSettings, User
 from app.processor import ProcessorSingleton
 from app.runtime_config import config as runtime_config
+from app.secret_store import encrypt_secret
 from shared.llm_utils import model_uses_max_completion_tokens
 
 logger = logging.getLogger("global_logger")
@@ -66,7 +79,10 @@ def _sanitize_config_for_client(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         llm_api_key = llm.pop("llm_api_key", None)
         if llm_api_key:
-            llm["llm_api_key_preview"] = _mask_secret(llm_api_key)
+            resolved_llm_key = resolve_llm_api_key_reference(llm_api_key)
+            llm["llm_api_key_preview"] = _mask_secret(resolved_llm_key or llm_api_key)
+            if is_llm_key_reference(llm_api_key):
+                llm["llm_api_key_ref"] = str(llm_api_key).strip()
 
         whisper_api_key = whisper.pop("api_key", None)
         if whisper_api_key:
@@ -419,6 +435,7 @@ def api_put_config() -> flask.Response:
     llm_payload = payload.get("llm")
     if isinstance(llm_payload, dict):
         llm_payload.pop("llm_api_key_preview", None)
+        llm_payload.pop("llm_api_key_ref", None)
 
     whisper_payload = payload.get("whisper")
     if isinstance(whisper_payload, dict):
@@ -428,10 +445,30 @@ def api_put_config() -> flask.Response:
     if isinstance(email_payload, dict):
         email_payload.pop("smtp_password_preview", None)
 
+    if isinstance(llm_payload, dict):
+        llm_key_value = llm_payload.get("llm_api_key")
+        if is_llm_key_reference(llm_key_value):
+            resolved_key = resolve_llm_api_key_reference(llm_key_value)
+            if not resolved_key:
+                return flask.make_response(
+                    jsonify({"error": "Selected API key reference is unavailable."}),
+                    400,
+                )
+
     try:
         data = update_combined(payload)
 
         try:
+            # Track key-profile usage for analytics/UX if selected.
+            profile_id = parse_llm_profile_ref(
+                (llm_payload or {}).get("llm_api_key") if isinstance(llm_payload, dict) else None
+            )
+            if profile_id is not None:
+                profile = db.session.get(LLMKeyProfile, profile_id)
+                if profile is not None:
+                    profile.last_used_at = datetime.utcnow()
+                    db.session.commit()
+
             db_cfg = to_pydantic_config()
         except Exception as hydrate_err:  # pylint: disable=broad-except
             logger.error("Post-update config hydration failed: %s", hydrate_err)
@@ -461,9 +498,19 @@ def api_test_llm() -> flask.Response:
     payload: Dict[str, Any] = request.get_json(silent=True) or {}
     llm: Dict[str, Any] = dict(payload.get("llm", {}))
 
-    api_key: str | None = llm.get("llm_api_key") or getattr(
-        runtime_config, "llm_api_key", None
-    )
+    raw_api_key = llm.get("llm_api_key")
+    profile_id = parse_llm_profile_ref(raw_api_key)
+    if profile_id is not None:
+        profile = db.session.get(LLMKeyProfile, profile_id)
+        if profile is not None:
+            profile.last_used_at = datetime.utcnow()
+            db.session.commit()
+
+    resolved_payload_key = resolve_llm_api_key_reference(raw_api_key)
+    if raw_api_key is not None:
+        api_key: str | None = resolved_payload_key
+    else:
+        api_key = getattr(runtime_config, "llm_api_key", None)
     model_val = llm.get("llm_model")
     model: str = (
         model_val
@@ -536,6 +583,13 @@ def _make_success_response(message: str, **extra_data: Any) -> flask.Response:
     response_data = {"ok": True, "message": message}
     response_data.update(extra_data)
     return flask.jsonify(response_data)
+
+
+def _refresh_runtime_from_db() -> None:
+    db_cfg = to_pydantic_config()
+    for field_name in runtime_config.__class__.model_fields.keys():
+        setattr(runtime_config, field_name, getattr(db_cfg, field_name))
+    ProcessorSingleton.reset_instance()
 
 
 def _get_whisper_config_value(
@@ -716,13 +770,133 @@ def api_configured_check() -> flask.Response:
         _hydrate_runtime_config(data)
 
         llm = data.get("llm", {}) if isinstance(data, dict) else {}
-        api_key = llm.get("llm_api_key")
+        api_key = resolve_llm_api_key_reference(llm.get("llm_api_key"))
         configured = bool(api_key)
         return flask.jsonify({"configured": configured})
     except Exception as e:  # pylint: disable=broad-except
         logger.error(f"Failed to check API configuration: {e}")
         # Be conservative: report not configured on error
         return flask.jsonify({"configured": False})
+
+
+@config_bp.route("/api/config/llm-options", methods=["GET"])
+def api_get_llm_options() -> flask.Response:
+    _, error_response = _require_admin()
+    if error_response:
+        return error_response
+
+    try:
+        payload = build_llm_options_payload()
+        llm_row = db.session.get(LLMSettings, 1)
+
+        current_key_ref = None
+        current_model = None
+        current_provider = "custom"
+        current_base_url = None
+
+        if llm_row is not None:
+            if is_llm_key_reference(llm_row.llm_api_key):
+                current_key_ref = str(llm_row.llm_api_key).strip()
+            current_model = llm_row.llm_model
+            current_provider = infer_provider_from_model(llm_row.llm_model)
+            current_base_url = llm_row.openai_base_url
+
+        payload["current"] = {
+            "key_ref": current_key_ref,
+            "provider": current_provider,
+            "model": current_model,
+            "openai_base_url": current_base_url,
+        }
+
+        return flask.jsonify(payload)
+    except Exception as e:  # pylint: disable=broad-except
+        logger.error(f"Failed to load llm options: {e}")
+        return flask.make_response(
+            jsonify({"error": "Failed to load llm options"}), 500
+        )
+
+
+@config_bp.route("/api/config/llm-key-profiles", methods=["POST"])
+def api_create_llm_key_profile() -> flask.Response:
+    _, error_response = _require_admin()
+    if error_response:
+        return error_response
+
+    payload: Dict[str, Any] = request.get_json(silent=True) or {}
+    name_raw = payload.get("name")
+    provider_raw = payload.get("provider")
+    api_key_raw = payload.get("api_key")
+    base_url_raw = payload.get("openai_base_url")
+    model_raw = payload.get("default_model")
+
+    name = str(name_raw).strip() if isinstance(name_raw, str) else ""
+    provider = normalize_provider(provider_raw)
+    api_key = str(api_key_raw).strip() if isinstance(api_key_raw, str) else ""
+    base_url = str(base_url_raw).strip() if isinstance(base_url_raw, str) else ""
+    default_model = str(model_raw).strip() if isinstance(model_raw, str) else ""
+
+    if not api_key:
+        return flask.make_response(
+            jsonify({"error": "api_key is required."}), 400
+        )
+
+    if not name:
+        name = f"{provider} key"
+
+    try:
+        encrypted = encrypt_secret(api_key)
+        profile = LLMKeyProfile(
+            name=name[:120],
+            provider=provider,
+            encrypted_api_key=encrypted,
+            api_key_preview=mask_secret_preview(api_key) or "configured",
+            openai_base_url=base_url or None,
+            default_model=default_model or None,
+            last_used_at=None,
+        )
+        db.session.add(profile)
+        db.session.commit()
+
+        return flask.jsonify(
+            {
+                "ok": True,
+                "profile": serialize_saved_key_profile(profile),
+            }
+        )
+    except Exception as e:  # pylint: disable=broad-except
+        db.session.rollback()
+        logger.error(f"Failed to save llm key profile: {e}")
+        return flask.make_response(
+            jsonify({"error": "Failed to save llm key profile."}), 500
+        )
+
+
+@config_bp.route("/api/config/llm-key-profiles/<int:profile_id>", methods=["DELETE"])
+def api_delete_llm_key_profile(profile_id: int) -> flask.Response:
+    _, error_response = _require_admin()
+    if error_response:
+        return error_response
+
+    profile = db.session.get(LLMKeyProfile, profile_id)
+    if profile is None:
+        return flask.make_response(jsonify({"error": "Profile not found."}), 404)
+
+    try:
+        active_ref = f"profile:{profile_id}"
+        llm_settings = db.session.get(LLMSettings, 1)
+        if llm_settings is not None and llm_settings.llm_api_key == active_ref:
+            llm_settings.llm_api_key = None
+
+        db.session.delete(profile)
+        db.session.commit()
+        _refresh_runtime_from_db()
+        return flask.jsonify({"ok": True})
+    except Exception as e:  # pylint: disable=broad-except
+        db.session.rollback()
+        logger.error(f"Failed to delete llm key profile: {e}")
+        return flask.make_response(
+            jsonify({"error": "Failed to delete llm key profile."}), 500
+        )
 
 
 @config_bp.route("/api/config/test-email", methods=["POST"])

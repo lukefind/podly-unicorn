@@ -76,6 +76,7 @@ export interface JobManagerStatus {
 
 export interface LLMConfig {
   llm_api_key?: string | null;
+  llm_api_key_ref?: string | null;
   llm_api_key_preview?: string | null;
   llm_model: string;
   openai_base_url?: string | null;
@@ -164,6 +165,54 @@ export type EnvOverrideMap = Record<string, EnvOverrideEntry>;
 export interface ConfigResponse {
   config: CombinedConfig;
   env_overrides?: EnvOverrideMap;
+}
+
+export interface LLMProviderOption {
+  id: string;
+  label: string;
+  default_model?: string | null;
+  default_openai_base_url?: string | null;
+}
+
+export interface LLMModelOption {
+  provider: string;
+  value: string;
+}
+
+export interface LLMEnvKeyOption {
+  ref: string;
+  env_var: string;
+  provider: string;
+  provider_label: string;
+  api_key_preview?: string | null;
+  default_model?: string | null;
+  default_openai_base_url?: string | null;
+}
+
+export interface LLMSavedKeyOption {
+  id: number;
+  ref: string;
+  name: string;
+  provider: string;
+  provider_label: string;
+  api_key_preview: string;
+  default_model?: string | null;
+  default_openai_base_url?: string | null;
+  created_at?: string | null;
+  last_used_at?: string | null;
+}
+
+export interface LLMOptionsResponse {
+  providers: LLMProviderOption[];
+  models: LLMModelOption[];
+  env_keys: LLMEnvKeyOption[];
+  saved_keys: LLMSavedKeyOption[];
+  current?: {
+    key_ref?: string | null;
+    provider?: string | null;
+    model?: string | null;
+    openai_base_url?: string | null;
+  };
 }
 
 export interface PodcastSearchResult {

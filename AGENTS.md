@@ -274,6 +274,30 @@ WHISPER_TYPE=groq
 ### API Key and Base URL
 The `api_key` and `api_base` are passed explicitly in completion calls to support providers like xAI that require them.
 
+### LLM Key Profiles (Saved Keys)
+
+Admins can save encrypted API keys as "key profiles" via the Settings page, instead of pasting raw keys each time.
+
+**Database:** `LLMKeyProfile` table (`llm_key_profile`) with columns: `name`, `provider`, `encrypted_api_key`, `api_key_preview`, `openai_base_url`, `default_model`, `last_used_at`.
+
+**Encryption:** Keys are encrypted with Fernet (AES-128-CBC) using a key derived from `SECRET_KEY` via SHA-256. See `src/app/secret_store.py`.
+
+**Dependency:** Requires the `cryptography` Python package (added to Pipfile + Pipfile.lite).
+
+**Key Reference System:** The `llm_api_key` field in `LLMSettings` can hold:
+- A direct API key string
+- `env:ENV_VAR_NAME` — resolved at runtime from environment
+- `profile:ID` — resolved at runtime by decrypting the saved profile
+
+Resolution logic lives in `src/app/llm_key_profiles.py` → `resolve_llm_api_key_reference()`.
+
+**API Endpoints (admin-only):**
+- `GET /api/config/llm-options` — returns provider catalog, model list, detected env keys, saved profiles, and current selection
+- `POST /api/config/llm-key-profiles` — create a new saved key profile
+- `DELETE /api/config/llm-key-profiles/<id>` — delete a saved key profile (clears active selection if in use)
+
+**Provider Catalog:** Defined in `src/app/llm_key_profiles.py` → `LLM_PROVIDER_CATALOG`. Includes Groq, xAI, OpenAI, Anthropic, Google Gemini, and Custom.
+
 ---
 
 ## Processing Flow
@@ -348,24 +372,32 @@ The running app locks the database. To run scripts:
 - **bcrypt** password hashing (12 rounds)
 - **Rate limiting** with exponential backoff on failed auth attempts (max 5 min)
 - **Feed tokens** for RSS access - SHA-256 hashed, timing-safe comparison
+- **Password validation** enforces minimum 8 characters on creation/change
+- **Login endpoint** returns generic error messages to prevent user enumeration
+- **Legacy mutating routes** (`/set_whitelist`, `/toggle-whitelist-all`) require POST + session auth
+
+### Feed Token Secrets
+New feed tokens use **deterministic derived secrets** (HMAC-SHA256 of `SECRET_KEY` + `token_id`) instead of storing plaintext secrets in the DB. Old tokens with stored `token_secret` continue to work. See `src/app/auth/feed_tokens.py`.
 
 ### Authorization
-- **Admin-only routes**: Settings, Presets, User Management
+- **Admin-only routes**: Settings, Presets, User Management, LLM Key Profiles
 - Backend enforces admin checks via `_require_admin()` helper
 - Frontend hides admin UI but backend is the source of truth
 
 ### Environment Variables
 | Variable | Purpose | Required |
 |----------|---------|----------|
-| `PODLY_SECRET_KEY` | Session encryption key | Recommended for production |
+| `PODLY_SECRET_KEY` | Session + token encryption key | **Required for production** |
 | `REQUIRE_AUTH` | Enable authentication | Yes for multi-user |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Initial admin credentials | Yes if auth enabled |
+| `PODLY_ADMIN_USERNAME` / `PODLY_ADMIN_PASSWORD` | Initial admin credentials | Yes if auth enabled |
+| `SESSION_COOKIE_SECURE` | Force secure cookies (defaults to `true` when auth enabled) | Set `false` for HTTP-only dev |
 | `CORS_ORIGINS` | Allowed CORS origins | Production only |
 
 ### Production Recommendations
-1. Set `PODLY_SECRET_KEY` to a stable secret (sessions persist across restarts)
+1. Set `PODLY_SECRET_KEY` to a stable secret (sessions persist across restarts, feed tokens derived from it)
 2. Use HTTPS (reverse proxy like nginx/Caddy)
 3. Set `CORS_ORIGINS` to your domain only
+4. Use a strong admin password (minimum 8 characters enforced at bootstrap)
 
 ### RSS Feed Authentication
 When auth is enabled, RSS feeds require tokens. The "Subscribe to Podly RSS" button automatically generates a tokenized URL that podcast apps can use without login.
@@ -468,12 +500,14 @@ docker restart <container-name>
 
 ### Current Migration Head
 
-**Revision:** `k8l9m0n1o2p3` (Remove unique constraint from post.download_url)
+**Revision:** `m0n1o2p3q4r5` (Add llm_key_profile table)
 
 ### Migration History (recent)
 
 | Revision | Description |
 |----------|-------------|
+| `m0n1o2p3q4r5` | Add `llm_key_profile` table for encrypted saved API keys |
+| `l9m0n1o2p3q4` | Make `feed_access_token.feed_id` nullable (combined feed tokens) |
 | `k8l9m0n1o2p3` | Remove unique constraint from `post.download_url` (allows duplicate audio URLs) |
 | `j7k8l9m0n1o2` | Add `feed_id` to `user_download` and make `post_id` nullable |
 | `i6j7k8l9m0n1` | Add `event_type` to `user_download` |

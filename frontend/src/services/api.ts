@@ -6,6 +6,7 @@ import type {
   JobManagerStatus,
   CombinedConfig,
   LLMConfig,
+  LLMOptionsResponse,
   WhisperConfig,
   PodcastSearchResult,
   ConfigResponse,
@@ -739,6 +740,24 @@ export const configApi = {
     const response = await api.get('/api/config/whisper-capabilities');
     const local_available = !!response.data?.local_available;
     return { local_available };
+  },
+  getLlmOptions: async (): Promise<LLMOptionsResponse> => {
+    const response = await api.get('/api/config/llm-options');
+    return response.data;
+  },
+  saveLlmKeyProfile: async (payload: {
+    name?: string;
+    provider?: string;
+    api_key: string;
+    openai_base_url?: string | null;
+    default_model?: string | null;
+  }): Promise<{ ok: boolean; profile: LLMOptionsResponse['saved_keys'][number] }> => {
+    const response = await api.post('/api/config/llm-key-profiles', payload);
+    return response.data;
+  },
+  deleteLlmKeyProfile: async (profileId: number): Promise<{ ok: boolean }> => {
+    const response = await api.delete(`/api/config/llm-key-profiles/${profileId}`);
+    return response.data;
   },
 };
 

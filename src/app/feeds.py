@@ -617,7 +617,9 @@ def _append_feed_token_params(url: str) -> str:
 
     if token_result is not None:
         token_id = token_id or token_result.token.token_id
-        secret = secret or token_result.token.token_secret
+        if not secret:
+            from app.auth.feed_tokens import _lookup_existing_token_secret  # pylint: disable=import-outside-toplevel
+            secret = _lookup_existing_token_secret(token_result.token)
 
     if not token_id or not secret:
         return url

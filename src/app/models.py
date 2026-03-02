@@ -417,6 +417,23 @@ class LLMSettings(db.Model):  # type: ignore[name-defined, misc]
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
+class LLMKeyProfile(db.Model):  # type: ignore[name-defined, misc]
+    __tablename__ = "llm_key_profile"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(120), nullable=False)
+    provider = db.Column(db.String(32), nullable=False, default="custom")
+    encrypted_api_key = db.Column(db.Text, nullable=False)
+    api_key_preview = db.Column(db.String(64), nullable=False)
+    openai_base_url = db.Column(db.Text, nullable=True)
+    default_model = db.Column(db.Text, nullable=True)
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class EmailSettings(db.Model):  # type: ignore[name-defined, misc]
     __tablename__ = "email_settings"
 

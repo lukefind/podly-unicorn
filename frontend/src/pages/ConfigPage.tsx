@@ -10,6 +10,7 @@ import type {
   EnvOverrideEntry,
   EnvOverrideMap,
   LLMConfig,
+  LLMOptionsResponse,
   ManagedUser,
   WhisperConfig,
 } from '../types';
@@ -73,6 +74,16 @@ export default function ConfigPage() {
     queryKey: ['config'],
     queryFn: configApi.getConfig,
     staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+  const {
+    data: llmOptions,
+    refetch: refetchLlmOptions,
+  } = useQuery<LLMOptionsResponse>({
+    queryKey: ['llm-options'],
+    queryFn: configApi.getLlmOptions,
+    staleTime: 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -149,6 +160,8 @@ export default function ConfigPage() {
   const [showGroqHelp, setShowGroqHelp] = useState(false);
   const [showGroqPricing, setShowGroqPricing] = useState(false);
   const [showBaseUrlInfo, setShowBaseUrlInfo] = useState(false);
+  const [manualLlmKey, setManualLlmKey] = useState('');
+  const [llmKeyProfileName, setLlmKeyProfileName] = useState('');
   const [localWhisperAvailable, setLocalWhisperAvailable] = useState<boolean | null>(null);
   const [llmStatus, setLlmStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const [llmMessage, setLlmMessage] = useState<string>('');
@@ -348,6 +361,131 @@ export default function ConfigPage() {
       });
     },
     [updatePending],
+  );
+
+  const isLlmKeyReference = useCallback((value: unknown): value is string => {
+    if (typeof value !== 'string') return false;
+    return value.startsWith('env:') || value.startsWith('profile:');
+  }, []);
+
+  const inferProviderFromModel = useCallback((model: unknown): string => {
+    if (typeof model !== 'string' || model.trim() === '') return 'custom';
+    const val = model.trim().toLowerCase();
+    if (val.startsWith('groq/')) return 'groq';
+    if (val.startsWith('xai/')) return 'xai';
+    if (val.startsWith('anthropic/')) return 'anthropic';
+    if (val.startsWith('gemini/')) return 'google';
+    if (val.startsWith('gpt-') || val.startsWith('o1') || val.startsWith('o3') || val.startsWith('o4')) return 'openai';
+    return 'custom';
+  }, []);
+
+  const currentLlmKeyRef = useMemo(() => {
+    const fromRef = pending?.llm?.llm_api_key_ref;
+    if (isLlmKeyReference(fromRef)) {
+      return fromRef;
+    }
+    const raw = pending?.llm?.llm_api_key;
+    if (isLlmKeyReference(raw)) {
+      return raw;
+    }
+    return 'manual';
+  }, [pending?.llm?.llm_api_key, pending?.llm?.llm_api_key_ref, isLlmKeyReference]);
+
+  const currentLlmProvider = useMemo(() => {
+    if (currentLlmKeyRef.startsWith('env:')) {
+      const envMatch = llmOptions?.env_keys.find((item) => item.ref === currentLlmKeyRef);
+      if (envMatch?.provider) {
+        return envMatch.provider;
+      }
+    }
+    if (currentLlmKeyRef.startsWith('profile:')) {
+      const profileMatch = llmOptions?.saved_keys.find((item) => item.ref === currentLlmKeyRef);
+      if (profileMatch?.provider) {
+        return profileMatch.provider;
+      }
+    }
+    return inferProviderFromModel(pending?.llm?.llm_model);
+  }, [currentLlmKeyRef, llmOptions?.env_keys, llmOptions?.saved_keys, pending?.llm?.llm_model, inferProviderFromModel]);
+
+  const providerModelOptions = useMemo(() => {
+    const allModels = llmOptions?.models ?? [];
+    return allModels.filter((item) => item.provider === currentLlmProvider);
+  }, [llmOptions?.models, currentLlmProvider]);
+
+  const selectedProfileId = useMemo(() => {
+    if (!currentLlmKeyRef.startsWith('profile:')) return null;
+    const raw = currentLlmKeyRef.slice('profile:'.length);
+    return /^\d+$/.test(raw) ? Number(raw) : null;
+  }, [currentLlmKeyRef]);
+
+  const saveLlmProfileMutation = useMutation({
+    mutationFn: async () => {
+      const keyValue = manualLlmKey.trim();
+      if (!keyValue) {
+        throw new Error('Enter an API key first.');
+      }
+      const provider = currentLlmProvider || inferProviderFromModel(pending?.llm?.llm_model);
+      return configApi.saveLlmKeyProfile({
+        name: llmKeyProfileName.trim() || undefined,
+        provider,
+        api_key: keyValue,
+        openai_base_url: pending?.llm?.openai_base_url || null,
+        default_model: pending?.llm?.llm_model || null,
+      });
+    },
+    onSuccess: async (result) => {
+      const profileRef = result.profile.ref;
+      setField(['llm', 'llm_api_key_ref'], profileRef);
+      setField(['llm', 'llm_api_key'], profileRef);
+      setManualLlmKey('');
+      setLlmKeyProfileName('');
+      await refetchLlmOptions();
+      toast.success('Saved key profile.');
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, 'Failed to save key profile.'));
+    },
+  });
+
+  const deleteLlmProfileMutation = useMutation({
+    mutationFn: async (profileId: number) => configApi.deleteLlmKeyProfile(profileId),
+    onSuccess: async () => {
+      if (selectedProfileId !== null) {
+        setField(['llm', 'llm_api_key_ref'], null);
+        setField(['llm', 'llm_api_key'], '');
+      }
+      await refetchLlmOptions();
+      toast.success('Deleted key profile.');
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, 'Failed to delete key profile.'));
+    },
+  });
+
+  const handleLlmKeySourceChange = useCallback(
+    (nextRef: string) => {
+      if (nextRef === 'manual') {
+        setField(['llm', 'llm_api_key_ref'], null);
+        setField(['llm', 'llm_api_key'], manualLlmKey);
+        return;
+      }
+
+      setField(['llm', 'llm_api_key_ref'], nextRef);
+      setField(['llm', 'llm_api_key'], nextRef);
+
+      const envMatch = llmOptions?.env_keys.find((item) => item.ref === nextRef);
+      const savedMatch = llmOptions?.saved_keys.find((item) => item.ref === nextRef);
+      const model = savedMatch?.default_model ?? envMatch?.default_model;
+      const baseUrl = savedMatch?.default_openai_base_url ?? envMatch?.default_openai_base_url;
+
+      if (model) {
+        setField(['llm', 'llm_model'], model);
+      }
+      if (typeof baseUrl === 'string' && baseUrl.trim() !== '') {
+        setField(['llm', 'openai_base_url'], baseUrl);
+      }
+    },
+    [llmOptions?.env_keys, llmOptions?.saved_keys, manualLlmKey, setField],
   );
 
   useEffect(() => {
@@ -1136,15 +1274,112 @@ export default function ConfigPage() {
           </div>
         </div>
         <Section title="LLM Configuration">
-            <Field label="API Key" envMeta={getEnvHint('llm.llm_api_key')}>
-              <input
+            <Field label="Provider">
+              <select
                 className="input"
-                type="text"
-                placeholder={pending?.llm?.llm_api_key_preview || ''}
-                value={pending?.llm?.llm_api_key || ''}
-                onChange={(e) => setField(['llm', 'llm_api_key'], e.target.value)}
-              />
+                value={currentLlmProvider}
+                onChange={(e) => {
+                  const nextProvider = e.target.value;
+                  const providerDefaults = llmOptions?.providers.find((p) => p.id === nextProvider);
+                  if (providerDefaults?.default_model) {
+                    setField(['llm', 'llm_model'], providerDefaults.default_model);
+                  }
+                  if (typeof providerDefaults?.default_openai_base_url === 'string') {
+                    setField(['llm', 'openai_base_url'], providerDefaults.default_openai_base_url);
+                  }
+                }}
+              >
+                {(llmOptions?.providers ?? []).map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.label}
+                  </option>
+                ))}
+                {(llmOptions?.providers ?? []).length === 0 && <option value="custom">Custom / Other</option>}
+              </select>
             </Field>
+            <Field label="API Key Source" envMeta={getEnvHint('llm.llm_api_key')}>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <select
+                    className="input"
+                    value={currentLlmKeyRef}
+                    onChange={(e) => handleLlmKeySourceChange(e.target.value)}
+                  >
+                    <option value="manual">Manual key entry</option>
+                    {(llmOptions?.env_keys ?? []).map((item) => (
+                      <option key={item.ref} value={item.ref}>
+                        {`Environment: ${item.env_var} (${item.api_key_preview || 'configured'})`}
+                      </option>
+                    ))}
+                    {(llmOptions?.saved_keys ?? []).map((item) => (
+                      <option key={item.ref} value={item.ref}>
+                        {`Saved: ${item.name} (${item.api_key_preview})`}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedProfileId !== null && (
+                    <button
+                      type="button"
+                      className="px-3 py-2 text-xs rounded border border-red-300 text-red-600 hover:bg-red-50"
+                      onClick={() => {
+                        const confirmed = window.confirm('Delete this saved key profile?');
+                        if (confirmed) {
+                          void deleteLlmProfileMutation.mutateAsync(selectedProfileId);
+                        }
+                      }}
+                      disabled={deleteLlmProfileMutation.isPending}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+                {currentLlmKeyRef !== 'manual' && (
+                  <p className="text-xs text-gray-600">
+                    Selected key reference: <code className="font-mono">{currentLlmKeyRef}</code>
+                  </p>
+                )}
+              </div>
+            </Field>
+            {currentLlmKeyRef === 'manual' && (
+              <Field label="Manual API Key" envMeta={getEnvHint('llm.llm_api_key')}>
+                <div className="space-y-2">
+                  <input
+                    className="input"
+                    type="text"
+                    placeholder={pending?.llm?.llm_api_key_preview || ''}
+                    value={manualLlmKey}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setManualLlmKey(value);
+                      setField(['llm', 'llm_api_key_ref'], null);
+                      setField(['llm', 'llm_api_key'], value);
+                    }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="input"
+                      type="text"
+                      placeholder="Profile name (optional)"
+                      value={llmKeyProfileName}
+                      onChange={(e) => setLlmKeyProfileName(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="px-3 py-2 text-xs rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60"
+                      onClick={() => {
+                        void saveLlmProfileMutation.mutateAsync();
+                      }}
+                      disabled={saveLlmProfileMutation.isPending || manualLlmKey.trim() === ''}
+                    >
+                      Save Key
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Saved keys are encrypted server-side and can be re-selected later.
+                  </p>
+                </div>
+              </Field>
+            )}
             <label className="flex items-start justify-between gap-3">
               <div className="w-60">
                 <div className="flex items-center gap-2">
@@ -1183,7 +1418,23 @@ export default function ConfigPage() {
             </label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Field label="Model" envMeta={getEnvHint('llm.llm_model')}>
-                <div className="relative">
+                <div className="space-y-2">
+                  <select
+                    className="input"
+                    value={pending?.llm?.llm_model ?? ''}
+                    onChange={(e) => setField(['llm', 'llm_model'], e.target.value)}
+                  >
+                    <option value="">Select model</option>
+                    {providerModelOptions.map((model) => (
+                      <option key={model.value} value={model.value}>
+                        {model.value}
+                      </option>
+                    ))}
+                    {pending?.llm?.llm_model &&
+                      !providerModelOptions.some((item) => item.value === pending.llm.llm_model) && (
+                        <option value={pending.llm.llm_model}>{`${pending.llm.llm_model} (custom)`}</option>
+                      )}
+                  </select>
                   <input
                     list="llm-model-datalist"
                     className="input"
@@ -1656,7 +1907,7 @@ export default function ConfigPage() {
       {/* Extra padding to prevent audio player overlay from obscuring bottom settings */}
       <div className="h-24"></div>
       {/* Datalist options rendered once at end to ensure they exist in DOM */}
-      <LlmModelDatalist />
+      <LlmModelDatalist models={llmOptions?.models ?? []} />
     </div>
   );
 }
@@ -1783,25 +2034,22 @@ function EnvVarHint({ meta }: { meta?: EnvOverrideEntry }) {
   );
 }
 
-const LLM_MODEL_ALIASES: string[] = [
-  // OpenAI aliases
-  'openai/gpt-4',
-  'openai/gpt-4o',
-  // Anthropic
-  'anthropic/claude-3.5-sonnet',
-  'anthropic/claude-3.5-haiku',
-  // Google Gemini
-  'gemini/gemini-2.0-flash',
-  'gemini/gemini-1.5-pro',
-  'gemini/gemini-1.5-flash',
-  // Groq popular models
+const FALLBACK_LLM_MODELS: string[] = [
   'groq/openai/gpt-oss-120b',
+  'xai/grok-3',
+  'gpt-4o',
+  'anthropic/claude-3-7-sonnet-latest',
+  'gemini/gemini-2.0-flash',
 ];
 
-function LlmModelDatalist() {
+function LlmModelDatalist({ models }: { models: Array<{ value: string }> }) {
+  const allValues = new Set<string>([
+    ...FALLBACK_LLM_MODELS,
+    ...models.map((m) => m.value),
+  ]);
   return (
     <datalist id="llm-model-datalist">
-      {LLM_MODEL_ALIASES.map((m) => (
+      {Array.from(allValues).map((m) => (
         <option key={m} value={m} />
       ))}
     </datalist>

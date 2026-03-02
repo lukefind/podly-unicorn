@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from app.background import add_background_job, schedule_cleanup_job
 from app.extensions import db, scheduler
+from app.llm_key_profiles import resolve_llm_api_key_reference
 from app.models import (
     AppSettings,
     EmailSettings,
@@ -628,6 +629,7 @@ def update_combined(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def to_pydantic_config() -> PydanticConfig:
     data = read_combined()
+    resolved_llm_api_key = resolve_llm_api_key_reference(data["llm"].get("llm_api_key"))
     # Map whisper section to discriminated union config
     whisper_obj: Optional[
         LocalWhisperConfig | RemoteWhisperConfig | TestWhisperConfig | GroqWhisperConfig
@@ -668,7 +670,7 @@ def to_pydantic_config() -> PydanticConfig:
         whisper_obj = TestWhisperConfig()
 
     return PydanticConfig(
-        llm_api_key=data["llm"].get("llm_api_key"),
+        llm_api_key=resolved_llm_api_key,
         llm_model=data["llm"].get("llm_model", DEFAULTS.LLM_DEFAULT_MODEL),
         openai_base_url=data["llm"].get("openai_base_url"),
         openai_max_tokens=int(

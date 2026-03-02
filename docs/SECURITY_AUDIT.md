@@ -428,11 +428,11 @@ Tokens are hashed with SHA-256, expire after 1 hour, and are marked as used afte
 | Finding | Status | Fix Summary |
 |---------|--------|-------------|
 | **C1** SQL Injection | **FIXED** | Replaced all f-string raw SQL with parameterized queries via shared `_delete_feed_records()` helper in `feed_routes.py` |
-| **C2** Plaintext Token Secrets | **FIXED** | Stopped writing `token_secret` on new tokens and removed backfill-on-auth in `feed_tokens.py`. Column kept for backward compat (existing tokens still readable). |
+| **C2** Plaintext Token Secrets | **FIXED** | New tokens use HMAC-SHA256 derived secrets (`_derive_token_secret` in `feed_tokens.py`). Column kept for backward compat (existing tokens still readable). |
 | **H1** No Password Validation | **FIXED** | Added `_validate_password()` in `auth/service.py` — minimum 8 chars, rejects empty/whitespace. Wired into `create_user`, `create_pending_user`, and `update_password`. |
-| **H2** GET State Change | **FIXED** | Changed `/set_whitelist` from GET to POST in `main_routes.py` |
+| **H2** GET State Change | **FIXED** | Changed `/set_whitelist` from GET to POST in `main_routes.py`, added session auth guard |
 | **H3** Unchecked Int Parsing | **FIXED** | Added try/except with safe defaults and non-negative clamping in `feed_routes.py` |
-| **H4** User Enumeration | **FIXED** | Moved pending-account check to after `authenticate()` fails in `auth_routes.py`, so response timing is consistent |
+| **H4** User Enumeration | **FIXED** | Removed distinct pending-account error branch from login in `auth_routes.py`; all failures return generic message |
 | **M1** SSRF | Open | Requires allowlist/blocklist for resolved IPs — moderate effort, deferred |
 | **M2/M3** Session Hardening | **FIXED** | `SESSION_COOKIE_SECURE` now defaults to `true` when `REQUIRE_AUTH=true` in `__init__.py` |
 | **M4** Rate Limiter | Accepted | In-memory limiter is acceptable for single-process SQLite deployment model |
