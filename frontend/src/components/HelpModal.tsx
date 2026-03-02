@@ -90,8 +90,8 @@ export default function HelpModal({ isOpen, onClose, onReplayTutorial }: HelpMod
               <div className="flex gap-3 p-3 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
                 <div className="flex-shrink-0 w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center font-bold">2</div>
                 <div>
-                  <p className="font-medium text-purple-900 dark:text-purple-100">Process Episodes</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Click "Process" on any episode to remove ads</p>
+                <p className="font-medium text-purple-900 dark:text-purple-100">Process Episodes</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Start processing from the web UI ("Process") or from your podcast app using the trigger link at the bottom of each episode's notes/description</p>
                 </div>
               </div>
               
@@ -139,7 +139,8 @@ export default function HelpModal({ isOpen, onClose, onReplayTutorial }: HelpMod
               <h4 className="font-medium text-purple-800 dark:text-purple-200">How to Process</h4>
               <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
                 <p><strong>Manual:</strong> Click the purple "Process" button on any enabled episode</p>
-                <p><strong>On-Demand:</strong> When your podcast app requests an episode from Podly, it processes automatically</p>
+                <p><strong>On-Demand:</strong> In your podcast app, open an episode and tap "Process this episode (remove ads)" at the bottom of the episode notes/description</p>
+                <p><strong>After processing:</strong> When the trigger page shows "Episode Ready", close the tab and refresh your podcast app feed</p>
               </div>
             </div>
 
@@ -196,7 +197,12 @@ export default function HelpModal({ isOpen, onClose, onReplayTutorial }: HelpMod
 
             <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
               <p className="text-sm text-amber-800 dark:text-amber-200">
-                <strong>Note:</strong> The Podly RSS URL includes your auth token. Don't share it publicly!
+                <strong>Note:</strong> With auth enabled, the Podly RSS URL includes your feed token. Don't share it publicly.
+              </p>
+            </div>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                <strong>Auth mode:</strong> Tokenized podcast-app trigger/download links work best with <code>REQUIRE_AUTH=true</code>.
               </p>
             </div>
           </div>
@@ -268,7 +274,7 @@ export default function HelpModal({ isOpen, onClose, onReplayTutorial }: HelpMod
               <div className="space-y-2 text-sm">
                 <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
                   <p className="font-medium text-gray-900 dark:text-gray-100">Episode won't process</p>
-                  <p className="text-gray-600 dark:text-gray-400">Check that it's Enabled and your API key is configured</p>
+                  <p className="text-gray-600 dark:text-gray-400">Check that it's Enabled (not disabled/not whitelisted), then use the trigger link or Process button</p>
                 </div>
                 <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
                   <p className="font-medium text-gray-900 dark:text-gray-100">Podcast app shows old episodes</p>

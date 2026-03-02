@@ -149,7 +149,14 @@ GROQ_API_KEY=gsk_your_groq_key
 REQUIRE_AUTH=true
 PODLY_ADMIN_USERNAME=admin
 PODLY_ADMIN_PASSWORD=your-secure-password
+PODLY_SECRET_KEY=replace-with-a-long-random-secret
+
+# Local HTTP only (no HTTPS): required so login cookies work on localhost
+# SESSION_COOKIE_SECURE=false
 ```
+
+If you run with `REQUIRE_AUTH=true` on plain `http://` (no TLS), you must set `SESSION_COOKIE_SECURE=false`.  
+If you are behind HTTPS (recommended), leave it unset.
 
 ### 2. Start
 

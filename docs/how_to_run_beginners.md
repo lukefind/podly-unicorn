@@ -20,6 +20,8 @@ cp .env.local.example .env.local
 # REQUIRE_AUTH=true
 # PODLY_ADMIN_USERNAME=admin
 # PODLY_ADMIN_PASSWORD=choose-a-strong-password
+# PODLY_SECRET_KEY=replace-with-a-long-random-secret
+# SESSION_COOKIE_SECURE=false  # only if running local HTTP (no HTTPS)
 docker compose up -d --build
 ```
 

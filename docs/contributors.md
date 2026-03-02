@@ -84,8 +84,9 @@ labels:
 Podly ships with built-in authentication so you can secure feeds without relying on a reverse proxy.
 
 - Set `REQUIRE_AUTH=true` to enable protection. By default it is `false`, preserving existing behaviour.
-- When auth is enabled, Podly fails fast on startup unless `PODLY_ADMIN_PASSWORD` is supplied and meets the strength policy (≥12 characters with upper, lower, digit, symbol). Override the initial username with `PODLY_ADMIN_USERNAME` (default `podly_admin`).
+- When auth is enabled, Podly fails fast on startup unless `PODLY_ADMIN_PASSWORD` is supplied (minimum 8 characters). Override the initial username with `PODLY_ADMIN_USERNAME` (default `podly_admin`).
 - Provide a long, random `PODLY_SECRET_KEY` so Flask sessions remain valid across restarts. If you omit it, the app generates a new key on each boot and all users are signed out.
+- If you run on local HTTP (no HTTPS) with auth enabled, set `SESSION_COOKIE_SECURE=false` so login cookies work. Keep it enabled/default for HTTPS deployments.
 - On first boot with an empty database, Podly seeds an admin user using the supplied credentials. **If you are enabling auth on an existing install, start from a fresh data volume.**
 - After signing in, open the Config page to rotate your password and manage additional users. When you change the admin password, update the corresponding environment variable in your deployment platform so restarts continue to succeed.
 - Use the "Copy protected feed" button to generate feed-specific access tokens that are embedded in subscription URLs so podcast clients can authenticate without your primary password. Rate limiting is still applied to repeated authentication failures.

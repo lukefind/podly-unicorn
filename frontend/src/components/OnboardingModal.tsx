@@ -59,7 +59,7 @@ const ONBOARDING_STEPS = [
         </ul>
         <p className="text-sm">Paste the URL into your favorite podcast app (Apple Podcasts, Overcast, Pocket Casts, etc.).</p>
         <div className="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-3 text-sm border border-amber-200 dark:border-amber-800">
-          <strong>Important:</strong> When your app first requests an episode, it triggers processing. The first download may fail - just wait ~1 minute and try again. After that, it's ready!
+          <strong>Important:</strong> Processing starts when you tap the "Process this episode (remove ads)" link at the bottom of each episode's notes/description. Once it says "Episode Ready", close the tab and refresh your podcast app.
         </div>
       </div>
     ),
@@ -76,7 +76,7 @@ const ONBOARDING_STEPS = [
           <li>The built-in audio player</li>
         </ul>
         <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-3 text-sm">
-          <strong>Tip:</strong> You can also click "Process" in the web UI to pre-process episodes before listening.
+          <strong>Tip:</strong> You can start processing either from your podcast app (trigger link at the bottom of episode notes) or from the web UI ("Process" button).
         </div>
         <p className="text-purple-600 dark:text-purple-300 font-medium">Enjoy your ad-free podcasts! ✨</p>
       </div>
