@@ -27,6 +27,11 @@ LLM_PROVIDER_CATALOG: Dict[str, Dict[str, Any]] = {
             "groq/openai/gpt-oss-120b",
             "groq/llama-3.3-70b-versatile",
             "groq/llama-3.1-8b-instant",
+            "groq/deepseek-r1-distill-llama-70b",
+            "groq/qwen-qwq-32b",
+            "groq/gemma2-9b-it",
+            "groq/mistral-saba-24b",
+            "groq/llama-4-scout-17b-16e-instruct",
         ],
     },
     "xai": {

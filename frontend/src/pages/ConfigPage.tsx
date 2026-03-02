@@ -157,8 +157,6 @@ export default function ConfigPage() {
 
   const [pending, setPending] = useState<CombinedConfig | null>(null);
   const [hasEdits, setHasEdits] = useState(false);
-  const [showGroqHelp, setShowGroqHelp] = useState(false);
-  const [showGroqPricing, setShowGroqPricing] = useState(false);
   const [showBaseUrlInfo, setShowBaseUrlInfo] = useState(false);
   const [manualLlmKey, setManualLlmKey] = useState('');
   const [llmKeyProfileName, setLlmKeyProfileName] = useState('');
@@ -903,182 +901,6 @@ export default function ConfigPage() {
         </div>
       </Section>
 
-      <Section title="Quick Setup">
-        <div className="text-sm text-gray-700 dark:text-purple-200 mb-2 flex items-center gap-2">
-          <span>Enter your Groq API key for a fast, cheaper setup. For better ad detection accuracy, use xAI Grok instead (see Advanced Settings).</span>
-          <button
-            type="button"
-            className="text-indigo-600 dark:text-indigo-400 hover:underline"
-            onClick={() => setShowGroqHelp((v) => !v)}
-          >
-            {showGroqHelp ? 'Hide help' : '(need help getting a key?)'}
-          </button>
-          <button
-            type="button"
-            className="text-indigo-600 dark:text-indigo-400 hover:underline"
-            onClick={() => setShowGroqPricing((v) => !v)}
-          >
-            {showGroqPricing ? 'Hide pricing' : '(pricing guide)'}
-          </button>
-        </div>
-        
-        {/* Groq vs Grok warning */}
-        <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg">
-          <div className="flex items-start gap-2">
-            <span className="text-amber-500 text-lg">⚠️</span>
-            <div className="text-sm text-amber-800 dark:text-amber-200">
-              <strong>Groq ≠ Grok!</strong> These are different companies:
-              <ul className="mt-1 ml-4 list-disc text-xs">
-                <li><strong>Groq</strong> (groq.com) - Fast inference platform. Key starts with <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">gsk_</code></li>
-                <li><strong>Grok</strong> (xAI) - Different LLM provider. Key starts with <code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">xai-</code></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        {showGroqHelp && (
-          <div className="text-sm text-gray-700 mb-2 bg-indigo-50 border border-indigo-200 rounded p-3 space-y-2">
-            <ol className="list-decimal pl-5 space-y-1">
-              <li>
-                Visit the{' '}
-                <a
-                  className="text-indigo-700 underline"
-                  href="https://console.groq.com/keys"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Groq Console
-                </a>{' '}
-                and sign in or create an account.
-              </li>
-              <li>Open the Keys page and click "Create API Key".</li>
-              <li>Copy the key (it starts with <code>gsk_</code>) and paste it below.</li>
-              <li>
-                <strong>Recommended:</strong> Set a billing limit at{' '}
-                <a
-                  className="text-indigo-700 underline"
-                  href="https://console.groq.com/settings/billing"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Settings → Billing → Limits
-                </a>{' '}
-                to control costs and receive usage alerts.
-              </li>
-            </ol>
-          </div>
-        )}
-        {showGroqPricing && (
-          <div className="text-sm text-gray-700 mb-2 bg-green-50 border border-green-200 rounded p-3 space-y-3">
-            <div>
-              <h4 className="font-semibold text-green-800 mb-2">Groq Pricing Guide</h4>
-              <p className="text-green-700 mb-3">
-                Based on the recommended models: <code>whisper-large-v3-turbo</code> and <code>llama-3.3-70b-versatile</code>
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white border border-green-300 rounded p-3">
-                <h5 className="font-medium text-green-800 mb-2">Whisper (Transcription)</h5>
-                <ul className="space-y-1 text-green-700">
-                  <li>• <strong>whisper-large-v3-turbo:</strong> $0.04/hour</li>
-                  <li>• Speed: 216x real-time</li>
-                  <li>• Minimum charge: 10 seconds per request</li>
-                </ul>
-              </div>
-              
-              <div className="bg-white border border-green-300 rounded p-3">
-                <h5 className="font-medium text-green-800 mb-2">LLM (Ad Detection)</h5>
-                <ul className="space-y-1 text-green-700">
-                  <li>• <strong>llama-3.3-70b-versatile:</strong></li>
-                  <li>• Input: $0.59/1M tokens</li>
-                  <li>• Output: $0.79/1M tokens</li>
-                  <li>• ~1M tokens ≈ 750,000 words</li>
-                </ul>
-              </div>
-            </div>
-            
-            <div className="bg-white border border-green-300 rounded p-3">
-              <h5 className="font-medium text-green-800 mb-2">Estimated Monthly Cost (6 podcasts, 6 hours/week)</h5>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-green-700">
-                <div>
-                  <strong>Transcription:</strong><br />
-                  24 hours/month × $0.04 = <span className="font-semibold">$0.96/month</span>
-                </div>
-                <div>
-                  <strong>Ad Detection:</strong><br />
-                  ~2M tokens × $0.69 avg = <span className="font-semibold">$1.38/month</span>
-                </div>
-                <div className="md:col-span-1">
-                  <strong>Total Estimate:</strong><br />
-                  <span className="font-semibold text-lg">~$2.34/month</span>
-                </div>
-              </div>
-              <p className="text-xs text-green-600 mt-2">
-                * Actual costs may vary based on podcast length, complexity, and token usage. 
-                Consider setting a $5-10/month billing limit for safety.
-              </p>
-            </div>
-          </div>
-        )}
-        <Field label="Groq API Key" envMeta={getEnvHint('groq.api_key')}>
-          <div className="flex gap-2">
-            <input
-              className="input"
-              type="text"
-              placeholder={
-                pending?.whisper?.whisper_type === 'groq'
-                  ? pending?.whisper?.api_key_preview || ''
-                  : pending?.llm?.llm_api_key_preview || ''
-              }
-              value={pending?.whisper?.whisper_type === 'groq' ? getWhisperApiKey(pending?.whisper) : (pending?.llm?.llm_api_key || '')}
-              onChange={(e) => {
-                const val = e.target.value;
-                updatePending((prevConfig) => {
-                  return {
-                    ...prevConfig,
-                    llm: {
-                      ...(prevConfig.llm as LLMConfig),
-                      llm_api_key: val,
-                      llm_model: groqRecommendedModel,
-                    },
-                    whisper: {
-                      whisper_type: 'groq',
-                      api_key: val,
-                      model: groqRecommendedWhisper,
-                      language: 'en',
-                      max_retries: 3,
-                    } as WhisperConfig,
-                  } as CombinedConfig;
-                });
-              }}
-              onBlur={(e) => {
-                const key = e.target.value.trim();
-                if (!key) return;
-                toast.promise(applyGroqKeyMutation.mutateAsync(key), {
-                  loading: 'Verifying Groq key and applying defaults...',
-                  success: 'Groq configured successfully',
-                  error: (err: unknown) => {
-                    const e = err as { response?: { data?: { error?: string; message?: string } }; message?: string };
-                    return e?.response?.data?.error || e?.response?.data?.message || e?.message || 'Failed to configure Groq';
-                  },
-                });
-              }}
-              onPaste={(e) => {
-                const text = e.clipboardData.getData('text').trim();
-                if (!text) return;
-                toast.promise(applyGroqKeyMutation.mutateAsync(text), {
-                  loading: 'Verifying Groq key and applying defaults...',
-                  success: 'Groq configured successfully',
-                  error: (err: unknown) => {
-                    const er = err as { response?: { data?: { error?: string; message?: string } }; message?: string };
-                    return er?.response?.data?.error || er?.response?.data?.message || er?.message || 'Failed to configure Groq';
-                  },
-                });
-              }}
-            />
-          </div>
-        </Field>
-      </Section>
 
       {showSecurityControls && (
                   <Section title="Account Security">
@@ -1238,14 +1060,7 @@ export default function ConfigPage() {
         </Section>
       )}
 
-      {/* Advanced Settings - Always visible */}
       <div className="space-y-6">
-        <div className="border-t border-purple-200 pt-6">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-purple-100">Advanced Settings</h2>
-            <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-medium">Changes below require clicking "Save Changes" to apply</span>
-          </div>
-        </div>
         <Section title="LLM Configuration">
             <Field label="Provider">
               <select
@@ -1330,6 +1145,26 @@ export default function ConfigPage() {
                           setField(['llm', 'llm_model'], providerDefaults.default_model ?? '');
                           setField(['llm', 'openai_base_url'], providerDefaults.default_openai_base_url ?? '');
                         }
+                        if (detected === 'groq') {
+                          setField(['whisper', 'whisper_type'], 'groq');
+                          setField(['whisper', 'api_key'], value);
+                          setField(['whisper', 'model'], groqRecommendedWhisper);
+                        }
+                      }
+                    }}
+                    onPaste={(e) => {
+                      const text = e.clipboardData.getData('text').trim();
+                      if (text.startsWith('gsk_')) {
+                        e.preventDefault();
+                        setManualLlmKey(text);
+                        toast.promise(applyGroqKeyMutation.mutateAsync(text), {
+                          loading: 'Verifying Groq key...',
+                          success: 'Groq configured (LLM + Whisper)',
+                          error: (err: unknown) => {
+                            const er = err as { response?: { data?: { error?: string; message?: string } }; message?: string };
+                            return er?.response?.data?.error || er?.response?.data?.message || er?.message || 'Failed to configure Groq';
+                          },
+                        });
                       }
                     }}
                   />
@@ -1756,7 +1591,19 @@ export default function ConfigPage() {
                   </div>
                 </div>
                 
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-purple-100">Email (SMTP) Configuration</h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-purple-100">Email (SMTP) Configuration</h4>
+                  {pending?.email?.smtp_host && pending?.email?.smtp_username ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                      Configured
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                      Not configured
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-gray-600 dark:text-purple-300 -mt-2">Configure SMTP to send approval notifications and password reset emails</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Field label="SMTP Host">
@@ -2041,8 +1888,14 @@ function EnvVarHint({ meta }: { meta?: EnvOverrideEntry }) {
 
 const FALLBACK_LLM_MODELS: string[] = [
   'groq/openai/gpt-oss-120b',
+  'groq/llama-3.3-70b-versatile',
+  'groq/deepseek-r1-distill-llama-70b',
+  'groq/qwen-qwq-32b',
+  'groq/llama-4-scout-17b-16e-instruct',
   'xai/grok-3',
+  'xai/grok-3-mini',
   'gpt-4o',
+  'gpt-4o-mini',
   'anthropic/claude-3-7-sonnet-latest',
   'gemini/gemini-2.0-flash',
 ];
