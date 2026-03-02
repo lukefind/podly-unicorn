@@ -1,5 +1,5 @@
 # Multi-stage build for combined frontend and backend
-ARG BASE_IMAGE=python:3.11-slim
+ARG BASE_IMAGE=python:3.12-slim
 FROM node:18-alpine AS frontend-build
 
 WORKDIR /app
