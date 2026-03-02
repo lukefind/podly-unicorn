@@ -16,7 +16,7 @@ Sign up at [console.groq.com](https://console.groq.com/keys) and create an API k
 git clone https://github.com/lukefind/podly-unicorn.git
 cd podly-unicorn
 cp .env.local.example .env.local
-# Edit .env.local with your API key and auth settings (recommended)
+# Edit .env.local with auth settings (recommended):
 # REQUIRE_AUTH=true
 # PODLY_ADMIN_USERNAME=admin
 # PODLY_ADMIN_PASSWORD=choose-a-strong-password
@@ -24,6 +24,8 @@ cp .env.local.example .env.local
 # SESSION_COOKIE_SECURE=false  # only if running local HTTP (no HTTPS)
 docker compose up -d --build
 ```
+
+No API keys needed in `.env.local` — enter your Groq API key in **Settings → Quick Setup** after starting.
 
 Open http://localhost:5001
 
@@ -105,12 +107,12 @@ docker compose down             # Stop
 
 ## Upgrading from an Older Version?
 
-If you previously had `LLM_API_KEY`, `LLM_MODEL`, or `OPENAI_BASE_URL` in your `.env.local`, those env vars now **override** the Settings UI. To use the new LLM Configuration UI:
+If you previously had `GROQ_API_KEY`, `WHISPER_TYPE`, `LLM_API_KEY`, `LLM_MODEL`, or `OPENAI_BASE_URL` in your `.env.local`, those env vars **override** the Settings UI. To use the new UI-based configuration:
 
-1. Remove `LLM_API_KEY`, `LLM_MODEL`, and `OPENAI_BASE_URL` from `.env.local`
-2. Keep `GROQ_API_KEY` and `WHISPER_TYPE=groq`
-3. Restart: `docker compose restart`
-4. Open **Settings → LLM Configuration** to select your provider and key
+1. Remove all of those vars from `.env.local` (keep only auth settings like `REQUIRE_AUTH`, `PODLY_ADMIN_USERNAME`, etc.)
+2. Restart: `docker compose restart`
+3. Open **Settings → Quick Setup** to enter your Groq key (configures both Whisper and LLM)
+4. Or use **Settings → LLM Configuration** for advanced provider selection
 
 See the [full upgrade guide](../README.md#upgrading-from-podly-pure-podcasts--earlier-versions) in the README.
 

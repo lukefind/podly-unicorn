@@ -137,11 +137,7 @@ cp .env.local.example .env.local
 Edit `.env.local`:
 
 ```bash
-# Required: Groq handles both transcription AND ad detection (free tier)
-GROQ_API_KEY=gsk_your_groq_key
-WHISPER_TYPE=groq
-
-# Recommended for podcast-app trigger/download links: enable authentication
+# Recommended: enable authentication for podcast-app trigger/download links
 REQUIRE_AUTH=true
 PODLY_ADMIN_USERNAME=admin
 PODLY_ADMIN_PASSWORD=your-secure-password
@@ -150,6 +146,8 @@ PODLY_SECRET_KEY=replace-with-a-long-random-secret
 # Local HTTP only (no HTTPS): required so login cookies work on localhost
 # SESSION_COOKIE_SECURE=false
 ```
+
+That's it for `.env.local`. After starting, open **Settings** in the web UI and enter your Groq API key in **Quick Setup** — it configures both transcription and ad detection in one step.
 
 If you run with `REQUIRE_AUTH=true` on plain `http://` (no TLS), you must set `SESSION_COOKIE_SECURE=false`.  
 If you are behind HTTPS (recommended), leave it unset.
@@ -227,11 +225,8 @@ OPENAI_BASE_URL=https://api.x.ai/v1
 WHISPER_TYPE=groq
 ```
 
-**After (recommended — let the UI manage LLM config):**
+**After (recommended — let the UI manage everything):**
 ```bash
-GROQ_API_KEY=gsk_...
-WHISPER_TYPE=groq
-
 # Auth (keep as-is)
 REQUIRE_AUTH=true
 PODLY_ADMIN_USERNAME=...
@@ -239,17 +234,19 @@ PODLY_ADMIN_PASSWORD=...
 PODLY_SECRET_KEY=...
 ```
 
+All LLM and Whisper settings are now configurable in **Settings** — no env vars needed.
+
 **What changed and why:**
 
 | Env var | Action | Reason |
 |---------|--------|--------|
-| `GROQ_API_KEY` | **Keep** | Still needed for Whisper transcription. Also auto-detected as an LLM key source in the UI. |
-| `LLM_API_KEY` | **Remove** | Manage your LLM API key in **Settings → LLM Configuration** instead. You can save encrypted key profiles and switch providers without restarting. |
+| `GROQ_API_KEY` | **Remove** | Enter your Groq key in **Settings → Quick Setup** instead. It's saved encrypted in the database and configures both Whisper and LLM. |
+| `LLM_API_KEY` | **Remove** | Manage your LLM API key in **Settings → LLM Configuration**. You can save encrypted key profiles and switch providers without restarting. |
 | `LLM_MODEL` | **Remove** | Select your model in the Settings UI. Env var overrides the UI if present. |
 | `OPENAI_BASE_URL` | **Remove** | No longer needed — models with a provider prefix (e.g. `xai/grok-3`, `groq/...`) are routed automatically by LiteLLM. |
-| `WHISPER_TYPE` | **Keep** | Still controls transcription backend. |
+| `WHISPER_TYPE` | **Remove** | Select Whisper mode (groq/local/remote) in **Settings → Whisper**. Default is groq. |
 
-> **Note:** If you prefer env vars over the UI, that still works — just be aware that any `LLM_MODEL`, `LLM_API_KEY`, or `OPENAI_BASE_URL` set in `.env.local` will override what you configure in Settings, and the UI will show a warning.
+> **Note:** If you prefer env vars over the UI, that still works — just be aware that any `GROQ_API_KEY`, `WHISPER_TYPE`, `LLM_MODEL`, `LLM_API_KEY`, or `OPENAI_BASE_URL` set in `.env.local` will override what you configure in Settings, and the UI will show a warning.
 
 ### After editing `.env.local`
 
