@@ -511,6 +511,17 @@ def api_test_llm() -> flask.Response:
         api_key: str | None = resolved_payload_key
     else:
         api_key = getattr(runtime_config, "llm_api_key", None)
+
+    # Fallback: read key from DB directly if runtime_config is stale/empty
+    if not api_key:
+        try:
+            db_data = read_combined()
+            db_llm_key = db_data.get("llm", {}).get("llm_api_key")
+            if db_llm_key:
+                api_key = resolve_llm_api_key_reference(db_llm_key)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
     model_val = llm.get("llm_model")
     model: str = (
         model_val
@@ -563,7 +574,7 @@ def api_test_llm() -> flask.Response:
         return flask.jsonify(
             {
                 "ok": True,
-                "message": "LLM connection OK",
+                "message": f"Connected to {model}",
                 "model": model,
                 "base_url": base_url,
             }
@@ -690,6 +701,16 @@ def _test_groq_whisper(whisper_cfg: Dict[str, Any]) -> flask.Response:
 
     if not groq_api_key:
         groq_api_key = _get_env_whisper_api_key("groq")
+
+    # Fallback: read from DB directly
+    if not groq_api_key:
+        try:
+            db_data = read_combined()
+            db_whisper_key = db_data.get("whisper", {}).get("api_key")
+            if isinstance(db_whisper_key, str) and db_whisper_key:
+                groq_api_key = db_whisper_key
+        except Exception:  # pylint: disable=broad-except
+            pass
 
     if not groq_api_key:
         return _make_error_response("Missing whisper.api_key")

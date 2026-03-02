@@ -628,17 +628,6 @@ export default function ConfigPage() {
     setEnvWarningPaths([]);
   };
 
-  const renderSaveButton = () => (
-    <div className="flex items-center justify-end">
-      <button
-        onClick={handleSave}
-        className="px-3 py-2 text-sm rounded bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:from-purple-700 hover:to-pink-600 disabled:opacity-60"
-        disabled={saveMutation.isPending}
-      >
-        {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
-      </button>
-    </div>
-  );
 
   const applyGroqKeyMutation = useMutation({
     mutationFn: async (key: string) => {
@@ -677,7 +666,7 @@ export default function ConfigPage() {
       refetch();
       toast.success('Groq key verified and saved. Defaults applied.');
       setLlmStatus('ok');
-      setLlmMessage('LLM connection OK');
+      setLlmMessage(`Connected to ${groqRecommendedModel}`);
       setWhisperStatus('ok');
       setWhisperMessage('Whisper connection OK');
     },
@@ -799,27 +788,6 @@ export default function ConfigPage() {
             </a>
           </div>
         </div>
-        {hasEdits && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-pink-600">✨ Unsaved changes</span>
-            <button
-              onClick={() => {
-                setPending(configData ?? null);
-                setHasEdits(false);
-              }}
-              className="px-4 py-2 text-sm font-medium text-purple-700 bg-white/80 border border-purple-200 rounded-xl hover:bg-purple-50 transition-colors"
-            >
-              Discard
-            </button>
-            <button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all disabled:opacity-50"
-            >
-              {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Pending Signups - Show at top for admins when there are pending users */}
@@ -1903,7 +1871,6 @@ export default function ConfigPage() {
             </Section>
           )}
 
-          {renderSaveButton()}
         </div>
 
       {showEnvWarning && envWarningPaths.length > 0 && (
@@ -1915,8 +1882,35 @@ export default function ConfigPage() {
         />
       )}
       
-      {/* Extra padding to prevent audio player overlay from obscuring bottom settings */}
-      <div className="h-24"></div>
+      {/* Sticky floating save bar */}
+      {hasEdits && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-purple-200 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
+          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+            <span className="text-sm text-pink-600 dark:text-pink-400 font-medium">Unsaved changes</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setPending(configData ?? null);
+                  setHasEdits(false);
+                }}
+                className="px-4 py-2 text-sm font-medium text-purple-700 dark:text-purple-300 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-600 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saveMutation.isPending}
+                className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all disabled:opacity-50"
+              >
+                {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Extra padding to prevent floating bar / audio player from obscuring bottom settings */}
+      <div className={hasEdits ? 'h-32' : 'h-24'}></div>
       {/* Datalist options rendered once at end to ensure they exist in DOM */}
       <LlmModelDatalist models={llmOptions?.models ?? []} />
     </div>
