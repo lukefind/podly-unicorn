@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import { feedsApi, presetsApi } from '../services/api';
 import { toast } from 'react-hot-toast';
 import type { PromptPreset, Feed } from '../types';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function DashboardPage() {
   const queryClient = useQueryClient();
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
 
   const { data: feeds } = useQuery({
     queryKey: ['feeds'],
@@ -62,18 +65,30 @@ export default function DashboardPage() {
     }
   };
 
+  const originalCardStyle = isOriginal
+    ? { backgroundColor: 'rgba(24, 62, 114, 0.46)', borderColor: 'rgba(147, 197, 253, 0.28)' }
+    : undefined;
+
+  const originalSectionHeaderStyle = isOriginal
+    ? {
+        background: 'linear-gradient(90deg, rgba(17, 61, 112, 0.92), rgba(34, 96, 162, 0.9), rgba(17, 61, 112, 0.92))',
+        borderColor: 'rgba(125, 211, 252, 0.34)',
+      }
+    : undefined;
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold rainbow-text">Dashboard</h1>
-          <p className="text-purple-600 mt-1">Overview of your podcast ad removal system ✨</p>
+          <h1 className={`text-2xl font-bold ${isOriginal ? 'text-blue-100' : 'rainbow-text'}`}>Dashboard</h1>
+          <p className={`${isOriginal ? 'text-blue-200' : 'text-purple-600'} mt-1`}>Overview of your podcast ad removal system ✨</p>
         </div>
         <button
           onClick={() => refreshAllMutation.mutate()}
           disabled={refreshAllMutation.isPending}
           className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 disabled:opacity-50 transition-all text-sm sm:text-base"
+          style={isOriginal ? { background: 'linear-gradient(to right, #3b82f6, #60a5fa, #67e8f9)', boxShadow: '0 8px 16px rgba(59, 130, 246, 0.22)' } : undefined}
         >
           <svg className={`w-4 h-4 flex-shrink-0 ${refreshAllMutation.isPending ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -88,21 +103,25 @@ export default function DashboardPage() {
         <Link
           to="/podcasts"
           className="bg-white/80 backdrop-blur-sm rounded-xl border border-pink-200/50 p-4 sm:p-6 shadow-sm unicorn-card block focus:outline-none focus:ring-2 focus:ring-purple-400/60"
+          style={originalCardStyle}
         >
           <div className="flex items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="p-2.5 sm:p-3 bg-gradient-to-br from-pink-100 to-pink-200 rounded-xl flex-shrink-0">
-                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div
+                className="p-2.5 sm:p-3 bg-gradient-to-br from-pink-100 to-pink-200 rounded-xl flex-shrink-0"
+                style={isOriginal ? { background: 'linear-gradient(to bottom right, rgba(125, 211, 252, 0.26), rgba(59, 130, 246, 0.28))' } : undefined}
+              >
+                <svg className={`w-5 h-5 sm:w-6 sm:h-6 ${isOriginal ? 'text-cyan-200' : 'text-pink-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
               </div>
               <div className="min-w-0">
-                <p className="text-xs sm:text-sm text-purple-500">Podcasts</p>
-                <p className="text-xl sm:text-2xl font-bold text-purple-900">{feedsArray.length}</p>
+                <p className={`text-xs sm:text-sm ${isOriginal ? 'text-blue-200' : 'text-purple-500'}`}>Podcasts</p>
+                <p className={`text-xl sm:text-2xl font-bold ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>{feedsArray.length}</p>
               </div>
             </div>
 
-            <div className="flex items-center text-purple-600 font-medium">
+            <div className={`flex items-center font-medium ${isOriginal ? 'text-blue-200' : 'text-purple-600'}`}>
               <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
@@ -113,21 +132,25 @@ export default function DashboardPage() {
         <Link
           to="/podcasts"
           className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 p-4 sm:p-6 shadow-sm unicorn-card block focus:outline-none focus:ring-2 focus:ring-purple-400/60"
+          style={originalCardStyle}
         >
           <div className="flex items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="p-2.5 sm:p-3 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex-shrink-0">
-                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div
+                className="p-2.5 sm:p-3 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex-shrink-0"
+                style={isOriginal ? { background: 'linear-gradient(to bottom right, rgba(96, 165, 250, 0.28), rgba(56, 189, 248, 0.26))' } : undefined}
+              >
+                <svg className={`w-5 h-5 sm:w-6 sm:h-6 ${isOriginal ? 'text-blue-200' : 'text-purple-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
               </svg>
             </div>
               <div className="min-w-0">
-                <p className="text-xs sm:text-sm text-purple-500">Episodes</p>
-                <p className="text-xl sm:text-2xl font-bold text-purple-900">{statsSummary?.total_episodes_processed || 0}</p>
+                <p className={`text-xs sm:text-sm ${isOriginal ? 'text-blue-200' : 'text-purple-500'}`}>Episodes</p>
+                <p className={`text-xl sm:text-2xl font-bold ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>{statsSummary?.total_episodes_processed || 0}</p>
               </div>
             </div>
 
-            <div className="flex items-center text-purple-600 font-medium">
+            <div className={`flex items-center font-medium ${isOriginal ? 'text-blue-200' : 'text-purple-600'}`}>
               <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
@@ -135,7 +158,7 @@ export default function DashboardPage() {
           </div>
         </Link>
 
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-cyan-200/50 p-4 sm:p-6 shadow-sm unicorn-card">
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-cyan-200/50 p-4 sm:p-6 shadow-sm unicorn-card" style={originalCardStyle}>
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <div className="p-2.5 sm:p-3 bg-gradient-to-br from-cyan-100 to-cyan-200 rounded-xl flex-shrink-0">
               <svg className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -143,13 +166,13 @@ export default function DashboardPage() {
             </svg>
           </div>
             <div className="min-w-0">
-              <p className="text-xs sm:text-sm text-purple-500">Ads</p>
-              <p className="text-xl sm:text-2xl font-bold text-purple-900">{statsSummary?.total_ad_segments_removed || 0}</p>
+              <p className={`text-xs sm:text-sm ${isOriginal ? 'text-blue-200' : 'text-purple-500'}`}>Ads</p>
+              <p className={`text-xl sm:text-2xl font-bold ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>{statsSummary?.total_ad_segments_removed || 0}</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-teal-200/50 p-4 sm:p-6 shadow-sm unicorn-card">
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-teal-200/50 p-4 sm:p-6 shadow-sm unicorn-card" style={originalCardStyle}>
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <div className="p-2.5 sm:p-3 bg-gradient-to-br from-teal-100 to-teal-200 rounded-xl flex-shrink-0">
               <svg className="w-5 h-5 sm:w-6 sm:h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -157,8 +180,8 @@ export default function DashboardPage() {
             </svg>
           </div>
             <div className="min-w-0">
-              <p className="text-xs sm:text-sm text-purple-500">Time</p>
-              <p className="text-xl sm:text-2xl font-bold text-purple-900">{statsSummary?.total_time_saved_formatted || '0m'}</p>
+              <p className={`text-xs sm:text-sm ${isOriginal ? 'text-blue-200' : 'text-purple-500'}`}>Time</p>
+              <p className={`text-xl sm:text-2xl font-bold ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>{statsSummary?.total_time_saved_formatted || '0m'}</p>
             </div>
           </div>
         </div>
@@ -166,11 +189,11 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Active Preset Card */}
-        <div className="lg:col-span-2 bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden unicorn-card">
-          <div className="p-6 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50">
+        <div className="lg:col-span-2 bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden unicorn-card" style={originalCardStyle}>
+          <div className={isOriginal ? 'p-6 border-b' : 'p-6 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50'} style={originalSectionHeaderStyle}>
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-purple-900">Ad Detection Preset ✨</h2>
-              <Link to="/presets" className="text-sm text-purple-600 hover:text-purple-700 font-medium">
+              <h2 className={`text-lg font-semibold ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>Ad Detection Preset ✨</h2>
+              <Link to="/presets" className={`text-sm font-medium ${isOriginal ? 'text-blue-200 hover:text-cyan-200' : 'text-purple-600 hover:text-purple-700'}`}>
                 Manage Presets →
               </Link>
             </div>
@@ -231,11 +254,11 @@ export default function DashboardPage() {
         </div>
 
         {/* Active Jobs Card */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden unicorn-card">
-          <div className="p-6 border-b border-purple-100/50 bg-gradient-to-r from-cyan-50/50 via-purple-50/50 to-pink-50/50">
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden unicorn-card" style={originalCardStyle}>
+          <div className={isOriginal ? 'p-6 border-b' : 'p-6 border-b border-purple-100/50 bg-gradient-to-r from-cyan-50/50 via-purple-50/50 to-pink-50/50'} style={originalSectionHeaderStyle}>
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-purple-900">Active Jobs 💫</h2>
-              <Link to="/jobs" className="text-sm text-purple-600 hover:text-purple-700 font-medium">
+              <h2 className={`text-lg font-semibold ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>Active Jobs 💫</h2>
+              <Link to="/jobs" className={`text-sm font-medium ${isOriginal ? 'text-blue-200 hover:text-cyan-200' : 'text-purple-600 hover:text-purple-700'}`}>
                 View All →
               </Link>
             </div>
@@ -244,22 +267,35 @@ export default function DashboardPage() {
             {activeJobs.length > 0 ? (
               <div className="space-y-3">
                 {activeJobs.slice(0, 5).map((job: { job_id: string; post_title: string | null; status: string; progress_percentage: number; step_name: string | null }) => (
-                  <div key={job.job_id} className="p-3 bg-gradient-to-r from-purple-50/50 to-pink-50/50 rounded-lg border border-purple-100/50">
+                  <div
+                    key={job.job_id}
+                    className="p-3 bg-gradient-to-r from-purple-50/50 to-pink-50/50 rounded-lg border border-purple-100/50"
+                    style={isOriginal ? { background: 'linear-gradient(to right, rgba(59, 130, 246, 0.16), rgba(14, 165, 233, 0.12))', borderColor: 'rgba(147, 197, 253, 0.25)' } : undefined}
+                  >
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm font-medium text-purple-900 truncate flex-1">{job.post_title || 'Processing...'}</p>
+                      <p className={`text-sm font-medium truncate flex-1 ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>{job.post_title || 'Processing...'}</p>
                       <span className={`ml-2 px-2 py-0.5 text-xs font-medium rounded-full ${
-                        job.status === 'running' ? 'bg-purple-100 text-purple-700' : 'bg-pink-100 text-pink-700'
+                        isOriginal
+                          ? job.status === 'running'
+                            ? 'bg-blue-500/20 text-blue-200'
+                            : 'bg-cyan-500/20 text-cyan-200'
+                          : job.status === 'running'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-pink-100 text-pink-700'
                       }`}>
                         {job.status}
                       </span>
                     </div>
-                    <div className="w-full bg-purple-100 rounded-full h-1.5">
+                    <div
+                      className="w-full bg-purple-100 rounded-full h-1.5"
+                      style={isOriginal ? { backgroundColor: 'rgba(147, 197, 253, 0.3)' } : undefined}
+                    >
                       <div 
                         className="bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 h-1.5 rounded-full transition-all"
-                        style={{ width: `${job.progress_percentage}%` }}
+                        style={isOriginal ? { width: `${job.progress_percentage}%`, background: 'linear-gradient(to right, #60a5fa, #38bdf8, #67e8f9)' } : { width: `${job.progress_percentage}%` }}
                       />
                     </div>
-                    <p className="text-xs text-purple-500 mt-1">{job.step_name || 'Initializing...'}</p>
+                    <p className={`text-xs mt-1 ${isOriginal ? 'text-blue-200' : 'text-purple-500'}`}>{job.step_name || 'Initializing...'}</p>
                   </div>
                 ))}
                 {activeJobs.length > 5 && (
@@ -279,11 +315,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Podcasts */}
-      <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden unicorn-card">
-        <div className="p-6 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50">
+      <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden unicorn-card" style={originalCardStyle}>
+        <div className={isOriginal ? 'p-6 border-b' : 'p-6 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50'} style={originalSectionHeaderStyle}>
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-purple-900">Your Podcasts 🎧</h2>
-            <Link to="/podcasts" className="text-sm text-purple-600 hover:text-purple-700 font-medium">
+            <h2 className={`text-lg font-semibold ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>Your Podcasts 🎧</h2>
+            <Link to="/podcasts" className={`text-sm font-medium ${isOriginal ? 'text-blue-200 hover:text-cyan-200' : 'text-purple-600 hover:text-purple-700'}`}>
               View All →
             </Link>
           </div>

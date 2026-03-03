@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -9,6 +9,7 @@ import DownloadButton from '../DownloadButton';
 import ProcessingStatsButton from '../ProcessingStatsButton';
 import ProcessButton from '../ProcessButton';
 import { copyTextToClipboard } from '../../services/clipboard';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 
 // Extended episode type that includes optional combined-feed fields
 export interface EpisodeWithTrigger extends Episode {
@@ -56,6 +57,16 @@ export default function EpisodeDetailModal({
 }: EpisodeDetailModalProps) {
   const [copyModalUrl, setCopyModalUrl] = useState<string | null>(null);
   const [isLoadingTrigger, setIsLoadingTrigger] = useState(false);
+  const closeCopyModal = useCallback(() => setCopyModalUrl(null), []);
+  const closeModal = useCallback(() => {
+    if (copyModalUrl) {
+      closeCopyModal();
+      return;
+    }
+    onClose();
+  }, [copyModalUrl, closeCopyModal, onClose]);
+
+  useEscapeKey(true, closeModal);
 
   // Determine the effective feed ID and title
   const effectiveFeedId = feedId ?? episode.feed_id;
@@ -326,7 +337,7 @@ export default function EpisodeDetailModal({
         <div 
           className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
           style={{ zIndex: 10001 }}
-          onClick={() => setCopyModalUrl(null)}
+          onClick={closeCopyModal}
         >
           <div 
             className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 shadow-2xl border border-purple-200 dark:border-purple-700"
@@ -345,7 +356,7 @@ export default function EpisodeDetailModal({
             />
             <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={() => setCopyModalUrl(null)}
+                onClick={closeCopyModal}
                 className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900"
               >
                 Close

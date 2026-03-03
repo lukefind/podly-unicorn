@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { jobsApi } from '../services/api';
 import type { Job, JobManagerRun, JobManagerStatus } from '../types';
 import { copyTextToClipboard } from '../services/clipboard';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 function getStatusColor(status: string) {
   switch (status) {
@@ -78,6 +79,7 @@ export default function JobsPage() {
   const [cancellingJobs, setCancellingJobs] = useState<Set<string>>(new Set());
   const previousHasActiveWork = useRef<boolean>(false);
   const [selectedJobError, setSelectedJobError] = useState<{ title: string; error: string; jobId: string } | null>(null);
+  useEscapeKey(!!selectedJobError, () => setSelectedJobError(null));
 
   const loadStatus = useCallback(async () => {
     try {

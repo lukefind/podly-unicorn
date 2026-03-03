@@ -6,6 +6,7 @@
  * - EpisodeProcessingStatus.tsx uses this with polling via feedsApi
  * - TriggerPage.tsx uses this with polling via /api/trigger/status
  */
+import { useTheme } from '../contexts/ThemeContext';
 
 interface ProcessingProgressUIProps {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'error' | 'skipped';
@@ -26,18 +27,26 @@ export default function ProcessingProgressUI({
   jobId: _jobId,
   error,
 }: ProcessingProgressUIProps) {
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
   void _jobId; // Unused but kept for API compatibility
   const isActive = status === 'running' || status === 'pending';
   const isFailed = status === 'failed' || status === 'error';
   const progressPercent = totalSteps > 0 ? (step / totalSteps) * 100 : 0;
 
   return (
-    <div className="p-4 rounded-lg bg-purple-50 dark:bg-purple-900/30 border border-purple-100 dark:border-purple-700">
+    <div
+      className={`p-4 rounded-lg border ${
+        isOriginal
+          ? 'bg-blue-950/40 border-blue-300/35'
+          : 'bg-purple-50 dark:bg-purple-900/30 border-purple-100 dark:border-purple-700'
+      }`}
+    >
       {/* Header with status and job link */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           {isActive && (
-            <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            <div className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${isOriginal ? 'border-blue-300' : 'border-purple-500'}`} />
           )}
           {isFailed && (
             <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
@@ -52,7 +61,7 @@ export default function ProcessingProgressUI({
           <span className={`text-sm font-medium ${
             isFailed ? 'text-red-600 dark:text-red-400' : 
             status === 'completed' ? 'text-emerald-600 dark:text-emerald-400' : 
-            'text-purple-900 dark:text-purple-100'
+            isOriginal ? 'text-blue-100' : 'text-purple-900 dark:text-purple-100'
           }`}>
             {status === 'pending' ? 'Queued' : 
              status === 'running' ? 'Processing' : 
@@ -67,9 +76,13 @@ export default function ProcessingProgressUI({
       {/* Progress bar */}
       {isActive && (
         <div className="mb-3">
-          <div className="w-full bg-purple-100 dark:bg-purple-800 rounded-full h-2">
+          <div className={`w-full rounded-full h-2 ${isOriginal ? 'bg-blue-900/65' : 'bg-purple-100 dark:bg-purple-800'}`}>
             <div
-              className="h-2 rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 transition-all duration-300"
+              className={`h-2 rounded-full transition-all duration-300 ${
+                isOriginal
+                  ? 'bg-gradient-to-r from-blue-400 via-sky-400 to-cyan-300'
+                  : 'bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500'
+              }`}
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -91,8 +104,12 @@ export default function ProcessingProgressUI({
                   isCompleted
                     ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'
                     : isCurrent
-                    ? 'bg-purple-200 dark:bg-purple-700 text-purple-800 dark:text-purple-200 font-medium'
-                    : 'bg-purple-50 dark:bg-purple-800/50 text-purple-700 dark:text-purple-200'
+                    ? isOriginal
+                      ? 'bg-blue-500/40 text-blue-50 font-medium'
+                      : 'bg-purple-200 dark:bg-purple-700 text-purple-800 dark:text-purple-200 font-medium'
+                    : isOriginal
+                      ? 'bg-blue-900/55 text-blue-100'
+                      : 'bg-purple-50 dark:bg-purple-800/50 text-purple-700 dark:text-purple-200'
                 }`}
               >
                 <div className="flex items-center justify-center gap-1">
@@ -102,7 +119,7 @@ export default function ProcessingProgressUI({
                     </svg>
                   )}
                   {isCurrent && (
-                    <div className="w-2 h-2 border border-purple-600 border-t-transparent rounded-full animate-spin" />
+                    <div className={`w-2 h-2 border border-t-transparent rounded-full animate-spin ${isOriginal ? 'border-blue-100' : 'border-purple-600'}`} />
                   )}
                   <span className="hidden sm:inline">{name}</span>
                   <span className="sm:hidden">{stepNum}</span>
@@ -115,7 +132,7 @@ export default function ProcessingProgressUI({
 
       {/* Current step name */}
       {isActive && stepName && (
-        <div className="mt-3 text-sm text-purple-900 dark:text-purple-100 text-center">
+        <div className={`mt-3 text-sm text-center ${isOriginal ? 'text-blue-100' : 'text-purple-900 dark:text-purple-100'}`}>
           {stepName}
         </div>
       )}

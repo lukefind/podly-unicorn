@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
+import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface SubscriptionModalProps {
   onClose: () => void;
@@ -8,6 +10,9 @@ interface SubscriptionModalProps {
 
 export default function SubscriptionModal({ onClose, onUpdate }: SubscriptionModalProps) {
   const queryClient = useQueryClient();
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
+  useEscapeKey(true, onClose);
   
   const { data: allFeeds, isLoading } = useQuery({
     queryKey: ['all-feeds'],
@@ -48,22 +53,26 @@ export default function SubscriptionModal({ onClose, onUpdate }: SubscriptionMod
 
   return (
     <div 
-      className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
-      style={{ zIndex: 9999 }}
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{ zIndex: 9999, backgroundColor: isOriginal ? 'rgba(2, 8, 23, 0.82)' : 'rgba(0, 0, 0, 0.8)' }}
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col max-h-[80vh]"
+        className="modal-content w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col max-h-[80vh]"
+        style={isOriginal ? { backgroundColor: '#0a2249', borderColor: 'rgba(96, 165, 250, 0.46)' } : undefined}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+        <div
+          className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4"
+          style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.35)', background: 'linear-gradient(to right, #14467e, #1d5995, #14467e)' } : undefined}
+        >
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Manage Subscriptions</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Choose which podcasts appear in your feed list</p>
+            <h2 className={`text-xl font-semibold ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-gray-100'}`}>Manage Subscriptions</h2>
+            <p className={`text-sm mt-1 ${isOriginal ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>Choose which podcasts appear in your feed list</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            className={`p-2 rounded-lg ${isOriginal ? 'text-blue-200 hover:text-blue-50 hover:bg-blue-800/40' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -74,7 +83,7 @@ export default function SubscriptionModal({ onClose, onUpdate }: SubscriptionMod
         <div className="overflow-y-auto px-6 py-4 flex-1">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+              <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isOriginal ? 'border-blue-300' : 'border-purple-600'}`} />
             </div>
           ) : allFeeds && allFeeds.length > 0 ? (
             <div className="space-y-3">
@@ -83,8 +92,12 @@ export default function SubscriptionModal({ onClose, onUpdate }: SubscriptionMod
                   key={feed.id}
                   className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${
                     feed.is_subscribed 
-                      ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-700' 
-                      : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                      ? isOriginal
+                        ? 'bg-blue-900/55 border-blue-300/45'
+                        : 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-700'
+                      : isOriginal
+                        ? 'bg-blue-950/40 border-blue-300/30'
+                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                   }`}
                 >
                   {feed.image_url ? (
@@ -102,7 +115,7 @@ export default function SubscriptionModal({ onClose, onUpdate }: SubscriptionMod
                   )}
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-gray-900 dark:text-gray-100 truncate">{feed.title}</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{feed.posts_count} episodes</p>
+                    <p className={`text-xs ${isOriginal ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>{feed.posts_count} episodes</p>
                   </div>
                   <div className="flex items-center gap-2">
                     {feed.is_subscribed ? (
@@ -130,7 +143,11 @@ export default function SubscriptionModal({ onClose, onUpdate }: SubscriptionMod
                         <button
                           onClick={() => handleUnsubscribe(feed.id)}
                           disabled={unsubscribeMutation.isPending}
-                          className="px-4 py-2 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                          className={`px-4 py-2 text-sm font-medium rounded-lg disabled:opacity-50 ${
+                            isOriginal
+                              ? 'bg-blue-500 text-white hover:bg-blue-400 border border-blue-300/55'
+                              : 'bg-purple-600 text-white hover:bg-purple-700'
+                          }`}
                           title="Click to unsubscribe"
                         >
                           Subscribed
@@ -141,7 +158,11 @@ export default function SubscriptionModal({ onClose, onUpdate }: SubscriptionMod
                         <button
                           onClick={() => handleSubscribe(feed.id, false)}
                           disabled={subscribeMutation.isPending}
-                          className="px-3 py-2 text-sm font-medium rounded-l-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
+                          className={`px-3 py-2 text-sm font-medium rounded-l-lg disabled:opacity-50 ${
+                            isOriginal
+                              ? 'bg-blue-900/65 text-blue-100 border border-blue-300/45 hover:bg-blue-800/75'
+                              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                          }`}
                           title="Subscribe publicly"
                         >
                           Subscribe
@@ -149,7 +170,11 @@ export default function SubscriptionModal({ onClose, onUpdate }: SubscriptionMod
                         <button
                           onClick={() => handleSubscribe(feed.id, true)}
                           disabled={subscribeMutation.isPending}
-                          className="px-2 py-2 text-sm font-medium rounded-r-lg bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-400 dark:hover:bg-gray-500 disabled:opacity-50"
+                          className={`px-2 py-2 text-sm font-medium rounded-r-lg disabled:opacity-50 ${
+                            isOriginal
+                              ? 'bg-blue-800/65 text-blue-100 border border-blue-300/45 hover:bg-blue-700/75'
+                              : 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-400 dark:hover:bg-gray-500'
+                          }`}
                           title="Subscribe privately"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

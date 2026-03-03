@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface ProcessButtonProps {
   episodeGuid: string;
@@ -15,6 +16,8 @@ export default function ProcessButton({
   className = '',
   onProcessStart
 }: ProcessButtonProps) {
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -61,8 +64,12 @@ export default function ProcessButton({
         disabled={isProcessing}
         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5 ${className} ${
           isProcessing
-            ? 'bg-purple-500 text-white cursor-wait border-purple-500'
-            : 'bg-white border-purple-200 text-purple-600 hover:bg-purple-50'
+            ? isOriginal
+              ? 'bg-blue-500 text-white cursor-wait border-blue-400'
+              : 'bg-purple-500 text-white cursor-wait border-purple-500'
+            : isOriginal
+              ? 'bg-blue-950/60 border-blue-300/50 text-blue-100 hover:bg-blue-900/70 hover:border-blue-200/60'
+              : 'bg-white border-purple-200 text-purple-600 hover:bg-purple-50'
         }`}
         title="Start processing this episode to remove ads"
       >

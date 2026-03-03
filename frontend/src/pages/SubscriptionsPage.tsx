@@ -4,12 +4,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { useTheme } from '../contexts/ThemeContext';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 export default function SubscriptionsPage() {
   const { user, requireAuth } = useAuth();
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
   const [expandedSubscribers, setExpandedSubscribers] = useState<Record<number, boolean>>({});
   const [settingsModalFeedId, setSettingsModalFeedId] = useState<number | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: 'unsubscribe-all' | 'delete'; feedId: number; feedTitle: string } | null>(null);
+  useEscapeKey(!!confirmAction, () => setConfirmAction(null));
+  useEscapeKey(!!settingsModalFeedId, () => setSettingsModalFeedId(null));
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -101,7 +107,7 @@ export default function SubscriptionsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+        <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isOriginal ? 'border-blue-400' : 'border-purple-600'}`} />
       </div>
     );
   }
@@ -121,22 +127,22 @@ export default function SubscriptionsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-purple-100">Feed Subscriptions</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className={`text-2xl font-bold ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'}`}>Feed Subscriptions</h1>
+          <p className={`text-sm mt-1 ${isOriginal ? 'text-blue-200' : 'text-gray-500'}`}>
             Overview of all podcast feeds and their subscribers
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
-          <div className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-lg font-medium">
+          <div className={`px-2.5 py-1 rounded-lg font-medium ${isOriginal ? 'bg-blue-900/65 text-blue-100 border border-blue-300/45' : 'bg-purple-100 text-purple-700'}`}>
             {data?.total_feeds || 0} feeds
           </div>
-          <div className="bg-cyan-100 text-cyan-700 px-2.5 py-1 rounded-lg font-medium">
+          <div className={`px-2.5 py-1 rounded-lg font-medium ${isOriginal ? 'bg-cyan-900/35 text-cyan-100 border border-cyan-300/40' : 'bg-cyan-100 text-cyan-700'}`}>
             {data?.total_subscriptions || 0} subscriptions
           </div>
-          <div className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-lg font-medium">
+          <div className={`px-2.5 py-1 rounded-lg font-medium ${isOriginal ? 'bg-emerald-900/30 text-emerald-100 border border-emerald-300/35' : 'bg-emerald-100 text-emerald-700'}`}>
             {data?.total_processed_episodes || 0} processed
           </div>
-          <div className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-lg font-medium">
+          <div className={`px-2.5 py-1 rounded-lg font-medium ${isOriginal ? 'bg-amber-900/30 text-amber-100 border border-amber-300/45' : 'bg-amber-100 text-amber-700'}`}>
             {formatBytes(data?.total_storage_bytes || 0)} stored
           </div>
         </div>
@@ -147,7 +153,11 @@ export default function SubscriptionsPage() {
         {feeds.map((feed) => (
           <div
             key={feed.id}
-            className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden"
+            className={`rounded-xl border shadow-sm overflow-hidden ${
+              isOriginal
+                ? 'bg-blue-900/45 border-blue-300/35'
+                : 'bg-white/80 backdrop-blur-sm border-purple-200/50'
+            }`}
           >
             <div className="p-4 sm:p-5">
               <div className="flex items-start gap-3">
@@ -171,7 +181,11 @@ export default function SubscriptionsPage() {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       onClick={() => navigate(`/podcasts?feed=${feed.id}`)}
-                      className="font-semibold text-gray-900 dark:text-purple-100 text-sm sm:text-base leading-snug truncate hover:text-purple-600 dark:hover:text-purple-300 transition-colors text-left"
+                      className={`font-semibold text-sm sm:text-base leading-snug truncate transition-colors text-left ${
+                        isOriginal
+                          ? 'text-blue-100 hover:text-white'
+                          : 'text-gray-900 dark:text-purple-100 hover:text-purple-600 dark:hover:text-purple-300'
+                      }`}
                     >
                       {feed.title}
                     </button>
@@ -195,7 +209,7 @@ export default function SubscriptionsPage() {
                     )}
                   </div>
                   {/* Author + Stats on same line */}
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-xs text-gray-500 dark:text-purple-400">
+                  <div className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-xs ${isOriginal ? 'text-blue-200' : 'text-gray-500 dark:text-purple-400'}`}>
                     {feed.author && <span>{feed.author}</span>}
                     {feed.author && <span>·</span>}
                     <span>{feed.posts_count} eps</span>
@@ -214,7 +228,8 @@ export default function SubscriptionsPage() {
                 <div className="flex-shrink-0 flex items-center gap-1.5">
                   <button
                     onClick={() => setSettingsModalFeedId(feed.id)}
-                    className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                    className="p-1.5 rounded-lg transition-colors"
+                    style={isOriginal ? { color: '#bfdbfe', backgroundColor: 'rgba(30, 64, 124, 0.64)' } : undefined}
                     title="Feed settings"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -224,7 +239,7 @@ export default function SubscriptionsPage() {
                   </button>
                   <div className={`px-2 py-1 rounded-lg text-center ${
                     feed.subscriber_count > 0 
-                      ? 'bg-purple-100 text-purple-700' 
+                      ? (isOriginal ? 'bg-blue-900/65 text-blue-100 border border-blue-300/45' : 'bg-purple-100 text-purple-700')
                       : 'bg-gray-100 text-gray-500'
                   }`}>
                     <div className="text-lg font-bold">{feed.subscriber_count}</div>
@@ -235,14 +250,16 @@ export default function SubscriptionsPage() {
 
               {/* Subscribers List - inline */}
               {feed.subscribers.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-purple-100/50 flex items-center gap-1.5 flex-wrap">
+                <div className={`mt-3 pt-3 border-t flex items-center gap-1.5 flex-wrap ${isOriginal ? 'border-blue-300/30' : 'border-purple-100/50'}`}>
                   {(expandedSubscribers[feed.id] ? feed.subscribers : feed.subscribers.slice(0, 6)).map((sub) => (
                     <div
                       key={sub.user_id}
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${
                         (sub as any).is_private 
-                          ? 'bg-gray-100 text-gray-500' 
-                          : 'bg-purple-50 text-purple-700'
+                          ? 'bg-gray-100 text-gray-500'
+                          : isOriginal
+                            ? 'bg-blue-900/55 text-blue-100 border border-blue-300/35'
+                            : 'bg-purple-50 text-purple-700'
                       }`}
                       title={(sub as any).is_private ? 'Private subscription' : ''}
                     >
@@ -265,7 +282,7 @@ export default function SubscriptionsPage() {
                     <button
                       type="button"
                       onClick={() => setExpandedSubscribers((prev) => ({ ...prev, [feed.id]: true }))}
-                      className="text-xs font-medium text-purple-600 hover:text-purple-800"
+                      className={`text-xs font-medium ${isOriginal ? 'text-blue-200 hover:text-blue-50' : 'text-purple-600 hover:text-purple-800'}`}
                     >
                       +{feed.subscribers.length - 6} more
                     </button>
@@ -274,7 +291,7 @@ export default function SubscriptionsPage() {
                     <button
                       type="button"
                       onClick={() => setExpandedSubscribers((prev) => ({ ...prev, [feed.id]: false }))}
-                      className="text-xs font-medium text-purple-600 hover:text-purple-800"
+                      className={`text-xs font-medium ${isOriginal ? 'text-blue-200 hover:text-blue-50' : 'text-purple-600 hover:text-purple-800'}`}
                     >
                       less
                     </button>
@@ -286,8 +303,8 @@ export default function SubscriptionsPage() {
         ))}
 
         {feeds.length === 0 && (
-          <div className="text-center py-12 bg-white/80 rounded-xl border border-purple-200/50">
-            <p className="text-gray-500">No feeds have been added yet</p>
+          <div className={`text-center py-12 rounded-xl border ${isOriginal ? 'bg-blue-900/45 border-blue-300/35' : 'bg-white/80 border-purple-200/50'}`}>
+            <p className={isOriginal ? 'text-blue-200' : 'text-gray-500'}>No feeds have been added yet</p>
           </div>
         )}
       </div>
@@ -295,34 +312,43 @@ export default function SubscriptionsPage() {
       {/* Settings Modal */}
       {settingsModalFeedId && selectedFeed && (
         <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 flex items-center justify-center z-50 p-4"
+          style={{ backgroundColor: isOriginal ? 'rgba(2, 8, 23, 0.8)' : 'rgba(0, 0, 0, 0.5)' }}
           onClick={() => setSettingsModalFeedId(null)}
         >
           <div 
-            className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
+            className="modal-content bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden border"
+            style={isOriginal ? { backgroundColor: '#0a2249', borderColor: 'rgba(96, 165, 250, 0.48)' } : undefined}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50">
+            <div
+              className="p-4 border-b border-gray-100 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50"
+              style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.38)', background: 'linear-gradient(to right, #14467e, #1d5995, #14467e)' } : undefined}
+            >
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-gray-900">Feed Settings</h3>
+                <h3 className={`font-semibold ${isOriginal ? 'text-blue-100' : 'text-gray-900'}`}>Feed Settings</h3>
                 <button
                   onClick={() => setSettingsModalFeedId(null)}
-                  className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                  className="p-1 rounded"
+                  style={isOriginal ? { color: '#93c5fd' } : undefined}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
-              <p className="text-sm text-gray-500 mt-1 truncate">{selectedFeed.title}</p>
+              <p className={`text-sm mt-1 truncate ${isOriginal ? 'text-blue-200' : 'text-gray-500'}`}>{selectedFeed.title}</p>
             </div>
 
             <div className="p-4 space-y-4">
               {/* Visibility Toggle */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                style={isOriginal ? { backgroundColor: 'rgba(21, 57, 108, 0.84)', border: '1px solid rgba(96, 165, 250, 0.28)' } : undefined}
+              >
                 <div>
-                  <div className="font-medium text-gray-900 text-sm">Hide from Browse</div>
-                  <div className="text-xs text-gray-500 mt-0.5">
+                  <div className={`font-medium text-sm ${isOriginal ? 'text-blue-100' : 'text-gray-900'}`}>Hide from Browse</div>
+                  <div className={`text-xs mt-0.5 ${isOriginal ? 'text-blue-200' : 'text-gray-500'}`}>
                     Hidden feeds won't appear in "Browse Podcasts on Server"
                   </div>
                 </div>
@@ -333,7 +359,9 @@ export default function SubscriptionsPage() {
                   })}
                   disabled={visibilityMutation.isPending}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    selectedFeed.is_hidden ? 'bg-purple-600' : 'bg-gray-300'
+                    selectedFeed.is_hidden
+                      ? (isOriginal ? 'bg-blue-500' : 'bg-purple-600')
+                      : (isOriginal ? 'bg-blue-900/60' : 'bg-gray-300')
                   }`}
                 >
                   <span
@@ -345,10 +373,13 @@ export default function SubscriptionsPage() {
               </div>
 
               {/* Auto-Process Toggle */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                style={isOriginal ? { backgroundColor: 'rgba(21, 57, 108, 0.84)', border: '1px solid rgba(96, 165, 250, 0.28)' } : undefined}
+              >
                 <div>
-                  <div className="font-medium text-gray-900 text-sm">Auto-Process</div>
-                  <div className="text-xs text-gray-500 mt-0.5">
+                  <div className={`font-medium text-sm ${isOriginal ? 'text-blue-100' : 'text-gray-900'}`}>Auto-Process</div>
+                  <div className={`text-xs mt-0.5 ${isOriginal ? 'text-blue-200' : 'text-gray-500'}`}>
                     {selectedFeed.auto_process_enabled 
                       ? 'Enabled by a user - new episodes auto-process'
                       : 'Disabled - no auto-processing'}
@@ -362,7 +393,9 @@ export default function SubscriptionsPage() {
                   }}
                   disabled={disableAutoProcessMutation.isPending || !selectedFeed.auto_process_enabled}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    selectedFeed.auto_process_enabled ? 'bg-emerald-500' : 'bg-gray-300'
+                    selectedFeed.auto_process_enabled
+                      ? 'bg-emerald-500'
+                      : (isOriginal ? 'bg-blue-900/60' : 'bg-gray-300')
                   } ${!selectedFeed.auto_process_enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                   title={selectedFeed.auto_process_enabled ? 'Click to disable for all users' : 'No users have enabled auto-process'}
                 >
@@ -376,30 +409,39 @@ export default function SubscriptionsPage() {
             </div>
 
             {/* Danger Zone */}
-            <div className="p-4 border-t border-gray-100">
+            <div className="p-4 border-t border-gray-100" style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.28)' } : undefined}>
               <div className="text-xs font-medium text-red-600 mb-3">Danger Zone</div>
               <div className="space-y-2">
                 <button
                   onClick={() => setConfirmAction({ type: 'unsubscribe-all', feedId: selectedFeed.id, feedTitle: selectedFeed.title })}
                   disabled={unsubscribeAllMutation.isPending || selectedFeed.subscriber_count === 0}
-                  className="w-full px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`w-full px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isOriginal
+                      ? 'text-amber-100 bg-amber-900/35 border border-amber-300/45 hover:bg-amber-900/45'
+                      : 'text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100'
+                  }`}
                 >
                   Unsubscribe All Users ({selectedFeed.subscriber_count})
                 </button>
                 <button
                   onClick={() => setConfirmAction({ type: 'delete', feedId: selectedFeed.id, feedTitle: selectedFeed.title })}
                   disabled={deleteFeedMutation.isPending}
-                  className="w-full px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                  className={`w-full px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 ${
+                    isOriginal
+                      ? 'text-red-100 bg-red-900/35 border border-red-300/45 hover:bg-red-900/45'
+                      : 'text-red-700 bg-red-50 border border-red-200 hover:bg-red-100'
+                  }`}
                 >
                   Delete Feed & All Episodes
                 </button>
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-100 bg-gray-50">
+            <div className="p-4 border-t border-gray-100 bg-gray-50" style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.28)', backgroundColor: 'rgba(11, 37, 79, 0.75)' } : undefined}>
               <button
                 onClick={() => setSettingsModalFeedId(null)}
                 className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                style={isOriginal ? { color: '#dbeafe', borderColor: 'rgba(96, 165, 250, 0.45)', backgroundColor: 'rgba(8, 24, 52, 0.92)' } : undefined}
               >
                 Close
               </button>
@@ -411,30 +453,42 @@ export default function SubscriptionsPage() {
       {/* Confirmation Modal */}
       {confirmAction && (
         <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
+          className="fixed inset-0 flex items-center justify-center z-[60] p-4"
+          style={{ backgroundColor: isOriginal ? 'rgba(2, 8, 23, 0.8)' : 'rgba(0, 0, 0, 0.5)' }}
           onClick={() => setConfirmAction(null)}
         >
           <div 
-            className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden"
+            className="modal-content bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden border"
+            style={isOriginal ? { backgroundColor: '#0a2249', borderColor: 'rgba(96, 165, 250, 0.45)' } : undefined}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-4 border-b border-gray-100 bg-red-50">
-              <h3 className="font-semibold text-red-900">
+            <div
+              className="p-4 border-b border-gray-100 bg-red-50"
+              style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.35)', backgroundColor: 'rgba(127, 29, 29, 0.28)' } : undefined}
+            >
+              <h3 className={`font-semibold ${isOriginal ? 'text-red-100' : 'text-red-900'}`}>
                 {confirmAction.type === 'delete' ? 'Delete Feed?' : 'Unsubscribe All Users?'}
               </h3>
             </div>
             <div className="p-4">
-              <p className="text-sm text-gray-600">
+              <p className={`text-sm ${isOriginal ? 'text-blue-100' : 'text-gray-600'}`}>
                 {confirmAction.type === 'delete' 
                   ? `This will permanently delete "${confirmAction.feedTitle}" and all its episodes, transcripts, and processing data. This cannot be undone.`
                   : `This will unsubscribe all users from "${confirmAction.feedTitle}". The feed and episodes will remain on the server.`
                 }
               </p>
             </div>
-            <div className="p-4 border-t border-gray-100 bg-gray-50 flex gap-2">
+            <div
+              className="p-4 border-t border-gray-100 bg-gray-50 flex gap-2"
+              style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.35)', backgroundColor: 'rgba(16, 48, 94, 0.82)' } : undefined}
+            >
               <button
                 onClick={() => setConfirmAction(null)}
-                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  isOriginal
+                    ? 'text-blue-100 bg-blue-900/45 border border-blue-300/45 hover:bg-blue-800/55'
+                    : 'text-gray-700 bg-white border border-gray-200 hover:bg-gray-50'
+                }`}
               >
                 Cancel
               </button>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { feedsApi } from '../services/api';
 import type { PodcastSearchResult } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 // Debounce hook for live search
 function useDebounce<T>(value: T, delay: number): T {
@@ -50,6 +51,7 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
   const [searchPage, setSearchPage] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
   const [previewPodcast, setPreviewPodcast] = useState<PodcastSearchResult | null>(null);
+  useEscapeKey(!!previewPodcast, () => setPreviewPodcast(null));
   
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debouncedSearchTerm = useDebounce(searchTerm, 400);
@@ -230,7 +232,7 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
         </form>
       )}
 
-      {activeMode === 'search' && (
+      {activeMode === 'search' && !previewPodcast && (
         <div className="flex flex-col flex-1 min-h-0 gap-3">
           <div className="flex gap-2">
             <input
@@ -296,13 +298,10 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
                 {displayedResults.map((result) => (
                   <li
                     key={result.feedUrl}
-                    className="p-3 border border-gray-200 rounded-md bg-gray-50"
+                    className="border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+                    onClick={() => setPreviewPodcast(result)}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setPreviewPodcast(result)}
-                      className="flex gap-3 w-full text-left hover:opacity-80 transition-opacity"
-                    >
+                    <div className="flex gap-3 p-3">
                       {result.artworkUrl ? (
                         <img
                           src={result.artworkUrl}
@@ -325,55 +324,9 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
                           </p>
                         )}
                       </div>
-                    </button>
-                    <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-gray-200">
-                      <p className="text-xs text-gray-400 truncate flex-1 min-w-0">{result.feedUrl}</p>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {isSubscribed(result.feedUrl) ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-1.5 bg-green-100 text-green-700 rounded-md text-xs font-medium">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            Subscribed
-                          </span>
-                        ) : requireAuth ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleAddFromSearch(result, false)}
-                              disabled={isSubmitting && addingFeedUrl === result.feedUrl}
-                              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-2.5 py-1.5 rounded-l-md text-xs font-medium transition-colors"
-                              title="Subscribe publicly - other users will see this feed in Browse Podcasts"
-                            >
-                              {isSubmitting && addingFeedUrl === result.feedUrl && !addingPrivately ? '...' : 'Subscribe'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleAddFromSearch(result, true)}
-                              disabled={isSubmitting && addingFeedUrl === result.feedUrl}
-                              className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-400 text-white px-1.5 py-1.5 rounded-r-md text-xs transition-colors"
-                              title="Subscribe privately - this feed won't appear in Browse Podcasts for other users"
-                            >
-                              {isSubmitting && addingFeedUrl === result.feedUrl && addingPrivately ? (
-                                <span>...</span>
-                              ) : (
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                                </svg>
-                              )}
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleAddFromSearch(result)}
-                            disabled={isSubmitting && addingFeedUrl === result.feedUrl}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors"
-                          >
-                            {isSubmitting && addingFeedUrl === result.feedUrl ? '...' : 'Add'}
-                          </button>
-                        )}
-                      </div>
+                      <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
                     </div>
                   </li>
                 ))}
@@ -383,118 +336,108 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
         </div>
       )}
 
-      {/* Podcast Preview Modal */}
-      {previewPodcast && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setPreviewPodcast(null)}
-        >
-          <div
-            className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
+      {/* Inline podcast detail view (replaces search list) */}
+      {activeMode === 'search' && previewPodcast && (
+        <div className="flex flex-col flex-1 min-h-0">
+          {/* Back button */}
+          <button
+            type="button"
+            onClick={() => setPreviewPodcast(null)}
+            className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-3 self-start"
           >
-            {/* Header */}
-            <div className="flex items-start gap-4 p-4 border-b border-gray-200 dark:border-purple-700/50">
-              {previewPodcast.artworkUrl ? (
-                <img
-                  src={previewPodcast.artworkUrl}
-                  alt={previewPodcast.title}
-                  className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
-                />
-              ) : (
-                <div className="w-20 h-20 rounded-lg bg-gray-200 dark:bg-purple-800 flex items-center justify-center text-gray-500 dark:text-purple-400 text-xs flex-shrink-0">
-                  No Image
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-gray-900 dark:text-purple-100 text-lg leading-tight">
-                  {previewPodcast.title}
-                </h3>
-                {previewPodcast.author && (
-                  <p className="text-sm text-gray-600 dark:text-purple-300 mt-1">{previewPodcast.author}</p>
-                )}
-                {previewPodcast.genres.length > 0 && (
-                  <p className="text-xs text-gray-500 dark:text-purple-400 mt-1">
-                    {previewPodcast.genres.join(' · ')}
-                  </p>
-                )}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to results
+          </button>
+
+          {/* Podcast header */}
+          <div className="flex gap-4 mb-4">
+            {previewPodcast.artworkUrl ? (
+              <img
+                src={previewPodcast.artworkUrl}
+                alt={previewPodcast.title}
+                className="w-24 h-24 rounded-lg object-cover flex-shrink-0 shadow-sm"
+              />
+            ) : (
+              <div className="w-24 h-24 rounded-lg bg-gray-200 flex items-center justify-center text-gray-500 text-xs flex-shrink-0">
+                No Image
               </div>
-              <button
-                type="button"
-                onClick={() => setPreviewPodcast(null)}
-                className="p-1 text-gray-400 hover:text-gray-600 dark:text-purple-400 dark:hover:text-purple-200"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Description */}
-            <div className="flex-1 overflow-y-auto p-4">
-              {previewPodcast.description ? (
-                <p className="text-sm text-gray-700 dark:text-purple-200 whitespace-pre-line">
-                  {previewPodcast.description}
-                </p>
-              ) : (
-                <p className="text-sm text-gray-500 dark:text-purple-400 italic">No description available.</p>
+            )}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-gray-900 text-lg leading-tight">
+                {previewPodcast.title}
+              </h3>
+              {previewPodcast.author && (
+                <p className="text-sm text-gray-600 mt-1">{previewPodcast.author}</p>
               )}
+              {previewPodcast.genres.length > 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {previewPodcast.genres.join(' · ')}
+                </p>
+              )}
+              <p className="text-xs text-gray-400 mt-1.5 truncate">{previewPodcast.feedUrl}</p>
             </div>
+          </div>
 
-            {/* Footer with actions */}
-            <div className="p-4 border-t border-gray-200 dark:border-purple-700/50 flex items-center justify-between gap-3">
-              <p className="text-xs text-gray-400 dark:text-purple-500 truncate flex-1 min-w-0">
-                {previewPodcast.feedUrl}
-              </p>
-              {isSubscribed(previewPodcast.feedUrl) ? (
-                <span className="inline-flex items-center gap-1 px-3 py-2 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 rounded-lg text-sm font-medium">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Subscribed
-                </span>
-              ) : requireAuth ? (
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleAddFromSearch(previewPodcast, false);
-                      setPreviewPodcast(null);
-                    }}
-                    disabled={isSubmitting}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-l-lg text-sm font-medium transition-colors"
-                  >
-                    {isSubmitting ? 'Adding...' : 'Subscribe'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleAddFromSearch(previewPodcast, true);
-                      setPreviewPodcast(null);
-                    }}
-                    disabled={isSubmitting}
-                    className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-400 text-white px-2 py-2 rounded-r-lg text-sm transition-colors"
-                    title="Subscribe privately"
-                  >
+          {/* Subscribe actions */}
+          <div className="flex items-center gap-2 mb-4 pb-4 border-b border-gray-200">
+            {isSubscribed(previewPodcast.feedUrl) ? (
+              <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Subscribed
+              </span>
+            ) : requireAuth ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleAddFromSearch(previewPodcast, false)}
+                  disabled={isSubmitting && addingFeedUrl === previewPodcast.feedUrl}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-l-lg text-sm font-medium transition-colors"
+                  title="Subscribe publicly"
+                >
+                  {isSubmitting && addingFeedUrl === previewPodcast.feedUrl && !addingPrivately ? 'Subscribing...' : 'Subscribe'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddFromSearch(previewPodcast, true)}
+                  disabled={isSubmitting && addingFeedUrl === previewPodcast.feedUrl}
+                  className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-400 text-white px-2 py-2 rounded-r-lg text-sm transition-colors"
+                  title="Subscribe privately"
+                >
+                  {isSubmitting && addingFeedUrl === previewPodcast.feedUrl && addingPrivately ? (
+                    <span className="px-1">...</span>
+                  ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                     </svg>
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleAddFromSearch(previewPodcast);
-                    setPreviewPodcast(null);
-                  }}
-                  disabled={isSubmitting}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {isSubmitting ? 'Adding...' : 'Add Podcast'}
+                  )}
                 </button>
-              )}
-            </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleAddFromSearch(previewPodcast)}
+                disabled={isSubmitting && addingFeedUrl === previewPodcast.feedUrl}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                {isSubmitting && addingFeedUrl === previewPodcast.feedUrl ? 'Adding...' : 'Add Podcast'}
+              </button>
+            )}
+          </div>
+
+          {/* Description */}
+          <div className="flex-1 overflow-y-auto">
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Description</h4>
+            {previewPodcast.description ? (
+              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+                {previewPodcast.description}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-400 italic">No description available.</p>
+            )}
           </div>
         </div>
       )}

@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePodcastsContext } from '../layouts/PodcastsLayout';
 import { copyTextToClipboard } from '../services/clipboard';
+import { isDarkSurfaceTheme } from '../theme';
 
 export default function FeedDetailView() {
   const navigate = useNavigate();
@@ -24,7 +25,8 @@ export default function FeedDetailView() {
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
   const { requireAuth, isAuthenticated } = useAuth();
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const isOriginal = theme === 'original';
+  const isDark = isDarkSurfaceTheme(theme);
 
   const selectedFeed = feeds.find((f) => f.id === selectedFeedId);
 
@@ -148,13 +150,20 @@ export default function FeedDetailView() {
 
   return (
     <>
-      <div className="flex-1 w-full flex flex-col bg-white/80 dark:bg-gray-900/50 backdrop-blur-sm rounded-xl border border-purple-200/50 dark:border-purple-700/30 shadow-sm overflow-hidden">
+      <div className={`flex-1 w-full flex flex-col rounded-xl border shadow-sm overflow-hidden ${
+        isOriginal
+          ? 'bg-blue-900/40 border-blue-300/35'
+          : 'bg-white/80 dark:bg-gray-900/50 backdrop-blur-sm border-purple-200/50 dark:border-purple-700/30'
+      }`}>
         {/* Feed Header */}
-        <div className="p-6 border-b border-purple-100/50 dark:border-purple-800/30 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50 dark:from-pink-950/20 dark:via-purple-950/20 dark:to-cyan-950/20">
+        <div
+          className={`p-6 border-b ${isOriginal ? 'border-blue-300/35' : 'border-purple-100/50 dark:border-purple-800/30 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50 dark:from-pink-950/20 dark:via-purple-950/20 dark:to-cyan-950/20'}`}
+          style={isOriginal ? { background: 'linear-gradient(to right, #1b4f89, #255f9c, #1b4f89)' } : undefined}
+        >
           {/* Back button - mobile only */}
           <button
             onClick={handleCloseFeed}
-            className="lg:hidden flex items-center gap-1 text-purple-500 hover:text-purple-700 mb-3 -mt-1"
+            className={`lg:hidden flex items-center gap-1 mb-3 -mt-1 ${isOriginal ? 'text-blue-200 hover:text-white' : 'text-purple-500 hover:text-purple-700'}`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -166,16 +175,16 @@ export default function FeedDetailView() {
               <img
                 src={selectedFeed.image_url}
                 alt={selectedFeed.title}
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shadow-sm border border-purple-200/50 flex-shrink-0"
+                className={`w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shadow-sm flex-shrink-0 ${isOriginal ? 'border border-blue-300/40' : 'border border-purple-200/50'}`}
               />
             )}
             <div className="min-w-0 flex-1">
-              <h2 className="text-xl sm:text-2xl font-bold text-purple-900 dark:text-purple-100 leading-tight truncate">{selectedFeed.title}</h2>
+              <h2 className={`text-xl sm:text-2xl font-bold leading-tight truncate ${isOriginal ? 'text-blue-50' : 'text-purple-900 dark:text-purple-100'}`}>{selectedFeed.title}</h2>
               {selectedFeed.author && (
-                <p className="text-purple-700 dark:text-purple-300 mt-1 truncate">{selectedFeed.author}</p>
+                <p className={isOriginal ? 'text-blue-100 mt-1 truncate' : 'text-purple-700 dark:text-purple-300 mt-1 truncate'}>{selectedFeed.author}</p>
               )}
               <div className="flex items-center gap-2 mt-1">
-                <p className="text-xs sm:text-sm text-purple-500 dark:text-purple-400">{selectedFeed.posts_count} episodes</p>
+                <p className={`text-xs sm:text-sm ${isOriginal ? 'text-blue-200' : 'text-purple-500 dark:text-purple-400'}`}>{selectedFeed.posts_count} episodes</p>
                 {(selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user) && (
                   <span 
                     className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
@@ -217,7 +226,7 @@ export default function FeedDetailView() {
                   }
                 }}
                 className="px-3 py-2 text-sm font-medium text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2"
-                style={{ background: 'linear-gradient(to right, #ec4899, #8b5cf6, #06b6d4)' }}
+                style={isOriginal ? { background: 'linear-gradient(to right, #2563eb, #0ea5e9, #06b6d4)', boxShadow: '0 8px 20px rgba(37, 99, 235, 0.25)' } : { background: 'linear-gradient(to right, #ec4899, #8b5cf6, #06b6d4)' }}
               >
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1Z"/>
@@ -230,10 +239,18 @@ export default function FeedDetailView() {
                   onClick={(e) => { e.stopPropagation(); setShowSettingsMenu(!showSettingsMenu); }}
                   className="px-3 py-2 text-sm font-medium rounded-xl transition-colors"
                   style={{
-                    backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                    backgroundColor: isOriginal
+                      ? 'rgba(15, 35, 73, 0.82)'
+                      : isDark
+                        ? 'rgba(30, 20, 50, 0.8)'
+                        : 'rgba(255, 255, 255, 0.8)',
                     borderWidth: 1,
-                    borderColor: isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(196, 181, 253, 0.5)',
-                    color: isDark ? '#c4b5fd' : '#7c3aed'
+                    borderColor: isOriginal
+                      ? 'rgba(96, 165, 250, 0.45)'
+                      : isDark
+                        ? 'rgba(139, 92, 246, 0.4)'
+                        : 'rgba(196, 181, 253, 0.5)',
+                    color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#7c3aed',
                   }}
                 >
                   Settings
@@ -244,8 +261,8 @@ export default function FeedDetailView() {
                   <div 
                     className="absolute top-full left-0 mt-1 w-56 rounded-lg shadow-lg border py-1 z-20"
                     style={{
-                      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-                      borderColor: isDark ? '#374151' : '#e5e7eb',
+                      backgroundColor: isOriginal ? '#0b1f45' : isDark ? '#1f2937' : '#ffffff',
+                      borderColor: isOriginal ? '#1d4ed8' : isDark ? '#374151' : '#e5e7eb',
                     }}
                   >
                     {/* Auto-process toggle - only when auth is enabled */}
@@ -261,7 +278,7 @@ export default function FeedDetailView() {
                         }}
                         disabled={autoDownloadMutation.isPending || (selectedFeed.auto_download_enabled_by_other && !selectedFeed.auto_download_enabled_by_user)}
                         className="w-full px-4 py-2 text-left text-sm flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{ color: isDark ? '#e5e7eb' : '#374151' }}
+                        style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e5e7eb' : '#374151' }}
                       >
                         <span className="flex items-center gap-3">
                           <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -288,7 +305,7 @@ export default function FeedDetailView() {
                       }}
                       disabled={bulkWhitelistMutation.isPending || totalCount === 0 || allWhitelisted}
                       className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80"
-                      style={{ color: isDark ? '#e5e7eb' : '#374151' }}
+                      style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e5e7eb' : '#374151' }}
                     >
                       <span className="text-green-600">✓</span>
                       Enable all episodes
@@ -303,7 +320,7 @@ export default function FeedDetailView() {
                       }}
                       disabled={bulkWhitelistMutation.isPending || totalCount === 0 || !allWhitelisted}
                       className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80"
-                      style={{ color: isDark ? '#e5e7eb' : '#374151' }}
+                      style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e5e7eb' : '#374151' }}
                     >
                       <span className="text-red-600">⛔</span>
                       Disable all episodes
@@ -316,7 +333,7 @@ export default function FeedDetailView() {
                       }}
                       disabled={refreshFeedMutation.isPending}
                       className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80"
-                      style={{ color: isDark ? '#e5e7eb' : '#374151' }}
+                      style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e5e7eb' : '#374151' }}
                     >
                       <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -330,7 +347,7 @@ export default function FeedDetailView() {
                         setShowSettingsMenu(false);
                       }}
                       className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 hover:opacity-80"
-                      style={{ color: isDark ? '#e5e7eb' : '#374151' }}
+                      style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e5e7eb' : '#374151' }}
                     >
                       <svg className="w-4 h-4 text-orange-500" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1Z"/>
@@ -357,8 +374,8 @@ export default function FeedDetailView() {
                 style={{
                   backgroundColor: 'transparent',
                   borderWidth: 1,
-                  borderColor: isDark ? 'rgba(244, 114, 182, 0.4)' : 'rgba(251, 207, 232, 1)',
-                  color: isDark ? '#f9a8d4' : '#be185d'
+                  borderColor: isOriginal ? 'rgba(96, 165, 250, 0.52)' : isDark ? 'rgba(244, 114, 182, 0.4)' : 'rgba(251, 207, 232, 1)',
+                  color: isOriginal ? '#bfdbfe' : isDark ? '#f9a8d4' : '#be185d'
                 }}
                 title="Unsubscribe"
               >
@@ -371,7 +388,7 @@ export default function FeedDetailView() {
         {/* Description */}
         {selectedFeed.description && (
           <div className="px-6 pt-4 pb-2">
-            <p className="text-sm text-purple-700 dark:text-purple-300 line-clamp-3">{selectedFeed.description}</p>
+            <p className={`text-sm line-clamp-3 ${isOriginal ? 'text-blue-100' : 'text-purple-700 dark:text-purple-300'}`}>{selectedFeed.description}</p>
           </div>
         )}
 
@@ -379,7 +396,7 @@ export default function FeedDetailView() {
         <div className="flex-1 overflow-y-auto p-4">
           {episodesLoading ? (
             <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600" />
+              <div className={`animate-spin rounded-full h-6 w-6 border-b-2 ${isOriginal ? 'border-blue-300' : 'border-purple-600'}`} />
             </div>
           ) : episodes && episodes.length > 0 ? (
             <div className="space-y-3">
@@ -387,9 +404,13 @@ export default function FeedDetailView() {
                 <div
                   key={episode.id}
                   className={`p-4 rounded-xl border transition-all ${
-                    episode.whitelisted || episode.has_processed_audio
-                      ? 'bg-white/80 dark:bg-purple-950/50 border-purple-200/60 dark:border-purple-700/40 shadow-sm'
-                      : 'bg-purple-100/30 dark:bg-purple-950/30 border-purple-200/30 dark:border-purple-800/20 border-dashed'
+                    isOriginal
+                      ? episode.whitelisted || episode.has_processed_audio
+                        ? 'bg-blue-900/50 border-blue-300/40 shadow-sm'
+                        : 'bg-blue-900/30 border-blue-300/30 border-dashed'
+                      : episode.whitelisted || episode.has_processed_audio
+                        ? 'bg-white/80 dark:bg-purple-950/50 border-purple-200/60 dark:border-purple-700/40 shadow-sm'
+                        : 'bg-purple-100/30 dark:bg-purple-950/30 border-purple-200/30 dark:border-purple-800/20 border-dashed'
                   }`}
                 >
                   {/* Top row: Title + Status badge */}
@@ -397,7 +418,11 @@ export default function FeedDetailView() {
                     <div className="flex-1 min-w-0">
                       <button
                         onClick={() => setSelectedEpisode(episode)}
-                        className="text-left font-medium text-purple-900 dark:text-purple-100 line-clamp-2 leading-snug hover:text-purple-700 dark:hover:text-purple-300 hover:underline cursor-pointer transition-colors"
+                        className={`text-left font-medium line-clamp-2 leading-snug hover:underline cursor-pointer transition-colors ${
+                          isOriginal
+                            ? 'text-blue-100 hover:text-white'
+                            : 'text-purple-900 dark:text-purple-100 hover:text-purple-700 dark:hover:text-purple-300'
+                        }`}
                       >
                         {episode.title}
                       </button>
@@ -419,7 +444,11 @@ export default function FeedDetailView() {
                           Enabled
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-purple-100/50 dark:bg-purple-900/30 text-purple-400 dark:text-purple-500 rounded-lg border border-dashed border-purple-300/50 dark:border-purple-700/50">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg border border-dashed ${
+                          isOriginal
+                            ? 'bg-blue-900/45 text-blue-200 border-blue-300/40'
+                            : 'bg-purple-100/50 dark:bg-purple-900/30 text-purple-400 dark:text-purple-500 border-purple-300/50 dark:border-purple-700/50'
+                        }`}>
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                           </svg>
@@ -430,11 +459,11 @@ export default function FeedDetailView() {
                   </div>
 
                   {/* Middle row: Metadata */}
-                  <div className="flex items-center gap-2 text-sm text-purple-400 dark:text-purple-500 mb-3">
+                  <div className={`flex items-center gap-2 text-sm mb-3 ${isOriginal ? 'text-blue-200' : 'text-purple-400 dark:text-purple-500'}`}>
                     <span>{formatDate(episode.release_date)}</span>
                     {episode.duration && (
                       <>
-                        <span className="text-purple-200 dark:text-purple-600">•</span>
+                        <span className={isOriginal ? 'text-blue-300/80' : 'text-purple-200 dark:text-purple-600'}>•</span>
                         <span>{formatDuration(episode.duration)}</span>
                       </>
                     )}
@@ -446,9 +475,13 @@ export default function FeedDetailView() {
                     <button
                       onClick={() => whitelistMutation.mutate({ guid: episode.guid, whitelisted: !episode.whitelisted })}
                       className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 border ${
-                        episode.whitelisted
-                          ? 'bg-white dark:bg-gray-800 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30'
-                          : 'bg-white dark:bg-gray-800 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'
+                        isOriginal
+                          ? episode.whitelisted
+                            ? 'bg-blue-950/55 border-red-300/45 text-red-200 hover:bg-red-900/28'
+                            : 'bg-blue-950/55 border-emerald-300/45 text-emerald-100 hover:bg-emerald-900/24'
+                          : episode.whitelisted
+                            ? 'bg-white dark:bg-gray-800 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30'
+                            : 'bg-white dark:bg-gray-800 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'
                       }`}
                     >
                       {episode.whitelisted ? (

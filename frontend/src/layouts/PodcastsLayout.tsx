@@ -8,6 +8,9 @@ import type { Feed } from '../types';
 import AddFeedForm from '../components/AddFeedForm';
 import SubscriptionModal from '../components/SubscriptionModal';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { getThemeLogoPath } from '../theme';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 // Regression guard: Track feed list fetches to detect duplicate requests
 const feedFetchTracker = {
@@ -67,6 +70,11 @@ export default function PodcastsLayout() {
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [copyUrlModal, setCopyUrlModal] = useState<string | null>(null);
   const { requireAuth, user } = useAuth();
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
+  const themeLogoPath = getThemeLogoPath(theme);
+  useEscapeKey(showAddForm, () => setShowAddForm(false));
+  useEscapeKey(!!copyUrlModal, () => setCopyUrlModal(null));
 
   // Determine if we're on the combined page
   const isCombinedView = location.pathname === '/podcasts/combined';
@@ -149,10 +157,12 @@ export default function PodcastsLayout() {
         {/* Left Panel - Feed List - hidden on mobile when content selected */}
         <div className={`lg:w-80 flex-shrink-0 flex-col ${(selectedFeedId || isCombinedView) ? 'hidden lg:flex' : 'flex w-full'}`}>
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Podcasts</h1>
+            <h1 className={`text-xl font-bold ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-gray-100'}`}>Podcasts</h1>
             <button
               onClick={() => setShowAddForm(true)}
-              className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+              className={`px-3 py-1.5 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1 ${
+                isOriginal ? 'bg-blue-500 hover:bg-blue-400 border border-blue-300/55' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -165,7 +175,11 @@ export default function PodcastsLayout() {
             <div className="space-y-2 mb-4">
               <button
                 onClick={() => setShowSubscriptions(true)}
-                className="w-full px-3 py-2 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-medium rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors border border-purple-200 dark:border-purple-700/50 flex items-center justify-center gap-2"
+                className={`w-full px-3 py-2 text-sm font-medium rounded-lg transition-colors border flex items-center justify-center gap-2 ${
+                  isOriginal
+                    ? 'bg-blue-900/55 text-blue-100 hover:bg-blue-800/65 border-blue-300/45'
+                    : 'bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 border-purple-200 dark:border-purple-700/50'
+                }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -199,12 +213,13 @@ export default function PodcastsLayout() {
                     });
                 }}
                 className="w-full px-3 py-2 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 text-white text-sm font-medium rounded-lg hover:from-pink-600 hover:via-purple-600 hover:to-cyan-600 transition-colors flex items-center justify-center gap-2"
+                style={isOriginal ? { background: 'linear-gradient(to right, #1d4ed8, #0ea5e9, #06b6d4)' } : undefined}
                 title="Get one RSS feed with all episodes from all your subscribed podcasts"
               >
-                <img src="/images/logos/unicorn-logo.png" alt="" className="w-5 h-5" />
+                <img src={themeLogoPath} alt="" className="w-5 h-5" />
                 All-in-One Podly RSS
               </button>
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+              <p className={`text-xs text-center ${isOriginal ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
                 One feed with all your podcasts combined
               </p>
             </div>
@@ -215,7 +230,11 @@ export default function PodcastsLayout() {
             placeholder="Search podcasts..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 mb-4 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            className={`w-full px-3 py-2 mb-4 border rounded-lg focus:ring-2 focus:border-purple-500 ${
+              isOriginal
+                ? 'border-blue-300/45 focus:ring-blue-400 bg-blue-900/45 text-blue-100'
+                : 'border-gray-300 dark:border-gray-600 focus:ring-purple-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+            }`}
           />
 
           <div className="flex-1 overflow-y-auto space-y-2 pb-16">
@@ -224,7 +243,7 @@ export default function PodcastsLayout() {
               <FeedSidebarItem
                 isSelected={isCombinedView}
                 onClick={handleSelectCombined}
-                imageUrl="/images/logos/unicorn-logo.png"
+                imageUrl={themeLogoPath}
                 title="Combined Episodes"
                 subtitle="All episodes from your subscriptions"
                 badge={`${feedsArray.length} shows`}
@@ -234,11 +253,15 @@ export default function PodcastsLayout() {
 
             {filteredFeeds.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500 dark:text-gray-400">No podcasts found</p>
+                <p className={isOriginal ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}>No podcasts found</p>
                 {requireAuth && (
                   <button
                     onClick={() => setShowSubscriptions(true)}
-                    className="mt-3 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-medium rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                    className={`mt-3 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      isOriginal
+                        ? 'bg-blue-900/55 text-blue-100 border border-blue-300/45 hover:bg-blue-800/65'
+                        : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/50'
+                    }`}
                   >
                     Browse Podcasts on Server
                   </button>
@@ -273,19 +296,27 @@ export default function PodcastsLayout() {
         {/* Add Feed Modal */}
         {showAddForm && createPortal(
           <div 
-            className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
-            style={{ zIndex: 9999 }}
+            className="fixed inset-0 flex items-center justify-center p-4"
+            style={{ zIndex: 9999, backgroundColor: isOriginal ? 'rgba(2, 8, 23, 0.82)' : 'rgba(0, 0, 0, 0.8)' }}
             onClick={() => setShowAddForm(false)}
           >
             <div 
-              className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-purple-200 dark:border-purple-700 flex flex-col max-h-[85vh]"
+              className="modal-content w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-purple-200 dark:border-purple-700 flex flex-col max-h-[85vh]"
+              style={isOriginal ? { backgroundColor: '#0a2249', borderColor: 'rgba(96, 165, 250, 0.45)' } : undefined}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between border-b border-purple-100 dark:border-purple-800 px-4 py-3 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50 dark:from-pink-950/30 dark:via-purple-950/30 dark:to-cyan-950/30 rounded-t-2xl">
-                <h2 className="text-lg font-semibold text-purple-900 dark:text-purple-100">Add Podcast</h2>
+              <div
+                className="flex items-center justify-between border-b border-purple-100 dark:border-purple-800 px-4 py-3 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50 dark:from-pink-950/30 dark:via-purple-950/30 dark:to-cyan-950/30 rounded-t-2xl"
+                style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.35)', background: 'linear-gradient(to right, #14467e, #1d5995, #14467e)' } : undefined}
+              >
+                <h2 className={`text-lg font-semibold ${isOriginal ? 'text-blue-100' : 'text-purple-900 dark:text-purple-100'}`}>Add Podcast</h2>
                 <button
                   onClick={() => setShowAddForm(false)}
-                  className="p-2 text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50"
+                  className={`p-2 rounded-lg ${
+                    isOriginal
+                      ? 'text-blue-200 hover:text-blue-50 hover:bg-blue-800/40'
+                      : 'text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 hover:bg-purple-100 dark:hover:bg-purple-900/50'
+                  }`}
                   aria-label="Close"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -319,26 +350,34 @@ export default function PodcastsLayout() {
         {/* Copy URL Modal for iOS fallback */}
         {copyUrlModal && createPortal(
           <div 
-            className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
-            style={{ zIndex: 10000 }}
+            className="fixed inset-0 flex items-center justify-center p-4"
+            style={{ zIndex: 10000, backgroundColor: isOriginal ? 'rgba(2, 8, 23, 0.82)' : 'rgba(0, 0, 0, 0.8)' }}
             onClick={() => setCopyUrlModal(null)}
           >
             <div 
-              className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-purple-200 dark:border-purple-700"
+              className="modal-content bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-purple-200 dark:border-purple-700"
+              style={isOriginal ? { backgroundColor: '#0a2249', borderColor: 'rgba(96, 165, 250, 0.45)' } : undefined}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-purple-100 dark:border-purple-800 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50 dark:from-pink-950/30 dark:via-purple-950/30 dark:to-cyan-950/30">
-                <h2 className="text-xl font-bold text-purple-900 dark:text-purple-100 flex items-center gap-2">
-                  <img src="/images/logos/unicorn-logo.png" alt="" className="w-6 h-6" />
+              <div
+                className="p-6 border-b border-purple-100 dark:border-purple-800 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50 dark:from-pink-950/30 dark:via-purple-950/30 dark:to-cyan-950/30"
+                style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.35)', background: 'linear-gradient(to right, #14467e, #1d5995, #14467e)' } : undefined}
+              >
+                <h2 className={`text-xl font-bold flex items-center gap-2 ${isOriginal ? 'text-blue-100' : 'text-purple-900 dark:text-purple-100'}`}>
+                  <img src={themeLogoPath} alt="" className="w-6 h-6" />
                   Combined Feed URL
                 </h2>
               </div>
               <div className="p-6">
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">Copy this URL and add it to your podcast app:</p>
+                <p className={`text-sm mb-4 ${isOriginal ? 'text-blue-200' : 'text-gray-600 dark:text-gray-300'}`}>Copy this URL and add it to your podcast app:</p>
                 <textarea
                   readOnly
                   value={copyUrlModal}
-                  className="w-full p-3 border border-purple-200 dark:border-purple-700 rounded-lg text-sm font-mono bg-purple-50 dark:bg-purple-950/50 text-purple-900 dark:text-purple-100"
+                  className={`w-full p-3 border rounded-lg text-sm font-mono ${
+                    isOriginal
+                      ? 'border-blue-300/45 bg-blue-950/55 text-blue-100'
+                      : 'border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-950/50 text-purple-900 dark:text-purple-100'
+                  }`}
                   rows={3}
                   onClick={(e) => (e.target as HTMLTextAreaElement).select()}
                 />
@@ -348,13 +387,21 @@ export default function PodcastsLayout() {
                       navigator.clipboard?.writeText(copyUrlModal);
                       toast.success('Copied!');
                     }}
-                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${
+                      isOriginal
+                        ? 'bg-blue-500 hover:bg-blue-400 border border-blue-300/55'
+                        : 'bg-purple-600 hover:bg-purple-700'
+                    }`}
                   >
                     Copy
                   </button>
                   <button
                     onClick={() => setCopyUrlModal(null)}
-                    className="px-4 py-2 border border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/50 transition-colors"
+                    className={`px-4 py-2 border rounded-lg transition-colors ${
+                      isOriginal
+                        ? 'border-blue-300/45 text-blue-100 hover:bg-blue-900/45'
+                        : 'border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/50'
+                    }`}
                   >
                     Close
                   </button>
@@ -401,13 +448,23 @@ function FeedSidebarItem({
   onPrivacyToggle,
   privacyToggleDisabled,
 }: FeedSidebarItemProps) {
-  const baseClasses = isCombined
-    ? isSelected
-      ? 'bg-purple-100 dark:bg-purple-900/40 border-2 border-purple-500'
-      : 'bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50 dark:from-pink-950/30 dark:via-purple-950/30 dark:to-cyan-950/30 border-2 border-purple-300 dark:border-purple-600 hover:border-purple-400 dark:hover:border-purple-500'
-    : isSelected
-      ? 'bg-purple-100 dark:bg-purple-900/40 border-2 border-purple-500'
-      : 'bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 hover:border-purple-300 dark:hover:border-purple-600/50 hover:shadow-sm';
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
+  const baseClasses = isOriginal
+    ? isCombined
+      ? isSelected
+        ? 'bg-blue-700/35 border-2 border-blue-300/70'
+        : 'bg-blue-900/45 border-2 border-blue-300/45 hover:border-blue-200/65'
+      : isSelected
+        ? 'bg-blue-700/35 border-2 border-blue-300/70'
+        : 'bg-blue-900/35 border border-blue-300/35 hover:border-blue-200/55 hover:shadow-sm'
+    : isCombined
+      ? isSelected
+        ? 'bg-purple-100 dark:bg-purple-900/40 border-2 border-purple-500'
+        : 'bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50 dark:from-pink-950/30 dark:via-purple-950/30 dark:to-cyan-950/30 border-2 border-purple-300 dark:border-purple-600 hover:border-purple-400 dark:hover:border-purple-500'
+      : isSelected
+        ? 'bg-purple-100 dark:bg-purple-900/40 border-2 border-purple-500'
+        : 'bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 hover:border-purple-300 dark:hover:border-purple-600/50 hover:shadow-sm';
 
   return (
     <div className={`p-3 rounded-lg transition-all ${baseClasses}`}>
@@ -431,10 +488,14 @@ function FeedSidebarItem({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <h3 className={`font-medium truncate ${isCombined ? 'text-purple-900 dark:text-purple-100' : 'text-gray-900 dark:text-gray-100'}`}>
-              {title}
+              <span className={isOriginal ? 'text-blue-100' : ''}>{title}</span>
             </h3>
             {badge && (
-              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300">
+              <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                isOriginal
+                  ? 'bg-blue-800/70 text-blue-100 border border-blue-300/45'
+                  : 'bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300'
+              }`}>
                 {badge}
               </span>
             )}
@@ -447,23 +508,23 @@ function FeedSidebarItem({
               </span>
             )}
           </div>
-          <p className={`text-xs truncate ${isCombined ? 'text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400'}`}>
+          <p className={`text-xs truncate ${isOriginal ? 'text-blue-200' : isCombined ? 'text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400'}`}>
             {subtitle}
           </p>
           {presetName && (
-            <p className="text-[11px] text-purple-600 dark:text-purple-400 truncate">
+            <p className={`text-[11px] truncate ${isOriginal ? 'text-blue-200' : 'text-purple-600 dark:text-purple-400'}`}>
               Preset: {presetName}
             </p>
           )}
         </div>
         {isCombined && (
-          <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`w-5 h-5 ${isOriginal ? 'text-blue-200' : 'text-purple-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         )}
       </div>
       {showPrivacyToggle && onPrivacyToggle && (
-        <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-purple-100/50 dark:border-purple-800/50">
+        <div className={`flex items-center justify-end gap-2 mt-2 pt-2 border-t ${isOriginal ? 'border-blue-300/30' : 'border-purple-100/50 dark:border-purple-800/50'}`}>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -472,8 +533,12 @@ function FeedSidebarItem({
             disabled={privacyToggleDisabled}
             className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
               isPrivate
-                ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                : 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400'
+                ? isOriginal
+                  ? 'bg-blue-800/55 text-blue-100 border border-blue-300/40'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                : isOriginal
+                  ? 'bg-emerald-900/30 text-emerald-100 border border-emerald-300/35'
+                  : 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400'
             }`}
             title={isPrivate 
               ? 'Private - This feed is hidden from other users. Click to make public.' 

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { feedsApi, configApi } from '../services/api';
 import { toast } from 'react-hot-toast';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface DownloadButtonProps {
   episodeGuid: string;
@@ -29,6 +30,8 @@ export default function DownloadButton({
   feedId,
   className = ''
 }: DownloadButtonProps) {
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState<ProcessingStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +221,11 @@ export default function DownloadButton({
       <>
         <button
           onClick={handleDownloadClick}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border bg-white border-teal-200 text-teal-600 hover:bg-teal-50 flex items-center gap-1.5 ${className}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5 ${className} ${
+            isOriginal
+              ? 'bg-sky-950/55 border-teal-300/55 text-teal-100 hover:bg-sky-900/70 hover:border-teal-200/70'
+              : 'bg-white border-teal-200 text-teal-600 hover:bg-teal-50'
+          }`}
           title="Download processed episode"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,8 +249,12 @@ export default function DownloadButton({
         disabled={isProcessing}
         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5 ${
           isProcessing
-            ? 'bg-purple-500 text-white cursor-wait border-purple-500'
-            : 'bg-white border-purple-200 text-purple-600 hover:bg-purple-50'
+            ? isOriginal
+              ? 'bg-blue-500 text-white cursor-wait border-blue-400'
+              : 'bg-purple-500 text-white cursor-wait border-purple-500'
+            : isOriginal
+              ? 'bg-blue-950/60 border-blue-300/50 text-blue-100 hover:bg-blue-900/70 hover:border-blue-200/60'
+              : 'bg-white border-purple-200 text-purple-600 hover:bg-purple-50'
         }`}
         title={
           isProcessing

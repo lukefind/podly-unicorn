@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
+import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface ReprocessButtonProps {
   episodeGuid: string;
@@ -18,10 +20,15 @@ export default function ReprocessButton({
   className = '',
   onReprocessStart
 }: ReprocessButtonProps) {
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const queryClient = useQueryClient();
+  const closeModal = useCallback(() => setShowModal(false), []);
+
+  useEscapeKey(showModal, closeModal);
 
   const handleReprocessClick = async () => {
     if (!isWhitelisted) {
@@ -33,7 +40,7 @@ export default function ReprocessButton({
   };
 
   const handleConfirmReprocess = async () => {
-    setShowModal(false);
+    closeModal();
     setIsReprocessing(true);
     setError(null);
 
@@ -74,8 +81,12 @@ export default function ReprocessButton({
         disabled={isReprocessing}
         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5 ${
           isReprocessing
-            ? 'bg-orange-500 text-white cursor-wait border-orange-500'
-            : 'bg-white border-orange-200 text-orange-600 hover:bg-orange-50'
+            ? isOriginal
+              ? 'bg-amber-500 text-white cursor-wait border-amber-400'
+              : 'bg-orange-500 text-white cursor-wait border-orange-500'
+            : isOriginal
+              ? 'bg-blue-950/60 border-amber-300/55 text-amber-100 hover:bg-blue-900/70 hover:border-amber-200/70'
+              : 'bg-white border-orange-200 text-orange-600 hover:bg-orange-50'
         }`}
         title={
           isReprocessing
@@ -107,20 +118,28 @@ export default function ReprocessButton({
       {/* Confirmation Modal - rendered via portal to document.body */}
       {showModal && createPortal(
         <div 
-          className="fixed inset-0 bg-purple-900/60 backdrop-blur-sm flex items-center justify-center p-4"
-          style={{ zIndex: 9999 }}
-          onClick={() => setShowModal(false)}
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{
+            zIndex: 9999,
+            backgroundColor: isOriginal ? 'rgba(2, 8, 23, 0.78)' : 'rgba(88, 28, 135, 0.6)',
+            backdropFilter: isOriginal ? 'none' : 'blur(2px)',
+          }}
+          onClick={closeModal}
         >
           <div 
-            className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border border-purple-200"
+            className="modal-content bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border border-purple-200"
+            style={isOriginal ? { backgroundColor: '#0b234d', borderColor: 'rgba(96, 165, 250, 0.45)' } : undefined}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-purple-100 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50">
-              <h2 className="text-xl font-bold text-purple-900">Confirm Reprocess</h2>
+            <div
+              className="flex items-center justify-between p-6 border-b border-purple-100 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50"
+              style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.32)', background: 'linear-gradient(to right, #123867, #1b4f87, #123867)' } : undefined}
+            >
+              <h2 className={`text-xl font-bold ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>Confirm Reprocess</h2>
               <button
-                onClick={() => setShowModal(false)}
-                className="p-2 text-purple-400 hover:text-purple-600 rounded-lg hover:bg-purple-100 transition-colors"
+                onClick={closeModal}
+                className={`p-2 rounded-lg transition-colors ${isOriginal ? 'text-blue-200 hover:text-blue-50 hover:bg-blue-800/45' : 'text-purple-400 hover:text-purple-600 hover:bg-purple-100'}`}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -130,21 +149,29 @@ export default function ReprocessButton({
 
             {/* Content */}
             <div className="p-6">
-              <p className="text-purple-800 mb-6">
+              <p className={`mb-6 ${isOriginal ? 'text-blue-100' : 'text-purple-800'}`}>
                 Are you sure you want to reprocess this episode? This will delete the existing processed data and start fresh processing.
               </p>
 
               {/* Action Buttons */}
               <div className="flex gap-3 justify-end">
                 <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-purple-700 bg-white border border-purple-200 rounded-xl hover:bg-purple-50 transition-colors"
+                  onClick={closeModal}
+                  className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors ${
+                    isOriginal
+                      ? 'text-blue-100 bg-blue-900/50 border border-blue-300/45 hover:bg-blue-800/60'
+                      : 'text-purple-700 bg-white border border-purple-200 hover:bg-purple-50'
+                  }`}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmReprocess}
-                  className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all"
+                  className={`px-4 py-2 text-sm font-medium text-white rounded-xl transition-all ${
+                    isOriginal
+                      ? 'bg-blue-500 hover:bg-blue-400 border border-blue-300/55'
+                      : 'bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 hover:shadow-lg hover:shadow-purple-500/30'
+                  }`}
                 >
                   Reprocess Episode
                 </button>

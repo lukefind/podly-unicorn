@@ -1,7 +1,12 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-
-type Theme = 'light' | 'dark';
+import {
+  THEME_STORAGE_KEY,
+  getNextTheme,
+  isDarkSurfaceTheme,
+  isValidTheme,
+  type Theme,
+} from '../theme';
 
 interface ThemeContextType {
   theme: Theme;
@@ -14,25 +19,23 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     // Check localStorage first, then system preference
-    const stored = localStorage.getItem('podly-theme') as Theme | null;
-    if (stored) return stored;
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    if (isValidTheme(stored)) return stored;
     if (window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
     return 'light';
   });
 
   useEffect(() => {
-    localStorage.setItem('podly-theme', theme);
-    
-    // Apply theme class to document
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+
+    // Original mode intentionally enables `dark` utilities and then layers blue overrides.
+    document.documentElement.classList.toggle('dark', isDarkSurfaceTheme(theme));
+    document.documentElement.classList.toggle('theme-original', theme === 'original');
+    document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    setTheme((prev) => getNextTheme(prev));
   };
 
   return (

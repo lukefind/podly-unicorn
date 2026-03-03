@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
 import { useTheme } from '../contexts/ThemeContext';
+import { isDarkSurfaceTheme } from '../theme';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface ProcessingStatsButtonProps {
   episodeGuid: string;
@@ -21,7 +23,11 @@ export default function ProcessingStatsButton({
   const [activeTab, setActiveTab] = useState<'overview' | 'model-calls' | 'transcript' | 'identifications'>('overview');
   const [expandedModelCalls, setExpandedModelCalls] = useState<Set<number>>(new Set());
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const isOriginal = theme === 'original';
+  const isDark = isDarkSurfaceTheme(theme);
+  const closeModal = useCallback(() => setShowModal(false), []);
+
+  useEscapeKey(showModal, closeModal);
 
   const { data: stats, isLoading, error } = useQuery({
     queryKey: ['episode-stats', episodeGuid],
@@ -79,7 +85,14 @@ export default function ProcessingStatsButton({
           setShowModal(true);
           onOpen?.();
         }}
-        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border bg-white border-purple-200 text-purple-600 hover:bg-purple-50 flex items-center gap-1.5 ${className}`}
+        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5 ${
+          isOriginal
+            ? 'text-blue-100 border-blue-400/60 hover:bg-blue-900/30'
+            : isDark
+              ? 'text-purple-200 border-purple-500/40 hover:bg-purple-900/30'
+              : 'bg-white border-purple-200 text-purple-600 hover:bg-purple-50'
+        } ${className}`}
+        style={isOriginal ? { backgroundColor: 'rgba(34, 74, 136, 0.5)' } : undefined}
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -90,15 +103,15 @@ export default function ProcessingStatsButton({
       {/* Modal - rendered via portal to document.body */}
       {showModal && createPortal(
         <div 
-          className="fixed inset-0 bg-purple-900/60 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 pt-8 sm:pt-12 overflow-y-auto"
-          style={{ zIndex: 10001 }}
-          onClick={() => setShowModal(false)}
+          className="fixed inset-0 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 pt-8 sm:pt-12 overflow-y-auto"
+          style={{ zIndex: 10001, backgroundColor: isOriginal ? 'rgba(2, 8, 23, 0.8)' : 'rgba(88, 28, 135, 0.6)', backdropFilter: isOriginal ? 'none' : undefined }}
+          onClick={closeModal}
         >
           <div 
             className="modal-content rounded-xl sm:rounded-2xl max-w-6xl w-full overflow-hidden shadow-2xl border flex flex-col my-auto"
             style={{ 
-              backgroundColor: isDark ? '#1a0f2e' : '#ffffff',
-              borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(196, 181, 253, 0.5)',
+              backgroundColor: isOriginal ? '#0b234d' : isDark ? '#1a0f2e' : '#ffffff',
+              borderColor: isOriginal ? 'rgba(96, 165, 250, 0.45)' : isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(196, 181, 253, 0.5)',
               maxHeight: 'calc(100vh - 4rem)',
               minHeight: '400px',
             }}
@@ -108,16 +121,16 @@ export default function ProcessingStatsButton({
             <div 
               className="flex items-center justify-between p-4 sm:p-6 border-b flex-shrink-0"
               style={{ 
-                backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : undefined,
-                borderColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(243, 232, 255, 1)',
-                background: isDark ? 'linear-gradient(to right, rgba(30, 10, 40, 0.9), rgba(20, 10, 50, 0.9), rgba(10, 20, 40, 0.9))' : 'linear-gradient(to right, #fdf2f8, #faf5ff, #ecfeff)'
+                backgroundColor: isOriginal ? '#174b87' : isDark ? 'rgba(30, 20, 50, 0.8)' : undefined,
+                borderColor: isOriginal ? 'rgba(96, 165, 250, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(243, 232, 255, 1)',
+                background: isOriginal ? 'linear-gradient(to right, #16487f, #1f5a97, #16487f)' : isDark ? 'linear-gradient(to right, rgba(30, 10, 40, 0.9), rgba(20, 10, 50, 0.9), rgba(10, 20, 40, 0.9))' : 'linear-gradient(to right, #fdf2f8, #faf5ff, #ecfeff)'
               }}
             >
-              <h2 className="text-base sm:text-xl font-bold text-left" style={{ color: isDark ? '#e9d5ff' : '#581c87' }}>Processing Stats</h2>
-              <button
-                onClick={() => setShowModal(false)}
+              <h2 className="text-base sm:text-xl font-bold text-left" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#581c87' }}>Processing Stats</h2>
+                <button
+                onClick={closeModal}
                 className="p-2 rounded-lg transition-colors"
-                style={{ color: isDark ? '#a78bfa' : '#a855f7' }}
+                style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#a855f7' }}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -129,8 +142,8 @@ export default function ProcessingStatsButton({
             <div 
               className="border-b overflow-x-auto flex-shrink-0"
               style={{ 
-                backgroundColor: isDark ? 'rgba(25, 15, 45, 0.9)' : '#faf5ff',
-                borderColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(243, 232, 255, 1)'
+                backgroundColor: isOriginal ? 'rgba(18, 62, 114, 0.92)' : isDark ? 'rgba(25, 15, 45, 0.9)' : '#faf5ff',
+                borderColor: isOriginal ? 'rgba(96, 165, 250, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(243, 232, 255, 1)'
               }}
             >
               <nav className="flex space-x-2 sm:space-x-8 px-3 sm:px-6 min-w-max">
@@ -145,10 +158,13 @@ export default function ProcessingStatsButton({
                     onClick={() => setActiveTab(tab.id as 'overview' | 'model-calls' | 'transcript' | 'identifications')}
                     className={`py-3 sm:py-4 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
                       activeTab === tab.id
-                        ? 'border-purple-500'
-                        : 'border-transparent hover:border-purple-300'
+                        ? ''
+                        : 'border-transparent hover:opacity-90'
                     }`}
-                    style={{ color: activeTab === tab.id ? (isDark ? '#c4b5fd' : '#6b21a8') : (isDark ? '#a78bfa' : '#6b7280') }}
+                    style={{
+                      borderColor: activeTab === tab.id ? (isOriginal ? '#60a5fa' : isDark ? '#8b5cf6' : '#8b5cf6') : 'transparent',
+                      color: activeTab === tab.id ? (isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#6b21a8') : (isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280')
+                    }}
                   >
                     <span className="hidden sm:inline">{tab.label}</span>
                     <span className="sm:hidden">{tab.id === 'model-calls' ? 'Calls' : tab.id === 'identifications' ? 'IDs' : tab.label}</span>
@@ -163,12 +179,12 @@ export default function ProcessingStatsButton({
             {/* Content */}
             <div 
               className="p-3 sm:p-6 overflow-y-auto flex-1 min-h-0" 
-              style={{ backgroundColor: isDark ? '#1a0f2e' : '#ffffff' }}
+              style={{ backgroundColor: isOriginal ? '#0e2d5f' : isDark ? '#1a0f2e' : '#ffffff' }}
             >
               {isLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                  <span className="ml-3" style={{ color: '#4b5563' }}>Loading stats...</span>
+                  <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isOriginal ? 'border-blue-400' : 'border-purple-600'}`}></div>
+                  <span className="ml-3" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#4b5563' }}>Loading stats...</span>
                 </div>
               ) : error ? (
                 <div className="text-center py-12">
@@ -181,14 +197,17 @@ export default function ProcessingStatsButton({
                     <div className="space-y-6">
                       {/* Episode Title */}
                       <div className="text-left">
-                        <h3 className="text-lg font-semibold text-gray-900">{stats.post?.title || 'Unknown Episode'}</h3>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <h3 className="text-lg font-semibold" style={{ color: isOriginal ? '#e0f2fe' : isDark ? '#e9d5ff' : '#111827' }}>{stats.post?.title || 'Unknown Episode'}</h3>
+                        <p className="text-sm mt-1" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>
                           {stats.post?.release_date ? new Date(stats.post.release_date).toLocaleDateString() : ''}
                         </p>
                       </div>
 
                       {/* Duration Comparison - Hero Section */}
-                      <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl p-4 sm:p-6 text-white">
+                      <div
+                        className="rounded-xl p-4 sm:p-6 text-white"
+                        style={{ background: isOriginal ? 'linear-gradient(to right, #3b82f6, #60a5fa, #22d3ee)' : 'linear-gradient(to right, #6366f1, #8b5cf6, #ec4899)' }}
+                      >
                         <h3 className="text-xs sm:text-sm font-medium opacity-90 mb-3 sm:mb-4">Duration Comparison</h3>
                         <div className="grid grid-cols-3 gap-2 sm:gap-4">
                           <div className="text-center">
@@ -236,56 +255,56 @@ export default function ProcessingStatsButton({
                           onClick={() => setActiveTab('transcript')}
                           className="rounded-xl p-3 sm:p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
-                            backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
-                            borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
+                            backgroundColor: isOriginal ? 'rgba(36, 82, 145, 0.44)' : isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
+                            borderColor: isOriginal ? 'rgba(59, 130, 246, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
                           }}
                         >
-                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>
                             {stats.processing_stats?.total_segments || 0}
                           </div>
-                          <div className="text-xs sm:text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Segments</div>
+                          <div className="text-xs sm:text-sm mt-1" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Segments</div>
                         </button>
 
                         <button 
                           onClick={() => setActiveTab('transcript')}
                           className="rounded-xl p-3 sm:p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
-                            backgroundColor: isDark ? 'rgba(34, 197, 94, 0.15)' : '#f0fdf4',
-                            borderColor: isDark ? 'rgba(34, 197, 94, 0.3)' : '#bbf7d0'
+                            backgroundColor: isOriginal ? 'rgba(22, 95, 133, 0.34)' : isDark ? 'rgba(34, 197, 94, 0.15)' : '#f0fdf4',
+                            borderColor: isOriginal ? 'rgba(34, 197, 94, 0.42)' : isDark ? 'rgba(34, 197, 94, 0.3)' : '#bbf7d0'
                           }}
                         >
-                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isDark ? '#86efac' : '#16a34a' }}>
+                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isOriginal ? '#6ee7b7' : isDark ? '#86efac' : '#16a34a' }}>
                             {stats.processing_stats?.content_segments || 0}
                           </div>
-                          <div className="text-xs sm:text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Kept</div>
+                          <div className="text-xs sm:text-sm mt-1" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Kept</div>
                         </button>
 
                         <button 
                           onClick={() => setActiveTab('identifications')}
                           className="rounded-xl p-3 sm:p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
-                            backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fef2f2',
-                            borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecaca'
+                            backgroundColor: isOriginal ? 'rgba(127, 29, 29, 0.24)' : isDark ? 'rgba(239, 68, 68, 0.15)' : '#fef2f2',
+                            borderColor: isOriginal ? 'rgba(239, 68, 68, 0.45)' : isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecaca'
                           }}
                         >
-                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isDark ? '#fca5a5' : '#dc2626' }}>
+                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isOriginal ? '#fca5a5' : isDark ? '#fca5a5' : '#dc2626' }}>
                             {stats.processing_stats?.ad_segments_count || 0}
                           </div>
-                          <div className="text-xs sm:text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Ads</div>
+                          <div className="text-xs sm:text-sm mt-1" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Ads</div>
                         </button>
 
                         <button 
                           onClick={() => setActiveTab('model-calls')}
                           className="rounded-xl p-3 sm:p-4 text-center shadow-sm border cursor-pointer transition-all hover:scale-105 hover:shadow-md"
                           style={{ 
-                            backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
-                            borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
+                            backgroundColor: isOriginal ? 'rgba(36, 82, 145, 0.44)' : isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
+                            borderColor: isOriginal ? 'rgba(59, 130, 246, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
                           }}
                         >
-                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isDark ? '#c4b5fd' : '#9333ea' }}>
+                          <div className="text-2xl sm:text-3xl font-bold" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#9333ea' }}>
                             {stats.processing_stats?.total_model_calls || 0}
                           </div>
-                          <div className="text-xs sm:text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>AI Calls</div>
+                          <div className="text-xs sm:text-sm mt-1" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>AI Calls</div>
                         </button>
                       </div>
 
@@ -295,15 +314,15 @@ export default function ProcessingStatsButton({
                         <div 
                           className="rounded-xl p-4 sm:p-5 shadow-sm border"
                           style={{ 
-                            backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
-                            borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
+                            backgroundColor: isOriginal ? 'rgba(36, 82, 145, 0.44)' : isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
+                            borderColor: isOriginal ? 'rgba(59, 130, 246, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
                           }}
                         >
-                          <h4 className="font-semibold mb-3 sm:mb-4 text-left text-sm sm:text-base" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Processing Status</h4>
+                          <h4 className="font-semibold mb-3 sm:mb-4 text-left text-sm sm:text-base" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>Processing Status</h4>
                           <div className="space-y-3">
                             {Object.entries(stats.processing_stats?.model_call_statuses || {}).map(([status, count]) => (
                               <div key={status} className="flex justify-between items-center">
-                                <span className="text-sm capitalize" style={{ color: isDark ? '#c4b5fd' : '#4b5563' }}>{status}</span>
+                                <span className="text-sm capitalize" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#4b5563' }}>{status}</span>
                                 <span
                                   className="px-3 py-1 rounded-full text-xs font-semibold"
                                   style={{
@@ -330,20 +349,20 @@ export default function ProcessingStatsButton({
                         <div 
                           className="rounded-xl p-4 sm:p-5 shadow-sm border"
                           style={{ 
-                            backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
-                            borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
+                            backgroundColor: isOriginal ? 'rgba(36, 82, 145, 0.44)' : isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
+                            borderColor: isOriginal ? 'rgba(59, 130, 246, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
                           }}
                         >
-                          <h4 className="font-semibold mb-3 sm:mb-4 text-left text-sm sm:text-base" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Models Used</h4>
+                          <h4 className="font-semibold mb-3 sm:mb-4 text-left text-sm sm:text-base" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>Models Used</h4>
                           <div className="space-y-3">
                             {Object.entries(stats.processing_stats?.model_types || {}).map(([model, count]) => (
                               <div key={model} className="flex justify-between items-center">
-                                <span className="text-sm truncate max-w-[200px]" style={{ color: isDark ? '#c4b5fd' : '#4b5563' }} title={model}>{model}</span>
+                                <span className="text-sm truncate max-w-[200px]" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#4b5563' }} title={model}>{model}</span>
                                 <span 
                                   className="px-3 py-1 rounded-full text-xs font-semibold"
                                   style={{
-                                    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#f3e8ff',
-                                    color: isDark ? '#c4b5fd' : '#7c3aed'
+                                    backgroundColor: isOriginal ? 'rgba(59, 130, 246, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#f3e8ff',
+                                    color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#7c3aed'
                                   }}
                                 >
                                   {count} calls
@@ -359,17 +378,17 @@ export default function ProcessingStatsButton({
                         <div 
                           className="rounded-xl p-5 shadow-sm border"
                           style={{ 
-                            backgroundColor: isDark ? 'rgba(6, 182, 212, 0.15)' : '#ecfeff',
-                            borderColor: isDark ? 'rgba(6, 182, 212, 0.3)' : '#a5f3fc'
+                            backgroundColor: isOriginal ? 'rgba(8, 47, 73, 0.55)' : isDark ? 'rgba(6, 182, 212, 0.15)' : '#ecfeff',
+                            borderColor: isOriginal ? 'rgba(14, 165, 233, 0.45)' : isDark ? 'rgba(6, 182, 212, 0.3)' : '#a5f3fc'
                           }}
                         >
-                          <h4 className="font-semibold mb-3 text-left" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Preset Used for This Episode</h4>
+                          <h4 className="font-semibold mb-3 text-left" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>Preset Used for This Episode</h4>
                           <div className="flex items-center gap-4">
                             <div className="flex-1">
-                              <div className="text-lg font-medium" style={{ color: isDark ? '#67e8f9' : '#0e7490' }}>
+                              <div className="text-lg font-medium" style={{ color: isOriginal ? '#67e8f9' : isDark ? '#67e8f9' : '#0e7490' }}>
                                 {stats.post.processed_with_preset.name}
                               </div>
-                              <div className="text-sm mt-1" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>
+                              <div className="text-sm mt-1" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>
                                 Aggressiveness: <span className="font-medium capitalize">{stats.post.processed_with_preset.aggressiveness}</span>
                                 {' · '}
                                 Min Confidence: <span className="font-medium">{(stats.post.processed_with_preset.min_confidence * 100).toFixed(0)}%</span>
@@ -403,12 +422,12 @@ export default function ProcessingStatsButton({
                         <div 
                           className="rounded-xl p-5 shadow-sm border"
                           style={{ 
-                            backgroundColor: isDark ? 'rgba(107, 114, 128, 0.15)' : '#f9fafb',
-                            borderColor: isDark ? 'rgba(107, 114, 128, 0.3)' : '#e5e7eb'
+                            backgroundColor: isOriginal ? 'rgba(34, 72, 132, 0.44)' : isDark ? 'rgba(107, 114, 128, 0.15)' : '#f9fafb',
+                            borderColor: isOriginal ? 'rgba(96, 165, 250, 0.35)' : isDark ? 'rgba(107, 114, 128, 0.3)' : '#e5e7eb'
                           }}
                         >
-                          <h4 className="font-semibold mb-2 text-left" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Preset Used for This Episode</h4>
-                          <p className="text-sm" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>
+                          <h4 className="font-semibold mb-2 text-left" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>Preset Used for This Episode</h4>
+                          <p className="text-sm" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>
                             Processed before preset tracking was added, or using default prompts.
                           </p>
                         </div>
@@ -418,21 +437,21 @@ export default function ProcessingStatsButton({
                       <div 
                         className="rounded-xl p-4 sm:p-5 shadow-sm border"
                         style={{ 
-                          backgroundColor: isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
-                          borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
+                          backgroundColor: isOriginal ? 'rgba(36, 82, 145, 0.44)' : isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
+                          borderColor: isOriginal ? 'rgba(59, 130, 246, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
                         }}
                       >
-                        <h4 className="font-semibold mb-3 text-left text-sm sm:text-base" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Processing Details</h4>
+                        <h4 className="font-semibold mb-3 text-left text-sm sm:text-base" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>Processing Details</h4>
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           <div>
-                            <div style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Triggered By</div>
-                            <div className="font-medium" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                            <div style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Triggered By</div>
+                            <div className="font-medium" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>
                               {stats.job_info?.triggered_by_username || (stats.job_info?.trigger_source === 'auto_feed_refresh' ? 'System' : '—')}
                             </div>
                           </div>
                           <div>
-                            <div style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Trigger Source</div>
-                            <div className="font-medium" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                            <div style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Trigger Source</div>
+                            <div className="font-medium" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>
                               {stats.job_info?.trigger_source === 'manual_ui' && 'Manual (UI)'}
                               {stats.job_info?.trigger_source === 'manual_reprocess' && 'Reprocess'}
                               {stats.job_info?.trigger_source === 'auto_feed_refresh' && 'Auto-download'}
@@ -441,14 +460,14 @@ export default function ProcessingStatsButton({
                             </div>
                           </div>
                           <div>
-                            <div style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Started</div>
-                            <div className="font-medium" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                            <div style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Started</div>
+                            <div className="font-medium" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>
                               {stats.job_info?.started_at ? formatTimestamp(stats.job_info.started_at) : '—'}
                             </div>
                           </div>
                           <div>
-                            <div style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Completed</div>
-                            <div className="font-medium" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                            <div style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Completed</div>
+                            <div className="font-medium" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>
                               {stats.job_info?.completed_at ? formatTimestamp(stats.job_info.completed_at) : '—'}
                             </div>
                           </div>
@@ -460,25 +479,25 @@ export default function ProcessingStatsButton({
                   {/* Model Calls Tab */}
                   {activeTab === 'model-calls' && (
                     <div>
-                      <h3 className="font-semibold mb-4 text-left" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Model Calls ({stats.model_calls?.length || 0})</h3>
+                      <h3 className="font-semibold mb-4 text-left" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>Model Calls ({stats.model_calls?.length || 0})</h3>
                       <div 
                         className="border rounded-lg overflow-hidden"
                         style={{ 
-                          backgroundColor: isDark ? 'rgba(25, 15, 45, 0.5)' : '#ffffff',
-                          borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e5e7eb'
+                          backgroundColor: isOriginal ? 'rgba(22, 56, 108, 0.48)' : isDark ? 'rgba(25, 15, 45, 0.5)' : '#ffffff',
+                          borderColor: isOriginal ? 'rgba(59, 130, 246, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#e5e7eb'
                         }}
                       >
                         <div className="overflow-x-auto">
                           <table className="min-w-full">
-                            <thead style={{ backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : '#f9fafb' }}>
+                            <thead style={{ backgroundColor: isOriginal ? 'rgba(33, 74, 136, 0.48)' : isDark ? 'rgba(30, 20, 50, 0.8)' : '#f9fafb' }}>
                               <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>ID</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Model</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Segment Range</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Status</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Timestamp</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Retries</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Actions</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>ID</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Model</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Segment Range</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Timestamp</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Retries</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Actions</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -487,13 +506,15 @@ export default function ProcessingStatsButton({
                                   <tr 
                                     key={call.id}
                                     style={{ 
-                                      backgroundColor: idx % 2 === 0 ? (isDark ? 'rgba(25, 15, 45, 0.3)' : '#ffffff') : (isDark ? 'rgba(30, 20, 50, 0.3)' : '#f9fafb'),
-                                      borderBottom: isDark ? '1px solid rgba(139, 92, 246, 0.1)' : '1px solid #e5e7eb'
+                                      backgroundColor: idx % 2 === 0
+                                        ? (isOriginal ? 'rgba(23, 60, 116, 0.44)' : isDark ? 'rgba(25, 15, 45, 0.3)' : '#ffffff')
+                                        : (isOriginal ? 'rgba(31, 70, 129, 0.36)' : isDark ? 'rgba(30, 20, 50, 0.3)' : '#f9fafb'),
+                                      borderBottom: isOriginal ? '1px solid rgba(59, 130, 246, 0.2)' : isDark ? '1px solid rgba(139, 92, 246, 0.1)' : '1px solid #e5e7eb'
                                     }}
                                   >
-                                    <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>{call.id}</td>
-                                    <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>{call.model_name}</td>
-                                    <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#c4b5fd' : '#4b5563' }}>{call.segment_range}</td>
+                                    <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>{call.id}</td>
+                                    <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>{call.model_name}</td>
+                                    <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#4b5563' }}>{call.segment_range}</td>
                                     <td className="px-4 py-3">
                                       <span 
                                         className="inline-flex px-2 py-1 text-xs font-medium rounded-full"
@@ -513,25 +534,25 @@ export default function ProcessingStatsButton({
                                         {call.status}
                                       </span>
                                     </td>
-                                    <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#c4b5fd' : '#4b5563' }}>{formatTimestamp(call.timestamp)}</td>
-                                    <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#c4b5fd' : '#4b5563' }}>{call.retry_attempts}</td>
+                                    <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#4b5563' }}>{formatTimestamp(call.timestamp)}</td>
+                                    <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#4b5563' }}>{call.retry_attempts}</td>
                                     <td className="px-4 py-3">
                                       <button
                                         onClick={() => toggleModelCallDetails(call.id)}
                                         className="text-sm font-medium"
-                                        style={{ color: isDark ? '#a78bfa' : '#2563eb' }}
+                                        style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#2563eb' }}
                                       >
                                         {expandedModelCalls.has(call.id) ? 'Hide' : 'Details'}
                                       </button>
                                     </td>
                                   </tr>
                                   {expandedModelCalls.has(call.id) && (
-                                    <tr style={{ backgroundColor: isDark ? 'rgba(30, 20, 50, 0.5)' : '#f9fafb' }}>
+                                    <tr style={{ backgroundColor: isOriginal ? 'rgba(34, 74, 136, 0.4)' : isDark ? 'rgba(30, 20, 50, 0.5)' : '#f9fafb' }}>
                                       <td colSpan={7} className="px-4 py-4">
                                         <div className="space-y-4">
                                           {call.prompt && (
                                             <div>
-                                              <h5 className="font-medium text-gray-900 mb-2 text-left">Prompt:</h5>
+                                              <h5 className="font-medium mb-2 text-left" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#111827' }}>Prompt:</h5>
                                               <div className="bg-gray-100 p-3 rounded text-sm font-mono whitespace-pre-wrap max-h-40 overflow-y-auto text-left">
                                                 {call.prompt}
                                               </div>
@@ -547,7 +568,7 @@ export default function ProcessingStatsButton({
                                           )}
                                           {call.response && (
                                             <div>
-                                              <h5 className="font-medium text-gray-900 mb-2 text-left">Response:</h5>
+                                              <h5 className="font-medium mb-2 text-left" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#111827' }}>Response:</h5>
                                               <div className="bg-gray-100 p-3 rounded text-sm font-mono whitespace-pre-wrap max-h-40 overflow-y-auto text-left">
                                                 {call.response}
                                               </div>
@@ -569,22 +590,22 @@ export default function ProcessingStatsButton({
                   {/* Transcript Segments Tab */}
                   {activeTab === 'transcript' && (
                     <div>
-                      <h3 className="font-semibold mb-4 text-left" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Transcript Segments ({stats.transcript_segments?.length || 0})</h3>
+                      <h3 className="font-semibold mb-4 text-left" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>Transcript Segments ({stats.transcript_segments?.length || 0})</h3>
                       <div 
                         className="border rounded-lg overflow-hidden"
                         style={{ 
-                          backgroundColor: isDark ? 'rgba(25, 15, 45, 0.5)' : '#ffffff',
-                          borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e5e7eb'
+                          backgroundColor: isOriginal ? 'rgba(22, 56, 108, 0.48)' : isDark ? 'rgba(25, 15, 45, 0.5)' : '#ffffff',
+                          borderColor: isOriginal ? 'rgba(59, 130, 246, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#e5e7eb'
                         }}
                       >
                         <div className="overflow-x-auto">
                           <table className="min-w-full">
-                            <thead style={{ backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : '#f9fafb' }}>
+                            <thead style={{ backgroundColor: isOriginal ? 'rgba(33, 74, 136, 0.48)' : isDark ? 'rgba(30, 20, 50, 0.8)' : '#f9fafb' }}>
                               <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Seq #</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Time Range</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Label</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Text</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Seq #</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Time Range</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Label</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Text</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -593,13 +614,17 @@ export default function ProcessingStatsButton({
                                   key={segment.id} 
                                   style={{ 
                                     backgroundColor: segment.primary_label === 'ad' 
-                                      ? (isDark ? 'rgba(159, 18, 57, 0.2)' : '#fef2f2')
-                                      : (idx % 2 === 0 ? (isDark ? 'rgba(25, 15, 45, 0.3)' : '#ffffff') : (isDark ? 'rgba(30, 20, 50, 0.3)' : '#f9fafb')),
-                                    borderBottom: isDark ? '1px solid rgba(139, 92, 246, 0.1)' : '1px solid #e5e7eb'
+                                      ? (isOriginal ? 'rgba(127, 29, 29, 0.28)' : isDark ? 'rgba(159, 18, 57, 0.2)' : '#fef2f2')
+                                      : (
+                                          idx % 2 === 0
+                                            ? (isOriginal ? 'rgba(23, 60, 116, 0.44)' : isDark ? 'rgba(25, 15, 45, 0.3)' : '#ffffff')
+                                            : (isOriginal ? 'rgba(31, 70, 129, 0.36)' : isDark ? 'rgba(30, 20, 50, 0.3)' : '#f9fafb')
+                                        ),
+                                    borderBottom: isOriginal ? '1px solid rgba(59, 130, 246, 0.2)' : isDark ? '1px solid rgba(139, 92, 246, 0.1)' : '1px solid #e5e7eb'
                                   }}
                                 >
-                                  <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>{segment.sequence_num}</td>
-                                  <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#c4b5fd' : '#374151' }}>
+                                  <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>{segment.sequence_num}</td>
+                                  <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#374151' }}>
                                     {formatTimeHMS(segment.start_time)} - {formatTimeHMS(segment.end_time)}
                                   </td>
                                   <td className="px-4 py-3">
@@ -607,17 +632,17 @@ export default function ProcessingStatsButton({
                                       className="inline-flex px-2 py-1 text-xs font-medium rounded-full"
                                       style={{
                                         backgroundColor: segment.primary_label === 'ad'
-                                          ? (isDark ? 'rgba(244, 63, 94, 0.3)' : '#ffe4e6')
-                                          : (isDark ? 'rgba(34, 197, 94, 0.3)' : '#d1fae5'),
+                                          ? (isOriginal ? 'rgba(239, 68, 68, 0.3)' : isDark ? 'rgba(244, 63, 94, 0.3)' : '#ffe4e6')
+                                          : (isOriginal ? 'rgba(16, 185, 129, 0.3)' : isDark ? 'rgba(34, 197, 94, 0.3)' : '#d1fae5'),
                                         color: segment.primary_label === 'ad'
-                                          ? (isDark ? '#fda4af' : '#9f1239')
-                                          : (isDark ? '#86efac' : '#065f46')
+                                          ? (isOriginal ? '#fca5a5' : isDark ? '#fda4af' : '#9f1239')
+                                          : (isOriginal ? '#6ee7b7' : isDark ? '#86efac' : '#065f46')
                                       }}
                                     >
                                       {segment.primary_label === 'ad' ? 'Ad' : 'Content'}
                                     </span>
                                   </td>
-                                  <td className="px-4 py-3 text-sm max-w-md" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                                  <td className="px-4 py-3 text-sm max-w-md" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>
                                     <div className="truncate text-left" title={segment.text}>
                                       {segment.text}
                                     </div>
@@ -634,25 +659,25 @@ export default function ProcessingStatsButton({
                   {/* Identifications Tab */}
                   {activeTab === 'identifications' && (
                     <div>
-                      <h3 className="font-semibold mb-4 text-left" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>Identifications ({stats.identifications?.length || 0})</h3>
+                      <h3 className="font-semibold mb-4 text-left" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>Identifications ({stats.identifications?.length || 0})</h3>
                       <div 
                         className="border rounded-lg overflow-hidden"
                         style={{ 
-                          backgroundColor: isDark ? 'rgba(25, 15, 45, 0.5)' : '#ffffff',
-                          borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : '#e5e7eb'
+                          backgroundColor: isOriginal ? 'rgba(22, 56, 108, 0.48)' : isDark ? 'rgba(25, 15, 45, 0.5)' : '#ffffff',
+                          borderColor: isOriginal ? 'rgba(59, 130, 246, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#e5e7eb'
                         }}
                       >
                         <div className="overflow-x-auto">
                           <table className="min-w-full">
-                            <thead style={{ backgroundColor: isDark ? 'rgba(30, 20, 50, 0.8)' : '#f9fafb' }}>
+                            <thead style={{ backgroundColor: isOriginal ? 'rgba(33, 74, 136, 0.48)' : isDark ? 'rgba(30, 20, 50, 0.8)' : '#f9fafb' }}>
                               <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>ID</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Segment ID</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Time Range</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Label</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Confidence</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Model Call</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isDark ? '#a78bfa' : '#6b7280' }}>Text</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>ID</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Segment ID</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Time Range</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Label</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Confidence</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Model Call</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>Text</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -661,14 +686,18 @@ export default function ProcessingStatsButton({
                                   key={identification.id}
                                   style={{ 
                                     backgroundColor: identification.label === 'ad' 
-                                      ? (isDark ? 'rgba(159, 18, 57, 0.2)' : '#fef2f2')
-                                      : (idx % 2 === 0 ? (isDark ? 'rgba(25, 15, 45, 0.3)' : '#ffffff') : (isDark ? 'rgba(30, 20, 50, 0.3)' : '#f9fafb')),
-                                    borderBottom: isDark ? '1px solid rgba(139, 92, 246, 0.1)' : '1px solid #e5e7eb'
+                                      ? (isOriginal ? 'rgba(127, 29, 29, 0.28)' : isDark ? 'rgba(159, 18, 57, 0.2)' : '#fef2f2')
+                                      : (
+                                          idx % 2 === 0
+                                            ? (isOriginal ? 'rgba(23, 60, 116, 0.44)' : isDark ? 'rgba(25, 15, 45, 0.3)' : '#ffffff')
+                                            : (isOriginal ? 'rgba(31, 70, 129, 0.36)' : isDark ? 'rgba(30, 20, 50, 0.3)' : '#f9fafb')
+                                        ),
+                                    borderBottom: isOriginal ? '1px solid rgba(59, 130, 246, 0.2)' : isDark ? '1px solid rgba(139, 92, 246, 0.1)' : '1px solid #e5e7eb'
                                   }}
                                 >
-                                  <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>{identification.id}</td>
-                                  <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#c4b5fd' : '#4b5563' }}>{identification.transcript_segment_id}</td>
-                                  <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#c4b5fd' : '#374151' }}>
+                                  <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>{identification.id}</td>
+                                  <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#4b5563' }}>{identification.transcript_segment_id}</td>
+                                  <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#374151' }}>
                                     {formatTimeHMS(identification.segment_start_time)} - {formatTimeHMS(identification.segment_end_time)}
                                   </td>
                                   <td className="px-4 py-3">
@@ -676,21 +705,21 @@ export default function ProcessingStatsButton({
                                       className="inline-flex px-2 py-1 text-xs font-medium rounded-full"
                                       style={{
                                         backgroundColor: identification.label === 'ad'
-                                          ? (isDark ? 'rgba(244, 63, 94, 0.3)' : '#ffe4e6')
-                                          : (isDark ? 'rgba(34, 197, 94, 0.3)' : '#d1fae5'),
+                                          ? (isOriginal ? 'rgba(239, 68, 68, 0.3)' : isDark ? 'rgba(244, 63, 94, 0.3)' : '#ffe4e6')
+                                          : (isOriginal ? 'rgba(16, 185, 129, 0.3)' : isDark ? 'rgba(34, 197, 94, 0.3)' : '#d1fae5'),
                                         color: identification.label === 'ad'
-                                          ? (isDark ? '#fda4af' : '#9f1239')
-                                          : (isDark ? '#86efac' : '#065f46')
+                                          ? (isOriginal ? '#fca5a5' : isDark ? '#fda4af' : '#9f1239')
+                                          : (isOriginal ? '#6ee7b7' : isDark ? '#86efac' : '#065f46')
                                       }}
                                     >
                                       {identification.label}
                                     </span>
                                   </td>
-                                  <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#c4b5fd' : '#4b5563' }}>
+                                  <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#4b5563' }}>
                                     {identification.confidence ? identification.confidence.toFixed(2) : 'N/A'}
                                   </td>
-                                  <td className="px-4 py-3 text-sm" style={{ color: isDark ? '#c4b5fd' : '#4b5563' }}>{identification.model_call_id}</td>
-                                  <td className="px-4 py-3 text-sm max-w-md" style={{ color: isDark ? '#e9d5ff' : '#1f2937' }}>
+                                  <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#4b5563' }}>{identification.model_call_id}</td>
+                                  <td className="px-4 py-3 text-sm max-w-md" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>
                                     <div className="truncate text-left" title={identification.segment_text}>
                                       {identification.segment_text}
                                     </div>

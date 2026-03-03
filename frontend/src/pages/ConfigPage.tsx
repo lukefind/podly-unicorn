@@ -16,7 +16,9 @@ import type {
   WhisperConfig,
 } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import AdminUserStats from '../components/AdminUserStats';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 const ENV_FIELD_LABELS: Record<string, string> = {
   'groq.api_key': 'Groq API Key',
@@ -71,6 +73,8 @@ const valuesDiffer = (a: unknown, b: unknown): boolean => {
 };
 
 export default function ConfigPage() {
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
   const { data, isLoading, refetch } = useQuery<ConfigResponse>({
     queryKey: ['config'],
     queryFn: configApi.getConfig,
@@ -291,7 +295,6 @@ export default function ConfigPage() {
       transform: (prevConfig: CombinedConfig) => CombinedConfig,
       markDirty: boolean = true,
     ) => {
-      let updated = false;
       setPending((prevConfig) => {
         if (!prevConfig) {
           return prevConfig;
@@ -300,13 +303,11 @@ export default function ConfigPage() {
         if (nextConfig === prevConfig) {
           return prevConfig;
         }
-        updated = true;
+        if (markDirty) {
+          queueMicrotask(() => setHasEdits(true));
+        }
         return nextConfig;
       });
-
-      if (updated && markDirty) {
-        setHasEdits(true);
-      }
     },
     [],
   );
@@ -774,9 +775,9 @@ export default function ConfigPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold rainbow-text">Settings ⚙️</h1>
+          <h1 className={`text-2xl font-bold ${isOriginal ? 'text-blue-100' : 'rainbow-text'}`}>Settings ⚙️</h1>
           <div className="flex items-center gap-3 mt-1">
-            <p className="text-purple-600">Configure your LLM and Whisper connections</p>
+            <p className={isOriginal ? 'text-blue-200' : 'text-purple-600'}>Configure your LLM and Whisper connections</p>
             <a
               href="https://t.me/+AV5-w_GSd2VjNjBk"
               target="_blank"
@@ -1773,9 +1774,12 @@ export default function ConfigPage() {
       
       {/* Sticky floating save bar - rendered via portal to escape overflow:hidden containers */}
       {hasEdits && createPortal(
-        <div className="fixed bottom-0 left-0 right-0 z-[9999] border-t border-purple-200 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
+        <div
+          className="fixed bottom-0 left-0 right-0 z-[9999] border-t bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.1)]"
+          style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.5)', background: 'rgba(8, 24, 52, 0.92)' } : undefined}
+        >
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-            <span className="text-sm text-pink-600 dark:text-pink-400 font-medium">Unsaved changes</span>
+            <span className={`text-sm font-medium ${isOriginal ? 'text-sky-200' : 'text-pink-600 dark:text-pink-400'}`}>Unsaved changes</span>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
@@ -1783,6 +1787,7 @@ export default function ConfigPage() {
                   setHasEdits(false);
                 }}
                 className="px-4 py-2 text-sm font-medium text-purple-700 dark:text-purple-300 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-600 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-colors"
+                style={isOriginal ? { color: '#bfdbfe', borderColor: 'rgba(96, 165, 250, 0.5)', background: 'rgba(11, 37, 79, 0.92)' } : undefined}
               >
                 Discard
               </button>
@@ -1790,6 +1795,7 @@ export default function ConfigPage() {
                 onClick={handleSave}
                 disabled={saveMutation.isPending}
                 className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all disabled:opacity-50"
+                style={isOriginal ? { background: 'linear-gradient(to right, #2563eb, #0ea5e9, #06b6d4)', boxShadow: '0 10px 22px rgba(37, 99, 235, 0.28)' } : undefined}
               >
                 {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
               </button>
@@ -1818,6 +1824,8 @@ function EnvOverrideWarningModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  useEscapeKey(true, onCancel);
+
   if (!paths.length) {
     return null;
   }
@@ -1880,10 +1888,25 @@ function EnvOverrideWarningModal({
 }
 
 function Section({ title, children, icon }: { title: string; children: ReactNode; icon?: ReactNode }) {
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
+  const headerClassName = isOriginal
+    ? 'px-4 py-3 border-b'
+    : 'px-4 py-3 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50';
+
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm unicorn-card">
-      <div className="px-4 py-3 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50">
-        <h3 className="text-sm font-semibold text-purple-900 flex items-center gap-2">
+    <div
+      className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm unicorn-card"
+      style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.45)', backgroundColor: 'rgba(10, 34, 74, 0.78)', backdropFilter: 'none' } : undefined}
+    >
+      <div
+        className={headerClassName}
+        style={isOriginal ? {
+          borderColor: 'rgba(125, 211, 252, 0.34)',
+          background: 'linear-gradient(90deg, rgba(17, 61, 112, 0.92), rgba(34, 96, 162, 0.9), rgba(17, 61, 112, 0.92))',
+        } : undefined}
+      >
+        <h3 className={`text-sm font-semibold flex items-center gap-2 ${isOriginal ? 'text-blue-50' : 'text-purple-900'}`}>
           {icon}
           {title}
         </h3>
@@ -1920,12 +1943,26 @@ function Field({
 }
 
 function EnvVarHint({ meta }: { meta?: EnvOverrideEntry }) {
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
+  const isDark = theme === 'dark';
+
   if (!meta?.env_var) {
     return null;
   }
 
   return (
-    <code className="mt-1 block text-xs text-gray-500 font-mono">{meta.env_var}</code>
+    <span
+      className={`mt-1 inline-block px-2 py-0.5 rounded text-xs font-mono border ${
+        isOriginal
+          ? 'bg-blue-900/70 border-blue-300/45 text-blue-100'
+          : isDark
+            ? 'bg-purple-900/35 border-purple-500/40 text-purple-200'
+            : 'bg-gray-100 border-gray-200 text-gray-600'
+      }`}
+    >
+      {meta.env_var}
+    </span>
   );
 }
 
@@ -1955,6 +1992,21 @@ function NumberInput({
       prevValue.current = value;
     }
   }, [value]);
+
+  const commitIfValid = (rawValue: string) => {
+    const trimmed = rawValue.trim();
+    if (trimmed === '') {
+      if (allowEmpty) {
+        onChange(null);
+      }
+      return;
+    }
+    const parsed = step?.includes('.') ? Number.parseFloat(trimmed) : Number.parseInt(trimmed, 10);
+    if (!Number.isNaN(parsed)) {
+      const finalVal = min !== undefined && parsed < min ? min : parsed;
+      onChange(finalVal);
+    }
+  };
 
   const handleBlur = () => {
     const trimmed = localValue.trim();
@@ -1986,7 +2038,11 @@ function NumberInput({
       inputMode={step?.includes('.') ? 'decimal' : 'numeric'}
       placeholder={placeholder}
       value={localValue}
-      onChange={(e) => setLocalValue(e.target.value)}
+      onChange={(e) => {
+        const nextValue = e.target.value;
+        setLocalValue(nextValue);
+        commitIfValid(nextValue);
+      }}
       onBlur={handleBlur}
     />
   );

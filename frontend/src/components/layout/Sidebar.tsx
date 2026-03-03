@@ -6,6 +6,15 @@ import { useTheme } from '../../contexts/ThemeContext';
 import HelpModal from '../HelpModal';
 import UserProfileModal from '../UserProfileModal';
 import { authApi } from '../../services/api';
+import {
+  getNextTheme,
+  getThemeBrandClass,
+  getThemeBrandName,
+  getThemeLabel,
+  getThemeLogoPath,
+  getThemeSwitchTitle,
+  type Theme,
+} from '../../theme';
 
 const ONBOARDING_STORAGE_KEY = 'podly_onboarding_completed';
 
@@ -87,9 +96,13 @@ interface SidebarProps {
 export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMobile = false }: SidebarProps) {
   const location = useLocation();
   const { requireAuth, user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme, toggleTheme } = useTheme();
   const [helpOpen, setHelpOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const logoPath = getThemeLogoPath(theme);
+  const brandName = getThemeBrandName(theme);
+  const brandClass = getThemeBrandClass(theme);
+  const nextThemeLabel = getThemeLabel(getNextTheme(theme));
 
   const { data: pendingCount } = useQuery<{ count: number }>({
     queryKey: ['pending-users-count'],
@@ -111,30 +124,44 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
   });
 
   // Solid sidebar colors - no transparency for better readability
-  const sidebarClasses = theme === 'dark'
-    ? 'bg-gradient-to-b from-slate-900 via-purple-950 to-slate-950'
-    : 'bg-gradient-to-b from-purple-800 via-purple-900 to-slate-900';
+  const sidebarClasses = theme === 'original'
+    ? 'bg-gradient-to-b from-blue-700 via-blue-800 to-blue-950'
+    : theme === 'dark'
+      ? 'bg-gradient-to-b from-slate-900 via-purple-950 to-slate-950'
+      : 'bg-gradient-to-b from-purple-800 via-purple-900 to-slate-900';
+
+  const navActiveClasses = theme === 'original'
+    ? 'bg-gradient-to-r from-blue-500/45 via-sky-500/35 to-cyan-500/35 text-white shadow-md shadow-blue-500/15 border border-blue-300/20'
+    : 'bg-gradient-to-r from-pink-500/80 via-purple-500/80 to-cyan-500/80 text-white shadow-lg shadow-purple-500/30';
+
+  const navInactiveClasses = theme === 'original'
+    ? 'text-blue-100 hover:text-white hover:bg-blue-600/20'
+    : 'text-purple-200 hover:text-white hover:bg-purple-800/40';
 
   return (
     <aside className={`${sidebarClasses} text-white flex flex-col transition-all duration-300 ${isMobile ? 'w-64' : (collapsed ? 'w-16' : 'w-64')} shadow-xl h-full`}>
       {/* Logo */}
-      <div className="h-16 flex items-center px-4 border-b border-purple-800/50">
+      <div className={`h-16 flex items-center px-4 border-b ${theme === 'original' ? 'border-blue-400/25' : 'border-purple-800/50'}`}>
         <Link to="/" className="flex items-center gap-3">
           <img 
-            src="/images/logos/unicorn-logo.png" 
-            alt="Podly Unicorn" 
+            src={logoPath}
+            alt={brandName}
             className="h-10 w-10 object-contain"
           />
           {(!collapsed || isMobile) && (
-            <span className="text-lg font-bold rainbow-text">
-              Podly Unicorn
+            <span className={`text-lg font-bold ${brandClass}`}>
+              {brandName}
             </span>
           )}
         </Link>
         {onToggle && !isMobile && (
           <button
             onClick={onToggle}
-            className="ml-auto p-2 rounded-lg bg-purple-700/50 hover:bg-purple-600/70 transition-colors border border-purple-500/30"
+            className={`ml-auto p-2 rounded-lg transition-colors border ${
+              theme === 'original'
+                ? 'bg-blue-600/35 hover:bg-blue-500/45 border-blue-300/25'
+                : 'bg-purple-700/50 hover:bg-purple-600/70 border-purple-500/30'
+            }`}
           >
             <svg className={`w-5 h-5 transition-transform text-white ${collapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
@@ -152,8 +179,8 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
             onClick={onNavigate}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
               isActive(item.path)
-                ? 'bg-gradient-to-r from-pink-500/80 via-purple-500/80 to-cyan-500/80 text-white shadow-lg shadow-purple-500/30'
-                : 'text-purple-200 hover:text-white hover:bg-purple-800/40'
+                ? navActiveClasses
+                : navInactiveClasses
             }`}
             title={collapsed && !isMobile ? item.label : undefined}
           >
@@ -173,10 +200,14 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
       </nav>
 
       {/* Help, Community & Theme toggle */}
-      <div className="px-4 py-2 border-t border-purple-800/30 space-y-1">
+      <div className={`px-4 py-2 border-t space-y-1 ${theme === 'original' ? 'border-blue-400/25 bg-blue-950/35 backdrop-blur-sm' : 'border-purple-800/30'}`}>
         <button
           onClick={() => setHelpOpen(true)}
-          className={`w-full flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg hover:bg-purple-800/30 text-purple-200 hover:text-white transition-colors`}
+          className={`w-full flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg transition-colors ${
+            theme === 'original'
+              ? 'hover:bg-blue-700/35 text-blue-100 hover:text-white'
+              : 'hover:bg-purple-800/30 text-purple-200 hover:text-white'
+          }`}
           title="How to use Podly"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -200,23 +231,60 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
             <span className="text-sm font-medium">Community</span>
           )}
         </a>
+        {(!collapsed || isMobile) && (
+          <div className={`grid grid-cols-3 gap-1 p-1 rounded-lg border ${
+            theme === 'original'
+              ? 'bg-blue-950/65 border-blue-300/25'
+              : 'bg-black/20 border-white/10'
+          }`}>
+            {(['light', 'dark', 'original'] as Theme[]).map((themeOption) => {
+              const selected = theme === themeOption;
+              return (
+                <button
+                  key={themeOption}
+                  onClick={() => setTheme(themeOption)}
+                  className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                    selected
+                      ? themeOption === 'original'
+                        ? 'bg-blue-500/70 text-white'
+                        : 'bg-white/20 text-white'
+                      : theme === 'original'
+                        ? 'text-blue-200 hover:text-white hover:bg-blue-700/35'
+                        : 'text-white/70 hover:text-white hover:bg-white/10'
+                  }`}
+                  title={`Switch to ${getThemeLabel(themeOption)} theme`}
+                >
+                  {themeOption === 'original' ? 'Blue' : getThemeLabel(themeOption)}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <button
           onClick={toggleTheme}
-          className={`w-full flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg hover:bg-purple-800/30 text-purple-200 hover:text-white transition-colors`}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          className={`w-full flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg transition-colors ${
+            theme === 'original'
+              ? 'hover:bg-blue-700/35 text-blue-100 hover:text-white'
+              : 'hover:bg-purple-800/30 text-purple-200 hover:text-white'
+          }`}
+          title={getThemeSwitchTitle(theme)}
         >
-          {theme === 'dark' ? (
+          {theme === 'light' ? (
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          ) : theme === 'dark' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.073 3.306a1 1 0 00.95.69h3.476c.969 0 1.371 1.24.588 1.81l-2.812 2.043a1 1 0 00-.364 1.118l1.074 3.305c.3.922-.755 1.688-1.538 1.118l-2.812-2.043a1 1 0 00-1.176 0l-2.812 2.043c-.784.57-1.838-.196-1.539-1.118l1.074-3.305a1 1 0 00-.363-1.118L4.962 8.733c-.783-.57-.38-1.81.588-1.81h3.476a1 1 0 00.95-.69l1.073-3.306z" />
             </svg>
           ) : (
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
           )}
           {(!collapsed || isMobile) && (
             <span className="text-sm font-medium">
-              {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+              Switch to {nextThemeLabel}
             </span>
           )}
         </button>
@@ -237,7 +305,7 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
 
       {/* User section */}
       {requireAuth && user && (
-        <div className="p-4 border-t border-purple-800/30">
+        <div className={`p-4 border-t ${theme === 'original' ? 'border-blue-400/25 bg-blue-950/45' : 'border-purple-800/30'}`}>
           <div className={`flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'}`}>
             <button
               onClick={() => setProfileOpen(true)}
@@ -249,17 +317,21 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
             {(!collapsed || isMobile) && (
               <button
                 onClick={() => setProfileOpen(true)}
-                className="flex-1 min-w-0 text-left hover:bg-purple-800/20 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                className={`flex-1 min-w-0 text-left rounded-lg px-2 py-1 -mx-2 transition-colors ${theme === 'original' ? 'hover:bg-blue-700/35' : 'hover:bg-purple-800/20'}`}
                 title="Account settings"
               >
                 <p className="text-sm font-medium truncate">{user.username}</p>
-                <p className="text-xs text-purple-300 capitalize">{user.role}</p>
+                <p className={`text-xs capitalize ${theme === 'original' ? 'text-blue-200' : 'text-purple-300'}`}>{user.role}</p>
               </button>
             )}
             {(!collapsed || isMobile) && (
               <button
                 onClick={logout}
-                className="p-1.5 rounded-lg hover:bg-purple-800/30 text-purple-300 hover:text-white transition-colors"
+                className={`p-1.5 rounded-lg transition-colors ${
+                  theme === 'original'
+                    ? 'hover:bg-blue-700/35 text-blue-200 hover:text-white'
+                    : 'hover:bg-purple-800/30 text-purple-300 hover:text-white'
+                }`}
                 title="Logout"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

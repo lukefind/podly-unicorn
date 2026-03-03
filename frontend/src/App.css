@@ -19,6 +19,26 @@ html, body {
   padding: 0 !important;
 }
 
+/* Mobile shell offsets: keep content and sidebar below fixed header */
+.mobile-main-offset {
+  /* Add a small buffer so content never tucks under fixed mobile header */
+  padding-top: calc(var(--mobile-header-offset, 3.5rem) + 0.75rem);
+}
+
+.mobile-sidebar-offset {
+  top: var(--mobile-header-offset, 3.5rem);
+}
+
+@media (min-width: 1024px) {
+  .mobile-main-offset {
+    padding-top: 0;
+  }
+
+  .mobile-sidebar-offset {
+    top: 0;
+  }
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;

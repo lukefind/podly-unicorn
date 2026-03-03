@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface OnboardingModalProps {
   onClose: () => void;
@@ -86,6 +87,7 @@ const ONBOARDING_STEPS = [
 
 export default function OnboardingModal({ onClose }: OnboardingModalProps) {
   const [currentStep, setCurrentStep] = useState(0);
+  useEscapeKey(true, onClose);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';

@@ -12,6 +12,8 @@ import ReprocessButton from '../components/ReprocessButton';
 import EpisodeProcessingStatus from '../components/EpisodeProcessingStatus';
 import EpisodeDetailModal from '../components/episodes/EpisodeDetailModal';
 import { usePodcastsContext } from '../layouts/PodcastsLayout';
+import { useTheme } from '../contexts/ThemeContext';
+import { getThemeLogoPath } from '../theme';
 import type { Episode } from '../types';
 
 // Type for combined episode from API
@@ -33,6 +35,9 @@ interface CombinedEpisode {
 
 export default function CombinedEpisodesView() {
   const { feeds, queryClient } = usePodcastsContext();
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
+  const themeLogoPath = getThemeLogoPath(theme);
   const [showUnprocessedOnly, setShowUnprocessedOnly] = useState(false);
   const [selectedEpisode, setSelectedEpisode] = useState<CombinedEpisode | null>(null);
   const [processingPollTriggers, setProcessingPollTriggers] = useState<Record<string, number>>({});
@@ -130,13 +135,20 @@ export default function CombinedEpisodesView() {
   const totalEpisodes = data?.total || 0;
 
   return (
-    <div className="flex-1 w-full flex flex-col bg-white/80 dark:bg-gray-900/50 backdrop-blur-sm rounded-xl border border-purple-200/50 dark:border-purple-700/30 shadow-sm overflow-hidden">
+    <div className={`flex-1 w-full flex flex-col rounded-xl border shadow-sm overflow-hidden ${
+      isOriginal
+        ? 'bg-blue-900/40 border-blue-300/35'
+        : 'bg-white/80 dark:bg-gray-900/50 backdrop-blur-sm border-purple-200/50 dark:border-purple-700/30'
+    }`}>
       {/* Header */}
-      <div className="p-4 sm:p-6 border-b border-purple-100/50 dark:border-purple-800/30 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50 dark:from-pink-950/20 dark:via-purple-950/20 dark:to-cyan-950/20">
+      <div
+        className={`p-4 sm:p-6 border-b ${isOriginal ? 'border-blue-300/35' : 'border-purple-100/50 dark:border-purple-800/30 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50 dark:from-pink-950/20 dark:via-purple-950/20 dark:to-cyan-950/20'}`}
+        style={isOriginal ? { background: 'linear-gradient(to right, #1b4f89, #255f9c, #1b4f89)' } : undefined}
+      >
         {/* Back button - mobile only */}
         <Link
           to="/podcasts"
-          className="lg:hidden flex items-center gap-1 text-purple-500 hover:text-purple-700 mb-3 -mt-1"
+          className={`lg:hidden flex items-center gap-1 mb-3 -mt-1 ${isOriginal ? 'text-blue-200 hover:text-white' : 'text-purple-500 hover:text-purple-700'}`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -146,14 +158,14 @@ export default function CombinedEpisodesView() {
 
         <div className="flex items-start gap-3">
           <img
-            src="/images/logos/unicorn-logo.png"
+            src={themeLogoPath}
             alt="Combined Feed"
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shadow-sm border border-purple-200/50 flex-shrink-0"
+            className={`w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shadow-sm flex-shrink-0 ${isOriginal ? 'border border-blue-300/40' : 'border border-purple-200/50'}`}
           />
           <div className="min-w-0 flex-1">
-            <h2 className="text-xl sm:text-2xl font-bold text-purple-900 dark:text-purple-100 leading-tight">Combined Episodes</h2>
-            <p className="text-purple-700 dark:text-purple-300 mt-1">All your subscriptions in one feed</p>
-            <p className="text-xs sm:text-sm text-purple-500 dark:text-purple-400 mt-1">
+            <h2 className={`text-xl sm:text-2xl font-bold leading-tight ${isOriginal ? 'text-blue-50' : 'text-purple-900 dark:text-purple-100'}`}>Combined Episodes</h2>
+            <p className={isOriginal ? 'text-blue-100 mt-1' : 'text-purple-700 dark:text-purple-300 mt-1'}>All your subscriptions in one feed</p>
+            <p className={`text-xs sm:text-sm mt-1 ${isOriginal ? 'text-blue-200' : 'text-purple-500 dark:text-purple-400'}`}>
               {subscribedFeeds} shows • {totalEpisodes} episodes
             </p>
           </div>
@@ -164,7 +176,7 @@ export default function CombinedEpisodesView() {
           <button
             onClick={handleCopyRss}
             className="px-3 py-2 text-sm font-medium text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center gap-2"
-            style={{ background: 'linear-gradient(to right, #ec4899, #8b5cf6, #06b6d4)' }}
+            style={isOriginal ? { background: 'linear-gradient(to right, #2563eb, #0ea5e9, #06b6d4)', boxShadow: '0 8px 20px rgba(37, 99, 235, 0.25)' } : { background: 'linear-gradient(to right, #ec4899, #8b5cf6, #06b6d4)' }}
           >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
               <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1Z"/>
@@ -174,19 +186,27 @@ export default function CombinedEpisodesView() {
           <button
             onClick={() => refreshAllMutation.mutate()}
             disabled={refreshAllMutation.isPending}
-            className="px-3 py-2 text-sm font-medium rounded-xl transition-colors bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`px-3 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              isOriginal
+                ? 'bg-blue-900/60 border border-blue-300/45 text-blue-100 hover:bg-blue-800/70'
+                : 'bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50'
+            }`}
           >
             {refreshAllMutation.isPending ? 'Refreshing...' : 'Refresh All Feeds'}
           </button>
           {/* Filter in header - Prompt 3 */}
-          <label className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 cursor-pointer ml-auto">
+          <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer ml-auto ${
+            isOriginal
+              ? 'bg-blue-900/60 border-blue-300/45'
+              : 'bg-white/80 dark:bg-purple-950/50 border-purple-200/50 dark:border-purple-700/30'
+          }`}>
             <input
               type="checkbox"
               checked={showUnprocessedOnly}
               onChange={(e) => setShowUnprocessedOnly(e.target.checked)}
-              className="rounded border-purple-300 text-purple-600 focus:ring-purple-500"
+              className={`rounded ${isOriginal ? 'border-blue-300 text-blue-500 focus:ring-blue-400' : 'border-purple-300 text-purple-600 focus:ring-purple-500'}`}
             />
-            <span className="text-sm text-purple-700 dark:text-purple-300">Unprocessed only</span>
+            <span className={`text-sm ${isOriginal ? 'text-blue-100' : 'text-purple-700 dark:text-purple-300'}`}>Unprocessed only</span>
           </label>
         </div>
       </div>
@@ -195,14 +215,14 @@ export default function CombinedEpisodesView() {
       <div className="flex-1 overflow-y-auto p-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-32">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600" />
+            <div className={`animate-spin rounded-full h-6 w-6 border-b-2 ${isOriginal ? 'border-blue-300' : 'border-purple-600'}`} />
           </div>
         ) : episodes.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-purple-500 dark:text-purple-400">
+            <p className={isOriginal ? 'text-blue-200' : 'text-purple-500 dark:text-purple-400'}>
               {showUnprocessedOnly ? 'No unprocessed episodes' : 'No episodes found'}
             </p>
-            <p className="text-sm text-purple-400 dark:text-purple-500 mt-1">
+            <p className={`text-sm mt-1 ${isOriginal ? 'text-blue-300/90' : 'text-purple-400 dark:text-purple-500'}`}>
               Subscribe to podcasts to see episodes here
             </p>
           </div>
@@ -212,9 +232,13 @@ export default function CombinedEpisodesView() {
               <div
                 key={episode.guid}
                 className={`p-4 rounded-xl border transition-all ${
-                  episode.whitelisted || episode.has_processed_audio
-                    ? 'bg-white/80 dark:bg-purple-950/50 border-purple-200/60 dark:border-purple-700/40 shadow-sm'
-                    : 'bg-purple-100/30 dark:bg-purple-950/30 border-purple-200/30 dark:border-purple-800/20 border-dashed'
+                  isOriginal
+                    ? episode.whitelisted || episode.has_processed_audio
+                      ? 'bg-blue-900/50 border-blue-300/40 shadow-sm'
+                      : 'bg-blue-900/30 border-blue-300/30 border-dashed'
+                    : episode.whitelisted || episode.has_processed_audio
+                      ? 'bg-white/80 dark:bg-purple-950/50 border-purple-200/60 dark:border-purple-700/40 shadow-sm'
+                      : 'bg-purple-100/30 dark:bg-purple-950/30 border-purple-200/30 dark:border-purple-800/20 border-dashed'
                 }`}
               >
                 {/* Top row: Thumbnail + Title + Status badge */}
@@ -225,21 +249,25 @@ export default function CombinedEpisodesView() {
                     className="flex-shrink-0"
                   >
                     <img
-                      src={episode.image_url || episode.feed_image || '/images/logos/unicorn-logo.png'}
+                      src={episode.image_url || episode.feed_image || themeLogoPath}
                       alt=""
-                      className="w-12 h-12 rounded-lg object-cover border border-purple-200/50 dark:border-purple-700/50"
+                      className={`w-12 h-12 rounded-lg object-cover border ${isOriginal ? 'border-blue-300/40' : 'border-purple-200/50 dark:border-purple-700/50'}`}
                     />
                   </Link>
                   <div className="flex-1 min-w-0">
                     <button
                       onClick={() => setSelectedEpisode(episode)}
-                      className="text-left font-medium text-purple-900 dark:text-purple-100 line-clamp-2 leading-snug hover:text-purple-700 dark:hover:text-purple-300 hover:underline cursor-pointer transition-colors"
+                      className={`text-left font-medium line-clamp-2 leading-snug hover:underline cursor-pointer transition-colors ${
+                        isOriginal
+                          ? 'text-blue-100 hover:text-white'
+                          : 'text-purple-900 dark:text-purple-100 hover:text-purple-700 dark:hover:text-purple-300'
+                      }`}
                     >
                       {episode.title}
                     </button>
                     <Link
                       to={`/podcasts?feed=${episode.feed_id}`}
-                      className="text-sm text-purple-600 dark:text-purple-400 hover:underline block mt-0.5"
+                      className={`text-sm hover:underline block mt-0.5 ${isOriginal ? 'text-blue-200' : 'text-purple-600 dark:text-purple-400'}`}
                     >
                       {episode.feed_title}
                     </Link>
@@ -261,7 +289,11 @@ export default function CombinedEpisodesView() {
                         Enabled
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-purple-100/50 dark:bg-purple-900/30 text-purple-400 dark:text-purple-500 rounded-lg border border-dashed border-purple-300/50 dark:border-purple-700/50">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg border border-dashed ${
+                        isOriginal
+                          ? 'bg-blue-900/45 text-blue-200 border-blue-300/40'
+                          : 'bg-purple-100/50 dark:bg-purple-900/30 text-purple-400 dark:text-purple-500 border-purple-300/50 dark:border-purple-700/50'
+                      }`}>
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                         </svg>
@@ -272,11 +304,11 @@ export default function CombinedEpisodesView() {
                 </div>
 
                 {/* Middle row: Metadata */}
-                <div className="flex items-center gap-2 text-sm text-purple-400 dark:text-purple-500 mb-3">
+                <div className={`flex items-center gap-2 text-sm mb-3 ${isOriginal ? 'text-blue-200' : 'text-purple-400 dark:text-purple-500'}`}>
                   <span>{formatDate(episode.release_date)}</span>
                   {episode.duration && (
                     <>
-                      <span className="text-purple-200 dark:text-purple-600">•</span>
+                      <span className={isOriginal ? 'text-blue-300/80' : 'text-purple-200 dark:text-purple-600'}>•</span>
                       <span>{formatDuration(episode.duration)}</span>
                     </>
                   )}
@@ -288,9 +320,13 @@ export default function CombinedEpisodesView() {
                   <button
                     onClick={() => whitelistMutation.mutate({ guid: episode.guid, whitelisted: !episode.whitelisted })}
                     className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 border ${
-                      episode.whitelisted
-                        ? 'bg-white dark:bg-gray-800 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30'
-                        : 'bg-white dark:bg-gray-800 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'
+                      isOriginal
+                        ? episode.whitelisted
+                          ? 'bg-blue-950/55 border-red-300/45 text-red-200 hover:bg-red-900/28'
+                          : 'bg-blue-950/55 border-emerald-300/45 text-emerald-100 hover:bg-emerald-900/24'
+                        : episode.whitelisted
+                          ? 'bg-white dark:bg-gray-800 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30'
+                          : 'bg-white dark:bg-gray-800 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'
                     }`}
                   >
                     {episode.whitelisted ? (

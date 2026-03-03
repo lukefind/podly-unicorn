@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import axios from 'axios';
 import { authApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface UserProfileModalProps {
 
 export default function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
   const { user, changePassword, logout } = useAuth();
+  useEscapeKey(isOpen, onClose);
   
   const [activeTab, setActiveTab] = useState<'password' | 'delete'>('password');
   

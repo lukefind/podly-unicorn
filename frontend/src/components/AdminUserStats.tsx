@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { authApi } from '../services/api';
 import type { UserStats } from '../services/api';
 import { useState } from 'react';
+import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface AdminUserStatsProps {
   onRoleChange?: (username: string, newRole: string) => Promise<void>;
@@ -84,6 +86,8 @@ interface DownloadAttemptsModalProps {
 }
 
 function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsModalProps) {
+  useEscapeKey(true, onClose);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['download-attempts', userId],
     queryFn: () => authApi.getDownloadAttempts({ user_id: userId, limit: 500 }),
@@ -239,6 +243,8 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
 }
 
 function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, adminCount, isCurrentUser }: UserStatCardProps) {
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -260,7 +266,13 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 p-5 shadow-sm unicorn-card">
+    <div
+      className={`rounded-xl border p-5 shadow-sm unicorn-card ${
+        isOriginal
+          ? 'bg-blue-900/45 border-blue-300/35'
+          : 'bg-white/80 backdrop-blur-sm border-purple-200/50'
+      }`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -268,39 +280,55 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
             {user.username.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h3 className="font-semibold text-purple-900">{user.username}</h3>
+            <h3 className={`font-semibold ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>{user.username}</h3>
             <span className={`text-xs px-2 py-0.5 rounded-full ${
-              user.role === 'admin' 
-                ? 'bg-purple-100 text-purple-700' 
-                : 'bg-gray-100 text-gray-600'
+              user.role === 'admin'
+                ? isOriginal
+                  ? 'bg-blue-800/70 text-blue-100 border border-blue-300/40'
+                  : 'bg-purple-100 text-purple-700'
+                : isOriginal
+                  ? 'bg-blue-900/65 text-blue-200 border border-blue-300/35'
+                  : 'bg-gray-100 text-gray-600'
             }`}>
               {user.role}
             </span>
           </div>
         </div>
-        <div className="text-right text-xs text-purple-400">
+        <div className={`text-right text-xs ${isOriginal ? 'text-blue-200' : 'text-purple-400'}`}>
           Last active: {formatDate(user.last_activity)}
         </div>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-4 gap-2 mb-4">
-        <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-lg p-2 text-center">
-          <div className="text-xl font-bold text-pink-600">{user.episodes_processed}</div>
-          <div className="text-xs text-pink-500">Processed</div>
+        <div
+          className="rounded-lg p-2 text-center"
+          style={isOriginal ? { background: 'linear-gradient(135deg, rgba(25, 72, 128, 0.95), rgba(20, 58, 104, 0.95))', border: '1px solid rgba(96, 165, 250, 0.38)' } : undefined}
+        >
+          <div className={`text-xl font-bold ${isOriginal ? 'text-blue-100' : 'text-pink-600'}`}>{user.episodes_processed}</div>
+          <div className={`text-xs ${isOriginal ? 'text-blue-200' : 'text-pink-500'}`}>Processed</div>
         </div>
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-2 text-center">
-          <div className="text-xl font-bold text-purple-600">{user.processed_downloads}</div>
-          <div className="text-xs text-purple-500">Downloads</div>
-          <div className="text-[10px] text-purple-400">RSS: {user.rss_processed_downloads ?? 0}</div>
+        <div
+          className="rounded-lg p-2 text-center"
+          style={isOriginal ? { background: 'linear-gradient(135deg, rgba(23, 67, 119, 0.95), rgba(17, 52, 96, 0.95))', border: '1px solid rgba(96, 165, 250, 0.38)' } : undefined}
+        >
+          <div className={`text-xl font-bold ${isOriginal ? 'text-blue-100' : 'text-purple-600'}`}>{user.processed_downloads}</div>
+          <div className={`text-xs ${isOriginal ? 'text-blue-200' : 'text-purple-500'}`}>Downloads</div>
+          <div className={`text-[10px] ${isOriginal ? 'text-blue-300/90' : 'text-purple-400'}`}>RSS: {user.rss_processed_downloads ?? 0}</div>
         </div>
-        <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg p-2 text-center">
-          <div className="text-sm font-bold text-cyan-600">{user.ad_time_removed_formatted || '0s'}</div>
-          <div className="text-xs text-cyan-500">Ads Removed</div>
+        <div
+          className="rounded-lg p-2 text-center"
+          style={isOriginal ? { background: 'linear-gradient(135deg, rgba(10, 110, 138, 0.94), rgba(14, 132, 167, 0.9))', border: '1px solid rgba(125, 211, 252, 0.45)' } : undefined}
+        >
+          <div className={`text-sm font-bold ${isOriginal ? 'text-cyan-50' : 'text-cyan-600'}`}>{user.ad_time_removed_formatted || '0s'}</div>
+          <div className={`text-xs ${isOriginal ? 'text-cyan-100' : 'text-cyan-500'}`}>Ads Removed</div>
         </div>
-        <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-2 text-center">
-          <div className="text-xl font-bold text-indigo-600">{user.subscriptions_count ?? 0}</div>
-          <div className="text-xs text-indigo-500">Subscribed</div>
+        <div
+          className="rounded-lg p-2 text-center"
+          style={isOriginal ? { background: 'linear-gradient(135deg, rgba(55, 65, 132, 0.94), rgba(67, 56, 169, 0.9))', border: '1px solid rgba(165, 180, 252, 0.45)' } : undefined}
+        >
+          <div className={`text-xl font-bold ${isOriginal ? 'text-indigo-50' : 'text-indigo-600'}`}>{user.subscriptions_count ?? 0}</div>
+          <div className={`text-xs ${isOriginal ? 'text-indigo-100' : 'text-indigo-500'}`}>Subscribed</div>
         </div>
       </div>
 
@@ -308,10 +336,10 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
       {user.recent_downloads.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <div className="text-xs font-medium text-purple-500 dark:text-purple-300">Recent Downloads</div>
+            <div className={`text-xs font-medium ${isOriginal ? 'text-blue-200' : 'text-purple-500 dark:text-purple-300'}`}>Recent Downloads</div>
             <button
               type="button"
-              className="text-xs text-cyan-500 hover:text-cyan-400 underline font-medium"
+              className={`text-xs underline font-medium ${isOriginal ? 'text-blue-100 hover:text-white' : 'text-cyan-500 hover:text-cyan-400'}`}
               onClick={() => setShowDownloadAttempts(true)}
             >
               View all attempts
@@ -319,9 +347,9 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
           </div>
           <div className="space-y-1 max-h-24 overflow-y-auto">
             {user.recent_downloads.slice(0, 3).map((download, idx) => (
-              <div key={idx} className="flex items-center justify-between text-xs bg-purple-50/50 rounded px-2 py-1">
-                <span className="truncate flex-1 text-purple-700">{download.post_title}</span>
-                <span className="text-purple-400 ml-2 whitespace-nowrap">
+              <div key={idx} className={`flex items-center justify-between text-xs rounded px-2 py-1 ${isOriginal ? 'bg-blue-900/45' : 'bg-purple-50/50'}`}>
+                <span className={`truncate flex-1 ${isOriginal ? 'text-blue-100' : 'text-purple-700'}`}>{download.post_title}</span>
+                <span className={`${isOriginal ? 'text-blue-300/90' : 'text-purple-400'} ml-2 whitespace-nowrap`}>
                   {formatDate(download.downloaded_at)}
                 </span>
               </div>
@@ -333,10 +361,10 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
       {user.recent_downloads.length === 0 && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <div className="text-xs text-purple-300">No downloads yet</div>
+            <div className={`text-xs ${isOriginal ? 'text-blue-200' : 'text-purple-300'}`}>No downloads yet</div>
             <button
               type="button"
-              className="text-xs text-cyan-500 hover:text-cyan-400 underline font-medium"
+              className={`text-xs underline font-medium ${isOriginal ? 'text-blue-100 hover:text-white' : 'text-cyan-500 hover:text-cyan-400'}`}
               onClick={() => setShowDownloadAttempts(true)}
             >
               View all attempts
@@ -356,11 +384,15 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
 
       {/* User Controls */}
       {(onRoleChange || onDeleteUser || onResetPassword) && (
-        <div className="border-t border-purple-200/50 pt-3 mt-3">
+        <div className={`border-t pt-3 mt-3 ${isOriginal ? 'border-blue-300/35' : 'border-purple-200/50'}`}>
           <div className="flex flex-wrap items-center gap-2">
             {onRoleChange && (
               <select
-                className="text-xs px-2 py-1 rounded border border-purple-200 bg-white dark:bg-slate-800 dark:border-purple-600 dark:text-purple-200"
+                className={`text-xs px-2 py-1 rounded border ${
+                  isOriginal
+                    ? 'border-blue-300/45 bg-blue-900/65 text-blue-100'
+                    : 'border-purple-200 bg-white dark:bg-slate-800 dark:border-purple-600 dark:text-purple-200'
+                }`}
                 value={user.role}
                 onChange={(e) => {
                   if (e.target.value !== user.role) {
@@ -377,7 +409,11 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
             {onResetPassword && (
               <button
                 type="button"
-                className="text-xs px-2 py-1 border border-purple-200 dark:border-purple-600 rounded hover:bg-purple-50 dark:hover:bg-purple-800 dark:text-purple-200"
+                className={`text-xs px-2 py-1 border rounded ${
+                  isOriginal
+                    ? 'border-blue-300/45 text-blue-100 hover:bg-blue-900/55'
+                    : 'border-purple-200 dark:border-purple-600 hover:bg-purple-50 dark:hover:bg-purple-800 dark:text-purple-200'
+                }`}
                 onClick={() => setShowPasswordForm(!showPasswordForm)}
               >
                 {showPasswordForm ? 'Cancel' : 'Set password'}
@@ -386,7 +422,11 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
             {onDeleteUser && (
               <button
                 type="button"
-                className="text-xs px-2 py-1 border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50"
+                className={`text-xs px-2 py-1 border rounded disabled:opacity-50 ${
+                  isOriginal
+                    ? 'border-red-300/50 text-red-200 hover:bg-red-900/28'
+                    : 'border-red-200 text-red-600 hover:bg-red-50'
+                }`}
                 onClick={() => void onDeleteUser(user.username)}
                 disabled={user.role === 'admin' && adminCount <= 1}
               >
@@ -411,7 +451,11 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
               <input
                 type="password"
                 placeholder="New password"
-                className="text-xs px-2 py-1 rounded border border-purple-200 dark:bg-slate-800 dark:border-purple-600 w-24"
+                className={`text-xs px-2 py-1 rounded border w-24 ${
+                  isOriginal
+                    ? 'border-blue-300/45 bg-blue-900/65 text-blue-100'
+                    : 'border-purple-200 dark:bg-slate-800 dark:border-purple-600'
+                }`}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
@@ -419,14 +463,22 @@ function UserStatCard({ user, onRoleChange, onDeleteUser, onResetPassword, admin
               <input
                 type="password"
                 placeholder="Confirm"
-                className="text-xs px-2 py-1 rounded border border-purple-200 dark:bg-slate-800 dark:border-purple-600 w-24"
+                className={`text-xs px-2 py-1 rounded border w-24 ${
+                  isOriginal
+                    ? 'border-blue-300/45 bg-blue-900/65 text-blue-100'
+                    : 'border-purple-200 dark:bg-slate-800 dark:border-purple-600'
+                }`}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
               />
               <button
                 type="submit"
-                className="text-xs px-2 py-1 rounded bg-purple-600 text-white hover:bg-purple-700"
+                className={`text-xs px-2 py-1 rounded text-white ${
+                  isOriginal
+                    ? 'bg-blue-500 hover:bg-blue-400 border border-blue-300/55'
+                    : 'bg-purple-600 hover:bg-purple-700'
+                }`}
               >
                 Update
               </button>

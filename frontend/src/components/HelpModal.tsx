@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface HelpModalProps {
   isOpen: boolean;
@@ -65,6 +66,7 @@ const tabs: Tab[] = [
 
 export default function HelpModal({ isOpen, onClose, onReplayTutorial }: HelpModalProps) {
   const [activeTab, setActiveTab] = useState<TabId>('getting-started');
+  useEscapeKey(isOpen, onClose);
 
   if (!isOpen) return null;
 
