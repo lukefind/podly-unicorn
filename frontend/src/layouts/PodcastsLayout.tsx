@@ -324,7 +324,7 @@ export default function PodcastsLayout() {
                   </svg>
                 </button>
               </div>
-              <div className="overflow-y-auto px-3 py-2 sm:px-4 sm:py-3 flex-1 bg-white dark:bg-gray-800">
+              <div className="overflow-y-auto px-3 py-2 sm:px-4 sm:py-3 flex-1">
                 <AddFeedForm
                   onSuccess={() => {
                     setShowAddForm(false);

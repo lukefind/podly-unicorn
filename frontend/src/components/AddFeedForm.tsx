@@ -168,7 +168,7 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex gap-2 mb-3">
+      <div className="flex gap-1 mb-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg p-0.5">
         <button
           type="button"
           onClick={() => {
@@ -176,10 +176,10 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
             setError('');
             resetSearchState();
           }}
-          className={`flex-1 px-2 py-1.5 text-sm rounded-md border ${
+          className={`flex-1 px-2 py-1.5 text-sm rounded-md transition-colors ${
             activeMode === 'search'
-              ? 'bg-blue-50 border-blue-500 text-blue-700'
-              : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+              ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm font-medium'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
           }`}
         >
           Search
@@ -189,10 +189,10 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
           onClick={() => {
             setActiveMode('url');
           }}
-          className={`flex-1 px-2 py-1.5 text-sm rounded-md border transition-colors ${
+          className={`flex-1 px-2 py-1.5 text-sm rounded-md transition-colors ${
             activeMode === 'url'
-              ? 'bg-blue-50 border-blue-500 text-blue-700'
-              : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+              ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm font-medium'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
           }`}
         >
           RSS URL
@@ -233,7 +233,7 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
       )}
 
       {activeMode === 'search' && !previewPodcast && (
-        <div className="flex flex-col flex-1 min-h-0 gap-3">
+        <div className="flex flex-col flex-1 min-h-0 gap-2">
           <div className="flex gap-2">
             <input
               ref={searchInputRef}
@@ -242,7 +242,7 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search podcasts..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-gray-100"
               autoComplete="off"
             />
             {isSearching && (
@@ -266,20 +266,18 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
 
           {searchResults.length > 0 && (
             <div className="flex flex-col flex-1 min-h-0">
-              <div className="flex justify-between items-center text-sm text-gray-500">
-                <span>
-                  Showing {startIndex}-{endIndex} of {totalResults} results
-                </span>
-                <div className="flex gap-2">
+              <div className="flex justify-between items-center text-xs text-gray-400 dark:text-gray-500 mb-1">
+                <span>{startIndex}-{endIndex} of {totalResults}</span>
+                <div className="flex gap-1">
                   <button
                     type="button"
                     onClick={() =>
                       setSearchPage((prev) => Math.max(prev - 1, 1))
                     }
                     disabled={isSearching || searchPage <= 1}
-                    className="px-3 py-1 border border-gray-200 rounded-md disabled:text-gray-400 disabled:border-gray-200 hover:bg-gray-100 transition-colors"
+                    className="px-2 py-0.5 text-xs rounded disabled:text-gray-300 dark:disabled:text-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
-                    Previous
+                    Prev
                   </button>
                   <button
                     type="button"
@@ -287,44 +285,46 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
                       setSearchPage((prev) => Math.min(prev + 1, totalPages))
                     }
                     disabled={isSearching || searchPage >= totalPages}
-                    className="px-3 py-1 border border-gray-200 rounded-md disabled:text-gray-400 disabled:border-gray-200 hover:bg-gray-100 transition-colors"
+                    className="px-2 py-0.5 text-xs rounded disabled:text-gray-300 dark:disabled:text-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     Next
                   </button>
                 </div>
               </div>
 
-              <ul className="space-y-3 flex-1 overflow-y-auto pr-2">
-                {displayedResults.map((result) => (
+              <ul className="flex-1 overflow-y-auto -mx-3 sm:-mx-4">
+                {displayedResults.map((result, idx) => (
                   <li
                     key={result.feedUrl}
-                    className="border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+                    className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer ${
+                      idx > 0 ? 'border-t border-gray-100 dark:border-gray-700/50' : ''
+                    }`}
                     onClick={() => setPreviewPodcast(result)}
                   >
-                    <div className="flex gap-3 p-3">
+                    <div className="flex items-center gap-3 px-3 sm:px-4 py-2.5">
                       {result.artworkUrl ? (
                         <img
                           src={result.artworkUrl}
                           alt={result.title}
-                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-md object-cover flex-shrink-0"
+                          className="w-11 h-11 sm:w-14 sm:h-14 rounded-lg object-cover flex-shrink-0"
                         />
                       ) : (
-                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 text-xs flex-shrink-0">
-                          No Image
+                        <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 text-xs flex-shrink-0">
+                          No Art
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-gray-900 line-clamp-2">{result.title}</h4>
+                        <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm line-clamp-1">{result.title}</h4>
                         {result.author && (
-                          <p className="text-sm text-gray-600 truncate">{result.author}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{result.author}</p>
                         )}
                         {result.genres.length > 0 && (
-                          <p className="text-xs text-gray-500 truncate">
+                          <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
                             {result.genres.join(' · ')}
                           </p>
                         )}
                       </div>
-                      <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </div>
