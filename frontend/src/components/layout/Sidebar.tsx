@@ -221,7 +221,11 @@ export default function Sidebar({ collapsed = false, onToggle, onNavigate, isMob
           href="https://t.me/+AV5-w_GSd2VjNjBk"
           target="_blank"
           rel="noopener noreferrer"
-          className={`w-full flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg hover:bg-[#229ED9]/20 text-[#229ED9] hover:text-[#229ED9] transition-colors`}
+          className={`w-full flex items-center ${collapsed && !isMobile ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg transition-colors ${
+            theme === 'original'
+              ? 'text-blue-200 hover:text-white hover:bg-blue-700/35'
+              : 'hover:bg-[#229ED9]/20 text-[#229ED9] hover:text-[#229ED9]'
+          }`}
           title="Join our Telegram community"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">

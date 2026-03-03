@@ -1901,23 +1901,28 @@ function EnvOverrideWarningModal({
 function Section({ title, children, icon }: { title: string; children: ReactNode; icon?: ReactNode }) {
   const { theme } = useTheme();
   const isOriginal = theme === 'original';
-  const headerClassName = isOriginal
-    ? 'px-4 py-3 border-b'
-    : 'px-4 py-3 border-b border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50';
 
   return (
     <div
-      className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm unicorn-card"
-      style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.45)', backgroundColor: 'rgba(10, 34, 74, 0.78)', backdropFilter: 'none' } : undefined}
+      className={`rounded-xl border shadow-sm overflow-hidden ${
+        isOriginal
+          ? ''
+          : 'bg-white/80 backdrop-blur-sm border-purple-200/50 unicorn-card'
+      }`}
+      style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.35)', backgroundColor: 'rgba(10, 34, 74, 0.85)' } : undefined}
     >
       <div
-        className={headerClassName}
+        className={`px-4 py-2.5 border-b ${
+          isOriginal
+            ? ''
+            : 'border-purple-100/50 bg-gradient-to-r from-pink-50/50 via-purple-50/50 to-cyan-50/50'
+        }`}
         style={isOriginal ? {
-          borderColor: 'rgba(125, 211, 252, 0.34)',
-          background: 'linear-gradient(90deg, rgba(17, 61, 112, 0.92), rgba(34, 96, 162, 0.9), rgba(17, 61, 112, 0.92))',
+          borderColor: 'rgba(96, 165, 250, 0.25)',
+          background: 'linear-gradient(90deg, rgba(20, 70, 126, 0.95), rgba(30, 85, 149, 0.95), rgba(20, 70, 126, 0.95))',
         } : undefined}
       >
-        <h3 className={`text-sm font-semibold flex items-center gap-2 ${isOriginal ? 'text-blue-50' : 'text-purple-900'}`}>
+        <h3 className={`text-sm font-semibold flex items-center gap-2 ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>
           {icon}
           {title}
         </h3>

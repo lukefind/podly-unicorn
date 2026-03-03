@@ -3,6 +3,7 @@ import { feedsApi } from '../services/api';
 import type { PodcastSearchResult } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useTheme } from '../contexts/ThemeContext';
 
 // Debounce hook for live search
 function useDebounce<T>(value: T, delay: number): T {
@@ -38,6 +39,8 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
   const [addingFeedUrl, setAddingFeedUrl] = useState<string | null>(null);
   const [addingPrivately, setAddingPrivately] = useState(false);
   const { requireAuth } = useAuth();
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
 
   // Normalize URLs for comparison (remove trailing slashes, lowercase)
   const normalizeUrl = (url: string) => url.toLowerCase().replace(/\/+$/, '');
@@ -168,7 +171,7 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex gap-1 mb-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg p-0.5">
+      <div className={`flex gap-1 mb-3 rounded-lg p-0.5 ${isOriginal ? 'bg-blue-900/50' : 'bg-gray-100 dark:bg-gray-700/50'}`}>
         <button
           type="button"
           onClick={() => {
@@ -178,8 +181,12 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
           }}
           className={`flex-1 px-2 py-1.5 text-sm rounded-md transition-colors ${
             activeMode === 'search'
-              ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm font-medium'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              ? isOriginal
+                ? 'bg-blue-600 text-white shadow-sm font-medium'
+                : 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm font-medium'
+              : isOriginal
+                ? 'text-blue-200 hover:text-white'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
           }`}
         >
           Search
@@ -191,8 +198,12 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
           }}
           className={`flex-1 px-2 py-1.5 text-sm rounded-md transition-colors ${
             activeMode === 'url'
-              ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm font-medium'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              ? isOriginal
+                ? 'bg-blue-600 text-white shadow-sm font-medium'
+                : 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm font-medium'
+              : isOriginal
+                ? 'text-blue-200 hover:text-white'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
           }`}
         >
           RSS URL
@@ -202,7 +213,7 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
       {activeMode === 'url' && (
         <form onSubmit={handleSubmitManual} className="space-y-4">
           <div>
-            <label htmlFor="feed-url" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="feed-url" className={`block text-sm font-medium mb-1 ${isOriginal ? 'text-blue-200' : 'text-gray-700'}`}>
               RSS Feed URL
             </label>
             <input
@@ -211,7 +222,11 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com/podcast/feed.xml"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                isOriginal
+                  ? 'bg-blue-950/60 border-blue-400/30 text-blue-100 placeholder-blue-300/40'
+                  : 'border-gray-300 bg-white'
+              }`}
               required
             />
           </div>
@@ -242,7 +257,11 @@ export default function AddFeedForm({ onSuccess, subscribedFeedUrls = [] }: AddF
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search podcasts..."
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-gray-100"
+              className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                isOriginal
+                  ? 'bg-blue-950/60 border-blue-400/30 text-blue-100 placeholder-blue-300/40'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+              }`}
               autoComplete="off"
             />
             {isSearching && (
