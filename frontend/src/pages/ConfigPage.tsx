@@ -1267,35 +1267,31 @@ export default function ConfigPage() {
                 </div>
               </Field>
               <Field label="OpenAI Timeout (sec)">
-                <input
-                  className="input"
-                  type="number"
-                  value={pending?.llm?.openai_timeout ?? 300}
-                  onChange={(e) => setField(['llm', 'openai_timeout'], Number(e.target.value))}
+                <NumberInput
+                  value={pending?.llm?.openai_timeout}
+                  defaultValue={300}
+                  onChange={(val) => setField(['llm', 'openai_timeout'], val)}
                 />
               </Field>
               <Field label="OpenAI Max Tokens">
-                <input
-                  className="input"
-                  type="number"
-                  value={pending?.llm?.openai_max_tokens ?? 4096}
-                  onChange={(e) => setField(['llm', 'openai_max_tokens'], Number(e.target.value))}
+                <NumberInput
+                  value={pending?.llm?.openai_max_tokens}
+                  defaultValue={4096}
+                  onChange={(val) => setField(['llm', 'openai_max_tokens'], val)}
                 />
               </Field>
               <Field label="Max Concurrent LLM Calls">
-                <input
-                  className="input"
-                  type="number"
-                  value={pending?.llm?.llm_max_concurrent_calls ?? 3}
-                  onChange={(e) => setField(['llm', 'llm_max_concurrent_calls'], Number(e.target.value))}
+                <NumberInput
+                  value={pending?.llm?.llm_max_concurrent_calls}
+                  defaultValue={3}
+                  onChange={(val) => setField(['llm', 'llm_max_concurrent_calls'], val)}
                 />
               </Field>
               <Field label="Max Retry Attempts">
-                <input
-                  className="input"
-                  type="number"
-                  value={pending?.llm?.llm_max_retry_attempts ?? 5}
-                  onChange={(e) => setField(['llm', 'llm_max_retry_attempts'], Number(e.target.value))}
+                <NumberInput
+                  value={pending?.llm?.llm_max_retry_attempts}
+                  defaultValue={5}
+                  onChange={(val) => setField(['llm', 'llm_max_retry_attempts'], val)}
                 />
               </Field>
               <Field label="Enable Token Rate Limiting">
@@ -1306,19 +1302,17 @@ export default function ConfigPage() {
                 />
               </Field>
               <Field label="Max Input Tokens Per Call (optional)">
-                <input
-                  className="input"
-                  type="number"
-                  value={pending?.llm?.llm_max_input_tokens_per_call ?? ''}
-                  onChange={(e) => setField(['llm', 'llm_max_input_tokens_per_call'], e.target.value === '' ? null : Number(e.target.value))}
+                <NumberInput
+                  value={pending?.llm?.llm_max_input_tokens_per_call}
+                  allowEmpty
+                  onChange={(val) => setField(['llm', 'llm_max_input_tokens_per_call'], val)}
                 />
               </Field>
               <Field label="Max Input Tokens Per Minute (optional)">
-                <input
-                  className="input"
-                  type="number"
-                  value={pending?.llm?.llm_max_input_tokens_per_minute ?? ''}
-                  onChange={(e) => setField(['llm', 'llm_max_input_tokens_per_minute'], e.target.value === '' ? null : Number(e.target.value))}
+                <NumberInput
+                  value={pending?.llm?.llm_max_input_tokens_per_minute}
+                  allowEmpty
+                  onChange={(val) => setField(['llm', 'llm_max_input_tokens_per_minute'], val)}
                 />
               </Field>
             </div>
@@ -1446,19 +1440,17 @@ export default function ConfigPage() {
                   />
                 </Field>
                 <Field label="Timeout (sec)" envMeta={getEnvHint('whisper.timeout_sec')}>
-                  <input
-                    className="input"
-                    type="number"
-                    value={pending?.whisper?.timeout_sec ?? 600}
-                    onChange={(e) => setField(['whisper', 'timeout_sec'], Number(e.target.value))}
+                  <NumberInput
+                    value={pending?.whisper?.timeout_sec}
+                    defaultValue={600}
+                    onChange={(val) => setField(['whisper', 'timeout_sec'], val)}
                   />
                 </Field>
                 <Field label="Chunk Size (MB)" envMeta={getEnvHint('whisper.chunksize_mb')}>
-                  <input
-                    className="input"
-                    type="number"
-                    value={pending?.whisper?.chunksize_mb ?? 24}
-                    onChange={(e) => setField(['whisper', 'chunksize_mb'], Number(e.target.value))}
+                  <NumberInput
+                    value={pending?.whisper?.chunksize_mb}
+                    defaultValue={24}
+                    onChange={(val) => setField(['whisper', 'chunksize_mb'], val)}
                   />
                 </Field>
               </div>
@@ -1509,11 +1501,10 @@ export default function ConfigPage() {
                   />
                 </Field>
                 <Field label="Max Retries" envMeta={getEnvHint('whisper.max_retries')}>
-                  <input
-                    className="input"
-                    type="number"
-                    value={pending?.whisper?.max_retries ?? 3}
-                    onChange={(e) => setField(['whisper', 'max_retries'], Number(e.target.value))}
+                  <NumberInput
+                    value={pending?.whisper?.max_retries}
+                    defaultValue={3}
+                    onChange={(val) => setField(['whisper', 'max_retries'], val)}
                   />
                 </Field>
               </div>
@@ -1547,11 +1538,10 @@ export default function ConfigPage() {
 
           <Section title="Processing">
             <Field label="Number of Segments per Prompt">
-              <input
-                className="input"
-                type="number"
-                value={pending?.processing?.num_segments_to_input_to_prompt ?? 30}
-                onChange={(e) => setField(['processing', 'num_segments_to_input_to_prompt'], Number(e.target.value))}
+              <NumberInput
+                value={pending?.processing?.num_segments_to_input_to_prompt}
+                defaultValue={30}
+                onChange={(val) => setField(['processing', 'num_segments_to_input_to_prompt'], val)}
               />
             </Field>
           </Section>
@@ -1559,36 +1549,32 @@ export default function ConfigPage() {
           <Section title="Output">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Field label="Fade (ms)">
-                <input
-                  className="input"
-                  type="number"
-                  value={pending?.output?.fade_ms ?? 3000}
-                  onChange={(e) => setField(['output', 'fade_ms'], Number(e.target.value))}
+                <NumberInput
+                  value={pending?.output?.fade_ms}
+                  defaultValue={3000}
+                  onChange={(val) => setField(['output', 'fade_ms'], val)}
                 />
               </Field>
               <Field label="Min Segment Separation (sec)">
-                <input
-                  className="input"
-                  type="number"
-                  value={pending?.output?.min_ad_segement_separation_seconds ?? 60}
-                  onChange={(e) => setField(['output', 'min_ad_segement_separation_seconds'], Number(e.target.value))}
+                <NumberInput
+                  value={pending?.output?.min_ad_segement_separation_seconds}
+                  defaultValue={60}
+                  onChange={(val) => setField(['output', 'min_ad_segement_separation_seconds'], val)}
                 />
               </Field>
               <Field label="Min Segment Length (sec)">
-                <input
-                  className="input"
-                  type="number"
-                  value={pending?.output?.min_ad_segment_length_seconds ?? 14}
-                  onChange={(e) => setField(['output', 'min_ad_segment_length_seconds'], Number(e.target.value))}
+                <NumberInput
+                  value={pending?.output?.min_ad_segment_length_seconds}
+                  defaultValue={14}
+                  onChange={(val) => setField(['output', 'min_ad_segment_length_seconds'], val)}
                 />
               </Field>
               <Field label="Min Confidence">
-                <input
-                  className="input"
-                  type="number"
+                <NumberInput
+                  value={pending?.output?.min_confidence}
+                  defaultValue={0.8}
                   step="0.01"
-                  value={pending?.output?.min_confidence ?? 0.8}
-                  onChange={(e) => setField(['output', 'min_confidence'], Number(e.target.value))}
+                  onChange={(val) => setField(['output', 'min_confidence'], val)}
                 />
               </Field>
             </div>
@@ -1597,20 +1583,18 @@ export default function ConfigPage() {
           <Section title="App">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Field label="Feed Refresh Background Interval (min)">
-                <input
-                  className="input"
-                  type="number"
-                  value={pending?.app?.background_update_interval_minute ?? ''}
-                  onChange={(e) => setField(['app', 'background_update_interval_minute'], e.target.value === '' ? null : Number(e.target.value))}
+                <NumberInput
+                  value={pending?.app?.background_update_interval_minute}
+                  allowEmpty
+                  onChange={(val) => setField(['app', 'background_update_interval_minute'], val)}
                 />
               </Field>
               <Field label="Cleanup Retention (days)">
-                <input
-                  className="input"
-                  type="number"
+                <NumberInput
+                  value={pending?.app?.post_cleanup_retention_days}
+                  allowEmpty
                   min={0}
-                  value={pending?.app?.post_cleanup_retention_days ?? ''}
-                  onChange={(e) => setField(['app', 'post_cleanup_retention_days'], e.target.value === '' ? null : Number(e.target.value))}
+                  onChange={(val) => setField(['app', 'post_cleanup_retention_days'], val)}
                 />
               </Field>
               <Field label="Auto-whitelist new episodes">
@@ -1621,13 +1605,11 @@ export default function ConfigPage() {
                 />
               </Field>
               <Field label="Number of episodes to whitelist from new feed archive">
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  value={pending?.app?.number_of_episodes_to_whitelist_from_archive_of_new_feed ?? 1}
-                  onFocus={(e) => e.target.select()}
-                  onChange={(e) => setField(['app', 'number_of_episodes_to_whitelist_from_archive_of_new_feed'], e.target.value === '' ? 0 : Number(e.target.value))}
+                <NumberInput
+                  value={pending?.app?.number_of_episodes_to_whitelist_from_archive_of_new_feed}
+                  defaultValue={1}
+                  min={0}
+                  onChange={(val) => setField(['app', 'number_of_episodes_to_whitelist_from_archive_of_new_feed'], val)}
                 />
               </Field>
             </div>
@@ -1677,12 +1659,11 @@ export default function ConfigPage() {
                     />
                   </Field>
                   <Field label="SMTP Port">
-                    <input
-                      className="input"
-                      type="number"
-                      value={pending?.email?.smtp_port ?? ''}
-                      onChange={(e) => setField(['email', 'smtp_port'], e.target.value === '' ? null : Number(e.target.value))}
+                    <NumberInput
+                      value={pending?.email?.smtp_port}
+                      allowEmpty
                       placeholder="587"
+                      onChange={(val) => setField(['email', 'smtp_port'], val)}
                     />
                   </Field>
                   <Field label="SMTP Username">
@@ -1945,6 +1926,69 @@ function EnvVarHint({ meta }: { meta?: EnvOverrideEntry }) {
 
   return (
     <code className="mt-1 block text-xs text-gray-500 font-mono">{meta.env_var}</code>
+  );
+}
+
+function NumberInput({
+  value,
+  onChange,
+  placeholder,
+  step,
+  min,
+  allowEmpty = false,
+  defaultValue,
+}: {
+  value: number | null | undefined;
+  onChange: (val: number | null) => void;
+  placeholder?: string;
+  step?: string;
+  min?: number;
+  allowEmpty?: boolean;
+  defaultValue?: number;
+}) {
+  const [localValue, setLocalValue] = useState<string>(value?.toString() ?? '');
+  const prevValue = useRef(value);
+
+  useEffect(() => {
+    if (prevValue.current !== value) {
+      setLocalValue(value?.toString() ?? '');
+      prevValue.current = value;
+    }
+  }, [value]);
+
+  const handleBlur = () => {
+    const trimmed = localValue.trim();
+    if (trimmed === '') {
+      if (allowEmpty) {
+        onChange(null);
+      } else {
+        const fallback = defaultValue ?? 0;
+        onChange(fallback);
+        setLocalValue(fallback.toString());
+      }
+      return;
+    }
+    const parsed = step?.includes('.') ? parseFloat(trimmed) : parseInt(trimmed, 10);
+    if (!isNaN(parsed)) {
+      const finalVal = min !== undefined && parsed < min ? min : parsed;
+      onChange(finalVal);
+      setLocalValue(finalVal.toString());
+    } else {
+      const fallback = value ?? defaultValue ?? 0;
+      setLocalValue(fallback.toString());
+    }
+  };
+
+  return (
+    <input
+      className="input"
+      type="text"
+      inputMode={step?.includes('.') ? 'decimal' : 'numeric'}
+      placeholder={placeholder}
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
+    />
   );
 }
 
