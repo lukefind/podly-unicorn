@@ -489,7 +489,7 @@ function FeedSidebarItem({
             {badge && (
               <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
                 isOriginal
-                  ? 'bg-blue-800/70 text-blue-100 border border-blue-300/45'
+                  ? 'bg-blue-800/40 text-blue-200/80'
                   : 'bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300'
               }`}>
                 {badge}

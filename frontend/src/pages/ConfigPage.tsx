@@ -771,7 +771,20 @@ export default function ConfigPage() {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-theme={theme}>
+      <style>{`
+        .input{width:100%;padding:0.5rem 0.75rem;border:1px solid #d1d5db;border-radius:0.5rem;font-size:0.875rem;transition:all 0.15s;background-color:white;color:#111827}
+        .input:focus{outline:none;border-color:#8b5cf6;box-shadow:0 0 0 2px rgba(139,92,246,0.15)}
+        .input::placeholder{color:#9ca3af}
+        [data-theme="original"] .input{background-color:rgba(15,40,80,0.5);border-color:rgba(96,165,250,0.25);color:#bfdbfe}
+        [data-theme="original"] .input:focus{border-color:rgba(96,165,250,0.5);box-shadow:0 0 0 2px rgba(96,165,250,0.12)}
+        [data-theme="original"] .input::placeholder{color:rgba(147,197,253,0.35)}
+        [data-theme="original"] select.input{background-color:rgba(15,40,80,0.5)}
+        [data-theme="dark"] .input{background-color:rgba(30,20,60,0.5);border-color:rgba(139,92,246,0.3);color:#e9d5ff}
+        [data-theme="dark"] .input:focus{border-color:rgba(139,92,246,0.5);box-shadow:0 0 0 2px rgba(139,92,246,0.15)}
+        [data-theme="dark"] .input::placeholder{color:rgba(168,85,247,0.35)}
+        [data-theme="dark"] select.input{background-color:rgba(30,20,60,0.5)}
+      `}</style>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -839,10 +852,14 @@ export default function ConfigPage() {
 
       <Section title="Connection Status">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className={`flex items-center justify-between rounded-lg p-4 ${
-            llmStatus === 'ok' ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700' :
-            llmStatus === 'error' ? 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700' :
-            'bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700'
+          <div className={`flex items-center justify-between rounded-lg p-3 ${
+            isOriginal
+              ? llmStatus === 'ok' ? 'bg-green-900/25 border border-green-400/25'
+                : llmStatus === 'error' ? 'bg-red-900/25 border border-red-400/25'
+                : 'bg-blue-800/30 border border-blue-300/20'
+              : llmStatus === 'ok' ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700'
+                : llmStatus === 'error' ? 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700'
+                : 'bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700'
           }`}>
             <div className="flex items-center gap-3">
               <div className={`w-3 h-3 rounded-full ${
@@ -851,7 +868,7 @@ export default function ConfigPage() {
                 'bg-purple-400 animate-pulse'
               }`} />
               <div>
-                <div className="text-sm font-medium text-gray-900 dark:text-purple-100">LLM Connection</div>
+                <div className={`text-sm font-medium ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'}`}>LLM Connection</div>
                 <div className={`text-xs ${
                   llmStatus === 'ok' ? 'text-green-700 dark:text-green-300' :
                   llmStatus === 'error' ? 'text-red-700 dark:text-red-300' :
@@ -865,16 +882,20 @@ export default function ConfigPage() {
             </div>
             <button
               type="button"
-              className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-purple-200 bg-white dark:bg-purple-800 border border-gray-300 dark:border-purple-600 rounded-lg hover:bg-gray-50 dark:hover:bg-purple-700 transition-colors"
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${isOriginal ? 'text-blue-200 bg-blue-800/40 border border-blue-300/25 hover:bg-blue-700/40' : 'text-gray-700 dark:text-purple-200 bg-white dark:bg-purple-800 border border-gray-300 dark:border-purple-600 hover:bg-gray-50 dark:hover:bg-purple-700'}`}
               onClick={() => void probeConnections()}
             >
               Test
             </button>
           </div>
-          <div className={`flex items-center justify-between rounded-lg p-4 ${
-            whisperStatus === 'ok' ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700' :
-            whisperStatus === 'error' ? 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700' :
-            'bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700'
+          <div className={`flex items-center justify-between rounded-lg p-3 ${
+            isOriginal
+              ? whisperStatus === 'ok' ? 'bg-green-900/25 border border-green-400/25'
+                : whisperStatus === 'error' ? 'bg-red-900/25 border border-red-400/25'
+                : 'bg-blue-800/30 border border-blue-300/20'
+              : whisperStatus === 'ok' ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700'
+                : whisperStatus === 'error' ? 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700'
+                : 'bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700'
           }`}>
             <div className="flex items-center gap-3">
               <div className={`w-3 h-3 rounded-full ${
@@ -883,7 +904,7 @@ export default function ConfigPage() {
                 'bg-purple-400 animate-pulse'
               }`} />
               <div>
-                <div className="text-sm font-medium text-gray-900 dark:text-purple-100">Whisper Connection</div>
+                <div className={`text-sm font-medium ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'}`}>Whisper Connection</div>
                 <div className={`text-xs ${
                   whisperStatus === 'ok' ? 'text-green-700 dark:text-green-300' :
                   whisperStatus === 'error' ? 'text-red-700 dark:text-red-300' :
@@ -897,7 +918,7 @@ export default function ConfigPage() {
             </div>
             <button
               type="button"
-              className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-purple-200 bg-white dark:bg-purple-800 border border-gray-300 dark:border-purple-600 rounded-lg hover:bg-gray-50 dark:hover:bg-purple-700 transition-colors"
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${isOriginal ? 'text-blue-200 bg-blue-800/40 border border-blue-300/25 hover:bg-blue-700/40' : 'text-gray-700 dark:text-purple-200 bg-white dark:bg-purple-800 border border-gray-300 dark:border-purple-600 hover:bg-gray-50 dark:hover:bg-purple-700'}`}
               onClick={() => void probeConnections()}
             >
               Test
@@ -905,165 +926,6 @@ export default function ConfigPage() {
           </div>
         </div>
       </Section>
-
-
-      {showSecurityControls && (
-                  <Section title="Account Security">
-            <form className="grid gap-3 max-w-md" onSubmit={handlePasswordSubmit}>
-              <Field label="Current password">
-                <input
-                  className="input"
-                  type="password"
-                  autoComplete="current-password"
-                  value={passwordForm.current}
-                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, current: event.target.value }))}
-                  required
-                />
-              </Field>
-              <Field label="New password">
-                <input
-                  className="input"
-                  type="password"
-                  autoComplete="new-password"
-                  value={passwordForm.next}
-                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, next: event.target.value }))}
-                  required
-                />
-              </Field>
-              <Field label="Confirm new password">
-                <input
-                  className="input"
-                  type="password"
-                  autoComplete="new-password"
-                  value={passwordForm.confirm}
-                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, confirm: event.target.value }))}
-                  required
-                />
-              </Field>
-              <div className="flex flex-col gap-2 pt-2">
-                <button
-                  type="submit"
-                  className="w-fit px-6 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm font-medium hover:from-purple-700 hover:to-pink-600 disabled:opacity-60 shadow-sm"
-                  disabled={passwordSubmitting}
-                >
-                  {passwordSubmitting ? 'Updating…' : 'Update password'}
-                </button>
-                <p className="text-xs text-purple-500">
-                  After updating, rotate <code className="font-mono bg-purple-50 px-1 rounded">PODLY_ADMIN_PASSWORD</code> to match.
-                </p>
-              </div>
-            </form>
-          </Section>
-      )}
-      {showSecurityControls && user?.role === 'admin' && (
-        <Section title="User Management">
-          <div className="space-y-4">
-            <form className="grid gap-3 md:grid-cols-2" onSubmit={handleCreateUser}>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-purple-200 mb-1">Username</label>
-                <input
-                  className="input"
-                  type="text"
-                  value={newUser.username}
-                  onChange={(event) => setNewUser((prev) => ({ ...prev, username: event.target.value }))}
-                  placeholder="new_user"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-purple-200 mb-1">Password</label>
-                <input
-                  className="input"
-                  type="password"
-                  value={newUser.password}
-                  onChange={(event) => setNewUser((prev) => ({ ...prev, password: event.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-purple-200 mb-1">Confirm password</label>
-                <input
-                  className="input"
-                  type="password"
-                  value={newUser.confirm}
-                  onChange={(event) => setNewUser((prev) => ({ ...prev, confirm: event.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-purple-200 mb-1">Role</label>
-                <select
-                  className="input"
-                  value={newUser.role}
-                  onChange={(event) => setNewUser((prev) => ({ ...prev, role: event.target.value }))}
-                >
-                  <option value="user">user</option>
-                  <option value="admin">admin</option>
-                </select>
-              </div>
-              <div className="md:col-span-2 flex items-center justify-start">
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm font-medium hover:from-purple-700 hover:to-pink-600"
-                >
-                  Add user
-                </button>
-              </div>
-            </form>
-
-            {/* User Statistics with integrated controls */}
-            <AdminUserStats 
-              onRoleChange={handleRoleChange}
-              onDeleteUser={handleDeleteUser}
-              onResetPassword={async (username, password) => {
-                try {
-                  await authApi.updateUser(username, { password });
-                  toast.success(`Password updated for ${username}`);
-                } catch {
-                  toast.error('Failed to reset password');
-                }
-              }}
-              adminCount={managedUsers?.filter(u => u.role === 'admin').length ?? 1}
-              currentUsername={user?.username}
-            />
-          </div>
-        </Section>
-      )}
-
-      {/* Database Maintenance - Admin only */}
-      {showSecurityControls && user?.role === 'admin' && (
-        <Section title="Database Maintenance">
-          <div className="space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h4 className="text-sm font-medium text-gray-900 dark:text-purple-100">Repair Processed Audio Paths</h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Scan for processed audio files on disk and update database records where the path is missing.
-                  Useful after database migrations or server moves.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    toast.loading('Scanning for processed files...', { id: 'repair-paths' });
-                    const result = await feedsApi.repairProcessedPaths();
-                    toast.success(
-                      `Repaired ${result.repaired} of ${result.checked} posts checked${result.total_errors > 0 ? ` (${result.total_errors} errors)` : ''}`,
-                      { id: 'repair-paths', duration: 5000 }
-                    );
-                  } catch (err) {
-                    toast.error('Failed to repair paths', { id: 'repair-paths' });
-                  }
-                }}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
-              >
-                Repair Paths
-              </button>
-            </div>
-          </div>
-        </Section>
-      )}
 
       <div className="space-y-6">
         <Section title="LLM Configuration">
@@ -1126,7 +988,7 @@ export default function ConfigPage() {
                   )}
                 </div>
                 {currentLlmKeyRef !== 'manual' && currentLlmKeyRef !== 'saved' && (
-                  <p className="text-xs text-gray-600">
+                  <p className={`text-xs ${isOriginal ? 'text-blue-300/60' : 'text-gray-600'}`}>
                     Selected key reference: <code className="font-mono">{currentLlmKeyRef}</code>
                   </p>
                 )}
@@ -1195,49 +1057,43 @@ export default function ConfigPage() {
                       Save Key
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className={`text-xs ${isOriginal ? 'text-blue-300/50' : 'text-gray-500'}`}>
                     Saved keys are encrypted server-side and can be re-selected later.
                   </p>
                 </div>
               </Field>
             )}
-            <label className="flex items-start justify-between gap-3">
-              <div className="w-60">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-700">OpenAI Base URL</span>
-                  <button
-                    type="button"
-                    className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-                    onClick={() => setShowBaseUrlInfo((v) => !v)}
-                    title="When is this used?"
-                  >
-                    ⓘ
-                  </button>
-                </div>
+            <div className="block">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className={`text-sm font-medium ${isOriginal ? 'text-blue-200/90' : 'text-gray-700 dark:text-purple-200'}`}>OpenAI Base URL</span>
                 <EnvVarHint meta={getEnvHint('llm.openai_base_url')} />
+                <button
+                  type="button"
+                  className={`px-1.5 py-0.5 text-[10px] rounded ${isOriginal ? 'text-blue-300/60 hover:text-blue-200 hover:bg-blue-800/30' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+                  onClick={() => setShowBaseUrlInfo((v) => !v)}
+                  title="When is this used?"
+                >
+                  ⓘ
+                </button>
               </div>
-              <div className="flex-1">
-                <input
-                  className="input"
-                  type="text"
-                  placeholder="https://api.openai.com/v1"
-                  value={pending?.llm?.openai_base_url || ''}
-                  onChange={(e) => setField(['llm', 'openai_base_url'], e.target.value)}
-                />
-                {showBaseUrlInfo && (
-                  <div className="mt-2 text-xs bg-blue-50 border border-blue-200 rounded p-3 space-y-2">
-                    <p className="font-medium text-blue-800">When do you need a Base URL?</p>
-                    <div className="text-blue-700 space-y-1">
-                      <p>• <strong>Groq, Anthropic, Gemini</strong> — leave empty. Models with a provider prefix (e.g. <code className="bg-white px-1 rounded">groq/</code>, <code className="bg-white px-1 rounded">anthropic/</code>) are routed automatically.</p>
-                      <p>• <strong>xAI Grok</strong> — set to <code className="bg-white px-1 rounded">https://api.x.ai/v1</code>. Models prefixed with <code className="bg-white px-1 rounded">xai/</code> also auto-route, so you can leave it empty if using <code className="bg-white px-1 rounded">xai/grok-3</code>.</p>
-                      <p>• <strong>OpenAI</strong> — leave empty (uses default). Only set this if you use a custom OpenAI-compatible endpoint.</p>
-                    </div>
-                    <p className="text-blue-600 italic">Selecting a provider above auto-fills the correct Base URL for you.</p>
+              <input
+                className="input"
+                type="text"
+                placeholder="https://api.openai.com/v1"
+                value={pending?.llm?.openai_base_url || ''}
+                onChange={(e) => setField(['llm', 'openai_base_url'], e.target.value)}
+              />
+              {showBaseUrlInfo && (
+                <div className={`mt-2 text-xs rounded p-3 space-y-2 ${isOriginal ? 'bg-blue-900/40 border border-blue-300/20' : 'bg-blue-50 border border-blue-200'}`}>
+                  <p className={`font-medium ${isOriginal ? 'text-blue-100' : 'text-blue-800'}`}>When do you need a Base URL?</p>
+                  <div className={`space-y-1 ${isOriginal ? 'text-blue-200/80' : 'text-blue-700'}`}>
+                    <p>• <strong>Groq, Anthropic, Gemini</strong> — leave empty. Models with a provider prefix are routed automatically.</p>
+                    <p>• <strong>xAI Grok</strong> — set to <code className={`px-1 rounded ${isOriginal ? 'bg-blue-800/40' : 'bg-white'}`}>https://api.x.ai/v1</code> or use <code className={`px-1 rounded ${isOriginal ? 'bg-blue-800/40' : 'bg-white'}`}>xai/</code> prefix to auto-route.</p>
+                    <p>• <strong>OpenAI</strong> — leave empty (uses default).</p>
                   </div>
-                )}
-              </div>
-              <style>{`.input{width:100%;padding:0.5rem;border:1px solid #e5e7eb;border-radius:0.375rem;font-size:0.875rem}`}</style>
-            </label>
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Field label="Model" envMeta={getEnvHint('llm.llm_model')}>
                 <div className="space-y-2">
@@ -1619,8 +1475,8 @@ export default function ConfigPage() {
           {showSecurityControls && user?.role === 'admin' && (
             <Section title="User Signups & Email">
               <div className="space-y-4">
-                <div className="p-4 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded-lg">
-                  <h4 className="text-sm font-semibold text-purple-900 dark:text-purple-100 mb-3">Signup Settings</h4>
+                <div className={`p-3 rounded-lg ${isOriginal ? 'bg-blue-800/30 border border-blue-300/20' : 'bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700'}`}>
+                  <h4 className={`text-sm font-semibold mb-3 ${isOriginal ? 'text-blue-100' : 'text-purple-900 dark:text-purple-100'}`}>Signup Settings</h4>
                   <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
@@ -1629,14 +1485,14 @@ export default function ConfigPage() {
                       onChange={(e) => setField(['app', 'allow_signup'], e.target.checked)}
                       className="w-4 h-4"
                     />
-                    <label htmlFor="allow-signup" className="text-sm text-gray-700 dark:text-purple-200">
+                    <label htmlFor="allow-signup" className={`text-sm ${isOriginal ? 'text-blue-200/90' : 'text-gray-700 dark:text-purple-200'}`}>
                       Allow new user signups (closed beta - requires admin approval)
                     </label>
                   </div>
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-semibold text-gray-900 dark:text-purple-100">Email (SMTP) Configuration</h4>
+                  <h4 className={`text-sm font-semibold ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'}`}>Email (SMTP) Configuration</h4>
                   {pending?.email?.smtp_host && pending?.email?.smtp_username ? (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
                       <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
@@ -1648,7 +1504,7 @@ export default function ConfigPage() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-gray-600 dark:text-purple-300 -mt-2">Configure SMTP to send approval notifications and password reset emails</p>
+                <p className={`text-xs -mt-2 ${isOriginal ? 'text-blue-300/60' : 'text-gray-600 dark:text-purple-300'}`}>Configure SMTP to send approval notifications and password reset emails</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Field label="SMTP Host">
                     <input
@@ -1762,6 +1618,161 @@ export default function ConfigPage() {
           )}
 
         </div>
+
+      {showSecurityControls && (
+        <Section title="Account Security">
+          <form className="grid gap-3 max-w-md" onSubmit={handlePasswordSubmit}>
+            <Field label="Current password">
+              <input
+                className="input"
+                type="password"
+                autoComplete="current-password"
+                value={passwordForm.current}
+                onChange={(event) => setPasswordForm((prev) => ({ ...prev, current: event.target.value }))}
+                required
+              />
+            </Field>
+            <Field label="New password">
+              <input
+                className="input"
+                type="password"
+                autoComplete="new-password"
+                value={passwordForm.next}
+                onChange={(event) => setPasswordForm((prev) => ({ ...prev, next: event.target.value }))}
+                required
+              />
+            </Field>
+            <Field label="Confirm new password">
+              <input
+                className="input"
+                type="password"
+                autoComplete="new-password"
+                value={passwordForm.confirm}
+                onChange={(event) => setPasswordForm((prev) => ({ ...prev, confirm: event.target.value }))}
+                required
+              />
+            </Field>
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                type="submit"
+                className="w-fit px-6 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm font-medium hover:from-purple-700 hover:to-pink-600 disabled:opacity-60 shadow-sm"
+                disabled={passwordSubmitting}
+              >
+                {passwordSubmitting ? 'Updating…' : 'Update password'}
+              </button>
+              <p className={`text-xs ${isOriginal ? 'text-blue-300/50' : 'text-purple-500'}`}>
+                After updating, rotate <code className={`font-mono px-1 rounded ${isOriginal ? 'bg-blue-800/30' : 'bg-purple-50'}`}>PODLY_ADMIN_PASSWORD</code> to match.
+              </p>
+            </div>
+          </form>
+        </Section>
+      )}
+
+      {showSecurityControls && user?.role === 'admin' && (
+        <Section title="User Management">
+          <div className="space-y-4">
+            <form className="grid gap-3 md:grid-cols-2" onSubmit={handleCreateUser}>
+              <div className="md:col-span-2">
+                <label className={`block text-sm font-medium mb-1 ${isOriginal ? 'text-blue-200/90' : 'text-gray-700 dark:text-purple-200'}`}>Username</label>
+                <input
+                  className="input"
+                  type="text"
+                  value={newUser.username}
+                  onChange={(event) => setNewUser((prev) => ({ ...prev, username: event.target.value }))}
+                  placeholder="new_user"
+                  required
+                />
+              </div>
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${isOriginal ? 'text-blue-200/90' : 'text-gray-700 dark:text-purple-200'}`}>Password</label>
+                <input
+                  className="input"
+                  type="password"
+                  value={newUser.password}
+                  onChange={(event) => setNewUser((prev) => ({ ...prev, password: event.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${isOriginal ? 'text-blue-200/90' : 'text-gray-700 dark:text-purple-200'}`}>Confirm password</label>
+                <input
+                  className="input"
+                  type="password"
+                  value={newUser.confirm}
+                  onChange={(event) => setNewUser((prev) => ({ ...prev, confirm: event.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${isOriginal ? 'text-blue-200/90' : 'text-gray-700 dark:text-purple-200'}`}>Role</label>
+                <select
+                  className="input"
+                  value={newUser.role}
+                  onChange={(event) => setNewUser((prev) => ({ ...prev, role: event.target.value }))}
+                >
+                  <option value="user">user</option>
+                  <option value="admin">admin</option>
+                </select>
+              </div>
+              <div className="md:col-span-2 flex items-center justify-start">
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm font-medium hover:from-purple-700 hover:to-pink-600"
+                >
+                  Add user
+                </button>
+              </div>
+            </form>
+
+            {/* User Statistics with integrated controls */}
+            <AdminUserStats
+              onRoleChange={handleRoleChange}
+              onDeleteUser={handleDeleteUser}
+              onResetPassword={async (username, password) => {
+                try {
+                  await authApi.updateUser(username, { password });
+                  toast.success(`Password updated for ${username}`);
+                } catch {
+                  toast.error('Failed to reset password');
+                }
+              }}
+              adminCount={managedUsers?.filter(u => u.role === 'admin').length ?? 1}
+              currentUsername={user?.username}
+            />
+          </div>
+        </Section>
+      )}
+
+      {showSecurityControls && user?.role === 'admin' && (
+        <Section title="Database Maintenance">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h4 className={`text-sm font-medium ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'}`}>Repair Processed Audio Paths</h4>
+              <p className={`text-xs mt-1 ${isOriginal ? 'text-blue-300/60' : 'text-gray-500 dark:text-gray-400'}`}>
+                Scan for processed audio files on disk and update database records where the path is missing.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  toast.loading('Scanning for processed files...', { id: 'repair-paths' });
+                  const result = await feedsApi.repairProcessedPaths();
+                  toast.success(
+                    `Repaired ${result.repaired} of ${result.checked} posts checked${result.total_errors > 0 ? ` (${result.total_errors} errors)` : ''}`,
+                    { id: 'repair-paths', duration: 5000 }
+                  );
+                } catch (err) {
+                  toast.error('Failed to repair paths', { id: 'repair-paths' });
+                }
+              }}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+            >
+              Repair Paths
+            </button>
+          </div>
+        </Section>
+      )}
 
       {showEnvWarning && envWarningPaths.length > 0 && (
         <EnvOverrideWarningModal
@@ -1911,7 +1922,7 @@ function Section({ title, children, icon }: { title: string; children: ReactNode
           {title}
         </h3>
       </div>
-      <div className="p-4 space-y-3">{children}</div>
+      <div className="px-4 py-3 space-y-3">{children}</div>
     </div>
   );
 }
@@ -1927,17 +1938,16 @@ function Field({
   envMeta?: EnvOverrideEntry;
   description?: string;
 }) {
+  const { theme } = useTheme();
+  const isOriginal = theme === 'original';
   return (
     <label className="block">
-      <div className="flex items-start justify-between gap-3">
-        <div className="w-40 flex-shrink-0">
-          <span className="block text-sm text-gray-700">{label}</span>
-          {description && <span className="block text-xs text-gray-500 mt-0.5">{description}</span>}
-          <EnvVarHint meta={envMeta} />
-        </div>
-        <div className="flex-1">{children}</div>
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className={`text-sm font-medium ${isOriginal ? 'text-blue-200/90' : 'text-gray-700 dark:text-purple-200'}`}>{label}</span>
+        <EnvVarHint meta={envMeta} />
       </div>
-      <style>{`.input{width:100%;padding:0.5rem 0.75rem;border:1px solid #d1d5db;border-radius:0.375rem;font-size:0.875rem;transition:all 0.15s}.input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,0.1)}`}</style>
+      {description && <span className={`block text-xs mb-1 ${isOriginal ? 'text-blue-300/50' : 'text-gray-500 dark:text-gray-400'}`}>{description}</span>}
+      {children}
     </label>
   );
 }
@@ -1953,12 +1963,12 @@ function EnvVarHint({ meta }: { meta?: EnvOverrideEntry }) {
 
   return (
     <span
-      className={`mt-1 inline-block px-2 py-0.5 rounded text-xs font-mono border ${
+      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-mono ${
         isOriginal
-          ? 'bg-blue-900/70 border-blue-300/45 text-blue-100'
+          ? 'bg-blue-800/30 text-blue-300/60'
           : isDark
-            ? 'bg-purple-900/35 border-purple-500/40 text-purple-200'
-            : 'bg-gray-100 border-gray-200 text-gray-600'
+            ? 'bg-purple-900/30 text-purple-300/60'
+            : 'bg-gray-100 text-gray-400'
       }`}
     >
       {meta.env_var}
