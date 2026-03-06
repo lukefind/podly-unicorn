@@ -163,6 +163,26 @@ Open http://localhost:5001
 
 ---
 
+## Install as a Mobile App (PWA)
+
+Podly can be installed as a Progressive Web App on your phone or tablet for a native app-like experience — no app store required.
+
+### Android (Chrome)
+1. Open your Podly server URL in Chrome
+2. Tap the **three-dot menu** (⋮) → **"Add to Home screen"** or **"Install app"**
+3. Confirm the installation
+4. Podly appears on your home screen as a standalone app
+
+### iOS (Safari)
+1. Open your Podly server URL in Safari
+2. Tap the **Share button** (📤) → **"Add to Home Screen"**
+3. Tap **"Add"**
+4. Podly appears on your home screen as a standalone app
+
+> **Note:** Your Podly server must be served over HTTPS for PWA installation to work. If running locally without HTTPS, PWA install will not be available.
+
+---
+
 ## Configuration
 
 ### LLM Providers
