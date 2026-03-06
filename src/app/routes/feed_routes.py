@@ -439,7 +439,7 @@ def get_combined_episodes() -> Response:
 def get_combined_feed() -> Response:
     """Get a combined RSS feed with all episodes from user's subscribed podcasts.
     
-    The feed uses the Podly Unicorn logo as the show image, but each episode
+    The feed uses the Podly logo as the show image, but each episode
     retains its original podcast's artwork.
     """
     from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel

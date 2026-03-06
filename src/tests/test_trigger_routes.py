@@ -221,7 +221,7 @@ class TestTriggerEndpoint:
         # Should be 401 or 403, never 500
         assert response.status_code in [401, 403]
         assert response.content_type == "text/html; charset=utf-8"
-        assert b"Podly Unicorn" in response.data  # Themed error page
+        assert b"Podly" in response.data  # Themed error page
 
 
 class TestTriggerStatusProcessingState:

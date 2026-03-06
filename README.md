@@ -58,7 +58,7 @@ Podly automatically removes advertisements from podcasts using AI. Add your favo
 ### 📻 All-in-One Combined Feed
 - Single RSS feed with all your subscribed podcasts combined
 - Add one feed URL to your podcast app, get all your ad-free shows
-- Feed uses Podly Unicorn logo, episodes keep their original artwork
+- Feed uses Podly logo, episodes keep their original artwork
 - Click "All-in-One Podly RSS" button on Podcasts page to copy the URL
 
 ### 🎛️ Prompt Presets System
@@ -211,7 +211,7 @@ Database migrations run automatically on startup — no manual steps needed.
 
 ## Upgrading from Podly Pure Podcasts / Earlier Versions
 
-If you're migrating from [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podcasts) or an older version of Podly Unicorn, your `.env.local` likely has LLM settings that will **override** the new Settings UI.
+If you're migrating from an older version of Podly, your `.env.local` likely has LLM settings that will **override** the new Settings UI.
 
 ### Clean up your `.env.local`
 

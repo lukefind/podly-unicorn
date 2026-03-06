@@ -1,10 +1,10 @@
-# Podly Unicorn - AI Agent Guidelines
+# Podly - AI Agent Guidelines
 
 This file contains important context for AI assistants working on this codebase.
 
 ## Project Overview
 
-Podly Unicorn is a fork of Podly - a podcast ad-removal system. It uses Whisper for transcription and LLMs for ad detection.
+Podly is a podcast ad-removal system. It uses Whisper for transcription and LLMs for ad detection.
 
 **Key documentation**: See `docs/ARCHITECTURE.md` for detailed system architecture.
 

@@ -1,6 +1,6 @@
 # User Guide
 
-Podly Unicorn removes ads from podcasts using AI. You add podcasts, subscribe to the Podly RSS feed in your podcast app, and trigger processing when you want to listen ad-free.
+Podly removes ads from podcasts using AI. You add podcasts, subscribe to the Podly RSS feed in your podcast app, and trigger processing when you want to listen ad-free.
 
 ---
 

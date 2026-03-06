@@ -1,4 +1,4 @@
-# Podly Unicorn - Project Status
+# Podly - Project Status
 
 ---
 

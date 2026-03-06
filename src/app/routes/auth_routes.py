@@ -144,7 +144,7 @@ def signup() -> RouteResult:
 
         send_email(
             to_email=user.email or email,
-            subject="Podly Unicorn: Signup received",
+            subject="Podly: Signup received",
             body=(
                 "Thanks for signing up!\n\n"
                 "Your account is pending admin approval. You'll receive another email once approved.\n"
@@ -155,7 +155,7 @@ def signup() -> RouteResult:
         if email_settings and email_settings.admin_notify_email:
             send_email(
                 to_email=email_settings.admin_notify_email,
-                subject="Podly Unicorn: New signup pending approval",
+                subject="Podly: New signup pending approval",
                 body=(
                     "A new user has requested access:\n\n"
                     f"Email: {email}\n"
@@ -207,7 +207,7 @@ def password_reset_request() -> RouteResult:
     try:
         send_email(
             to_email=email,
-            subject="Podly Unicorn: Password reset",
+            subject="Podly: Password reset",
             body=(
                 "A password reset was requested for your account.\n\n"
                 f"Reset link (valid for 1 hour):\n{reset_link}\n\n"
@@ -319,7 +319,7 @@ def approve_user(user_id: int) -> RouteResult:
         if target.email:
             send_email(
                 to_email=target.email,
-                subject="Podly Unicorn: Account approved",
+                subject="Podly: Account approved",
                 body=(
                     "Your account has been approved. You can now log in.\n"
                 ),

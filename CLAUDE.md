@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Podly Unicorn is a podcast ad-removal web application. It uses Whisper for transcription and LLMs for ad detection, then removes detected ad segments from audio files. Users subscribe to modified RSS feeds that serve ad-free episodes.
+Podly is a podcast ad-removal web application. It uses Whisper for transcription and LLMs for ad detection, then removes detected ad segments from audio files. Users subscribe to modified RSS feeds that serve ad-free episodes.
 
 **Tech Stack:** Python/Flask backend, React/TypeScript frontend, SQLite database, Docker deployment.
 

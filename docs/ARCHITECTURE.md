@@ -1,10 +1,10 @@
-# Podly Unicorn Architecture
+# Podly Architecture
 
-This document describes the key architectural components and data flows in Podly Unicorn.
+This document describes the key architectural components and data flows in Podly.
 
 ## Overview
 
-Podly Unicorn is a podcast ad-removal system that:
+Podly is a podcast ad-removal system that:
 1. Subscribes to podcast RSS feeds
 2. Transcribes episodes using Whisper (local, remote, or Groq)
 3. Detects ads using an LLM with configurable prompt presets

@@ -1,4 +1,4 @@
-# Podly Unicorn — Security Audit Report
+# Podly — Security Audit Report
 
 **Date:** 2025-01-XX
 **Scope:** Full backend codebase review (`src/app/`)
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The Podly Unicorn codebase has a generally sound security architecture with proper session management, bcrypt password hashing, feed-scoped token authentication, and rate limiting. However, several findings of varying severity were identified. The most critical are **SQL injection via string-interpolated raw SQL** and **plaintext feed token secrets stored in the database**.
+The Podly codebase has a generally sound security architecture with proper session management, bcrypt password hashing, feed-scoped token authentication, and rate limiting. However, several findings of varying severity were identified. The most critical are **SQL injection via string-interpolated raw SQL** and **plaintext feed token secrets stored in the database**.
 
 ### Severity Breakdown
 

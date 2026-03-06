@@ -1656,7 +1656,7 @@ def _render_trigger_error_page(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title} - Podly Unicorn</title>
+    <title>{title} - Podly</title>
     <link rel="icon" type="image/svg+xml" href="/images/logos/favicon.svg">
     <link rel="icon" type="image/png" sizes="96x96" href="/images/logos/favicon-96x96.png">
     <link rel="icon" type="image/x-icon" href="/images/logos/favicon.ico">
@@ -1714,7 +1714,7 @@ def _render_trigger_error_page(
 <body>
     <div class="card">
         <div class="header">
-            <h1>Podly Unicorn</h1>
+            <h1>Podly</h1>
             <div class="subtitle">Ad-free podcast processing</div>
         </div>
         <div class="content">
@@ -1724,7 +1724,7 @@ def _render_trigger_error_page(
             <a href="/" class="btn btn-primary">Go to Podly</a>
         </div>
         <div class="footer">
-            <a href="/">Podly Unicorn</a>
+            <a href="/">Podly</a>
         </div>
     </div>
 </body>
@@ -1799,7 +1799,7 @@ def _render_trigger_page_fallback(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title} - Podly Unicorn</title>
+    <title>{title} - Podly</title>
     <link rel="icon" type="image/svg+xml" href="/images/logos/favicon.svg">
     <link rel="icon" type="image/png" sizes="96x96" href="/images/logos/favicon-96x96.png">
     <link rel="icon" type="image/x-icon" href="/images/logos/favicon.ico">
@@ -1890,7 +1890,7 @@ def _render_trigger_page_fallback(
 <body>
     <div class="card">
         <div class="header">
-            <h1>Podly Unicorn</h1>
+            <h1>Podly</h1>
             <div class="subtitle">Ad-free podcast processing</div>
         </div>
         <div class="content">
@@ -1907,7 +1907,7 @@ def _render_trigger_page_fallback(
         </div>
         <div class="footer">
             {"This page starts ad removal for your episode.<br>Your download will be ready here when complete." if state == "processing" else "Return to your podcast app to listen."}<br>
-            <a href="/">Podly Unicorn</a>
+            <a href="/">Podly</a>
         </div>
     </div>
     {"<script>" + _get_trigger_polling_script(status_url, download_url) + "</script>" if state == "processing" and status_url else ""}

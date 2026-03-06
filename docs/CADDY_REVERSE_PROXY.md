@@ -1,6 +1,6 @@
 # Caddy Reverse Proxy Configuration
 
-When running Podly Unicorn behind Caddy (especially over WireGuard), you must configure Caddy to forward the correct headers so the Flask app generates proper HTTPS URLs.
+When running Podly behind Caddy (especially over WireGuard), you must configure Caddy to forward the correct headers so the Flask app generates proper HTTPS URLs.
 
 ## Required Headers
 

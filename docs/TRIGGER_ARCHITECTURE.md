@@ -1,6 +1,6 @@
 # Trigger-Based Processing Architecture
 
-This document explains the on-demand processing architecture for Podly Unicorn, covering the conceptual model, why specific design decisions were made, and how to test the system.
+This document explains the on-demand processing architecture for Podly, covering the conceptual model, why specific design decisions were made, and how to test the system.
 
 ## Important Auth Assumption
 
@@ -13,7 +13,7 @@ This trigger flow assumes `REQUIRE_AUTH=true` and tokenized feed URLs.
 
 ## Conceptual Model
 
-Podly Unicorn separates four distinct concerns:
+Podly separates four distinct concerns:
 
 | Layer | Responsibility | Mutates State? |
 |-------|----------------|----------------|
