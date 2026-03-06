@@ -3,7 +3,6 @@ name: Build and Publish Docker Images
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
     branches: [main]
   release:
@@ -165,18 +164,6 @@ jobs:
             gpu_nvidia: "false"
             gpu_amd: "false"
             lite_build: "true"
-          - name: "gpu-nvidia"
-            base: "nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04"
-            gpu: "true"
-            gpu_nvidia: "true"
-            gpu_amd: "false"
-            lite_build: "false"
-          - name: "gpu-amd"
-            base: "rocm/dev-ubuntu-22.04:6.4-complete"
-            gpu: "false"
-            gpu_nvidia: "false"
-            gpu_amd: "true"
-            lite_build: "false"
     env:
       ARCH: amd64
     steps:
@@ -204,6 +191,7 @@ jobs:
             image=moby/buildkit:v0.12.0
 
       - name: Log in to Container Registry
+        if: ${{ github.event_name == 'release' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -221,12 +209,12 @@ jobs:
             type=semver,pattern={{version}},suffix=-${{ matrix.variant.name }}-${{ env.ARCH }}
             type=raw,value=${{ matrix.variant.name }}-${{ env.ARCH }},enable={{is_default_branch}}
 
-      - name: Build and push
+      - name: Build image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          push: true
+          push: ${{ github.event_name == 'release' }}
           platforms: linux/${{ env.ARCH }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -293,6 +281,7 @@ jobs:
             image=moby/buildkit:v0.12.0
 
       - name: Log in to Container Registry
+        if: ${{ github.event_name == 'release' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -310,12 +299,12 @@ jobs:
             type=semver,pattern={{version}},suffix=-${{ matrix.variant.name }}-${{ env.ARCH }}
             type=raw,value=${{ matrix.variant.name }}-${{ env.ARCH }},enable={{is_default_branch}}
 
-      - name: Build and push
+      - name: Build image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          push: true
+          push: ${{ github.event_name == 'release' }}
           platforms: linux/${{ env.ARCH }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -331,7 +320,7 @@ jobs:
 
   manifest:
     needs: [changes, build-amd64, build-arm64]
-    if: ${{ needs.changes.outputs.skip == 'false' }}
+    if: ${{ needs.changes.outputs.skip == 'false' && github.event_name == 'release' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
