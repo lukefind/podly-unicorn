@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import litellm
@@ -11,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import Identification, ModelCall, Post, TranscriptSegment
+from podcast_processor.boundary_refiner import BoundaryRefiner
 from podcast_processor.llm_concurrency_limiter import (
     ConcurrencyContext,
     LLMConcurrencyLimiter,
@@ -26,6 +28,7 @@ from podcast_processor.token_rate_limiter import (
     configure_rate_limiter_for_model,
 )
 from podcast_processor.transcribe import Segment
+from podcast_processor.word_boundary_refiner import WordBoundaryRefiner
 from shared.config import Config, TestWhisperConfig
 from shared.llm_utils import model_uses_max_completion_tokens
 
@@ -66,6 +69,18 @@ class AdClassifier:
         self.model_call_query = model_call_query or ModelCall.query
         self.identification_query = identification_query or Identification.query
         self.db_session = db_session or db.session
+        self.boundary_refiner = BoundaryRefiner(
+            config=config,
+            logger=self.logger,
+            model_call_query=self.model_call_query,
+            db_session=self.db_session,
+        )
+        self.word_boundary_refiner = WordBoundaryRefiner(
+            config=config,
+            logger=self.logger,
+            model_call_query=self.model_call_query,
+            db_session=self.db_session,
+        )
 
         # Initialize rate limiter for the configured model
         self.rate_limiter: Optional[TokenRateLimiter]
@@ -125,7 +140,10 @@ class AdClassifier:
             self.logger.info(
                 f"No transcript segments to classify for post {post.id}. Skipping."
             )
+            self._clear_refined_ad_boundaries(post)
             return
+
+        self._clear_refined_ad_boundaries(post)
 
         classify_params = ClassifyParams(
             system_prompt=system_prompt,
@@ -162,6 +180,8 @@ class AdClassifier:
         except ClassifyException as e:
             self.logger.error(f"Classification failed for post {post.id}: {e}")
             return
+
+        self._refine_ad_boundaries(post, transcript_segments)
 
     def _step(
         self,
@@ -829,6 +849,165 @@ class AdClassifier:
             ).first()
             is not None
         )
+
+    def _clear_refined_ad_boundaries(self, post: Post) -> None:
+        if not hasattr(post, "refined_ad_boundaries"):
+            return
+        post.refined_ad_boundaries = None
+        post.refined_ad_boundaries_updated_at = None
+        self.db_session.add(post)
+        self.db_session.commit()
+
+    def _refine_ad_boundaries(
+        self,
+        post: Post,
+        transcript_segments: List[TranscriptSegment],
+    ) -> None:
+        if not getattr(self.config, "enable_boundary_refinement", False):
+            return
+
+        ad_groups = self._build_ad_groups(post)
+        if not ad_groups:
+            post.refined_ad_boundaries = []
+            post.refined_ad_boundaries_updated_at = datetime.utcnow()
+            self.db_session.add(post)
+            self.db_session.commit()
+            return
+
+        serialized_segments = [
+            {
+                "sequence_num": segment.sequence_num,
+                "start_time": segment.start_time,
+                "end_time": segment.end_time,
+                "text": segment.text,
+            }
+            for segment in transcript_segments
+        ]
+
+        refined_boundaries: List[Dict[str, Any]] = []
+        for group in ad_groups:
+            boundary_refinement = self.boundary_refiner.refine(
+                group["orig_start"],
+                group["orig_end"],
+                group["confidence"],
+                serialized_segments,
+                post_id=post.id,
+                first_seq_num=group["first_seq_num"],
+                last_seq_num=group["last_seq_num"],
+            )
+
+            refined_start = boundary_refinement.refined_start
+            refined_end = boundary_refinement.refined_end
+            start_reason = boundary_refinement.start_adjustment_reason
+            end_reason = boundary_refinement.end_adjustment_reason
+            refined_by = "boundary"
+
+            if getattr(self.config, "enable_word_level_boundary_refiner", False):
+                word_refinement = self.word_boundary_refiner.refine(
+                    refined_start,
+                    refined_end,
+                    group["confidence"],
+                    serialized_segments,
+                    post_id=post.id,
+                    first_seq_num=group["first_seq_num"],
+                    last_seq_num=group["last_seq_num"],
+                )
+                refined_start = word_refinement.refined_start
+                refined_end = word_refinement.refined_end
+                start_reason = word_refinement.start_adjustment_reason
+                end_reason = word_refinement.end_adjustment_reason
+                refined_by = "word"
+
+            refined_boundaries.append(
+                {
+                    "orig_start": round(float(group["orig_start"]), 3),
+                    "orig_end": round(float(group["orig_end"]), 3),
+                    "refined_start": round(float(refined_start), 3),
+                    "refined_end": round(float(refined_end), 3),
+                    "first_seq_num": int(group["first_seq_num"]),
+                    "last_seq_num": int(group["last_seq_num"]),
+                    "confidence": round(float(group["confidence"]), 4),
+                    "start_adjustment_reason": start_reason,
+                    "end_adjustment_reason": end_reason,
+                    "refined_by": refined_by,
+                }
+            )
+
+        post.refined_ad_boundaries = refined_boundaries
+        post.refined_ad_boundaries_updated_at = datetime.utcnow()
+        self.db_session.add(post)
+        self.db_session.commit()
+
+    def _build_ad_groups(self, post: Post) -> List[Dict[str, Any]]:
+        ad_identifications = (
+            self.identification_query.join(
+                TranscriptSegment,
+                Identification.transcript_segment_id == TranscriptSegment.id,
+            )
+            .join(ModelCall, Identification.model_call_id == ModelCall.id)
+            .filter(
+                TranscriptSegment.post_id == post.id,
+                Identification.label == "ad",
+                Identification.confidence >= self.config.output.min_confidence,
+                ModelCall.status == "success",
+            )
+            .order_by(TranscriptSegment.sequence_num.asc())
+            .all()
+        )
+
+        valid_items: List[Tuple[TranscriptSegment, float]] = []
+        seen_segment_ids: Set[int] = set()
+        for identification in ad_identifications:
+            segment = identification.transcript_segment
+            if segment is None or segment.id in seen_segment_ids:
+                continue
+            seen_segment_ids.add(segment.id)
+            valid_items.append((segment, float(identification.confidence or 0.0)))
+
+        if not valid_items:
+            return []
+
+        groups: List[Dict[str, Any]] = []
+        current_segments: List[TranscriptSegment] = []
+        current_confidences: List[float] = []
+
+        for segment, confidence in valid_items:
+            if not current_segments:
+                current_segments = [segment]
+                current_confidences = [confidence]
+                continue
+
+            previous = current_segments[-1]
+            if segment.sequence_num <= previous.sequence_num + 1:
+                current_segments.append(segment)
+                current_confidences.append(confidence)
+                continue
+
+            groups.append(
+                self._group_payload(current_segments, current_confidences)
+            )
+            current_segments = [segment]
+            current_confidences = [confidence]
+
+        if current_segments:
+            groups.append(self._group_payload(current_segments, current_confidences))
+
+        return groups
+
+    def _group_payload(
+        self,
+        segments: List[TranscriptSegment],
+        confidences: List[float],
+    ) -> Dict[str, Any]:
+        return {
+            "first_seq_num": segments[0].sequence_num,
+            "last_seq_num": segments[-1].sequence_num,
+            "orig_start": segments[0].start_time,
+            "orig_end": segments[-1].end_time,
+            "confidence": (
+                sum(confidences) / len(confidences) if confidences else 0.0
+            ),
+        }
 
     def _is_retryable_error(self, error: Exception) -> bool:
         """Determine if an error should be retried."""

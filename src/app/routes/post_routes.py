@@ -322,13 +322,66 @@ def api_post_stats(p_guid: str) -> flask.Response:
     content_segments = sum(1 for i in identifications if i.label == "content")
     ad_segments = sum(1 for i in identifications if i.label == "ad")
 
-    # Calculate estimated ad time by summing duration of ad-labeled segments
-    ad_segment_ids = {i.transcript_segment_id for i in identifications if i.label == "ad"}
-    estimated_ad_time_seconds = sum(
-        (seg.end_time - seg.start_time)
-        for seg in transcript_segments
-        if seg.id in ad_segment_ids
-    )
+    refined_boundaries = []
+    raw_refined = getattr(post, "refined_ad_boundaries", None) or []
+    if isinstance(raw_refined, list):
+        for item in raw_refined:
+            if not isinstance(item, dict):
+                continue
+            try:
+                orig_start = float(item.get("orig_start"))
+                orig_end = float(item.get("orig_end"))
+                refined_start = float(item.get("refined_start"))
+                refined_end = float(item.get("refined_end"))
+            except (TypeError, ValueError):
+                continue
+            if refined_end <= refined_start:
+                continue
+            refined_boundaries.append(
+                {
+                    "orig_start": round(orig_start, 3),
+                    "orig_end": round(orig_end, 3),
+                    "refined_start": round(refined_start, 3),
+                    "refined_end": round(refined_end, 3),
+                    "first_seq_num": item.get("first_seq_num"),
+                    "last_seq_num": item.get("last_seq_num"),
+                    "confidence": item.get("confidence"),
+                    "start_adjustment_reason": item.get("start_adjustment_reason"),
+                    "end_adjustment_reason": item.get("end_adjustment_reason"),
+                    "refined_by": item.get("refined_by"),
+                }
+            )
+
+    refined_windows = [
+        (boundary["refined_start"], boundary["refined_end"])
+        for boundary in refined_boundaries
+    ]
+
+    if refined_boundaries:
+        estimated_ad_time_seconds = sum(
+            boundary["refined_end"] - boundary["refined_start"]
+            for boundary in refined_boundaries
+        )
+    else:
+        ad_segment_ids = {
+            i.transcript_segment_id for i in identifications if i.label == "ad"
+        }
+        estimated_ad_time_seconds = sum(
+            (seg.end_time - seg.start_time)
+            for seg in transcript_segments
+            if seg.id in ad_segment_ids
+        )
+
+    def _is_mixed_segment(*, seg_start: float, seg_end: float) -> bool:
+        for window_start, window_end in refined_windows:
+            overlaps = seg_start <= window_end and seg_end >= window_start
+            if not overlaps:
+                continue
+
+            fully_contained = seg_start >= window_start and seg_end <= window_end
+            if not fully_contained:
+                return True
+        return False
 
     model_call_details = []
     for call in model_calls:
@@ -349,6 +402,7 @@ def api_post_stats(p_guid: str) -> flask.Response:
         )
 
     transcript_segments_data = []
+    segment_mixed_by_id: Dict[int, bool] = {}
     for segment in transcript_segments:
         segment_identifications = [
             i for i in identifications if i.transcript_segment_id == segment.id
@@ -356,6 +410,11 @@ def api_post_stats(p_guid: str) -> flask.Response:
 
         has_ad_label = any(i.label == "ad" for i in segment_identifications)
         primary_label = "ad" if has_ad_label else "content"
+        mixed = bool(has_ad_label) and _is_mixed_segment(
+            seg_start=float(segment.start_time),
+            seg_end=float(segment.end_time),
+        )
+        segment_mixed_by_id[int(segment.id)] = mixed
 
         transcript_segments_data.append(
             {
@@ -365,6 +424,7 @@ def api_post_stats(p_guid: str) -> flask.Response:
                 "end_time": round(segment.end_time, 1),
                 "text": segment.text,
                 "primary_label": primary_label,
+                "mixed": mixed,
                 "identifications": [
                     {
                         "id": ident.id,
@@ -397,6 +457,7 @@ def api_post_stats(p_guid: str) -> flask.Response:
                 "segment_start_time": round(segment.start_time, 1),
                 "segment_end_time": round(segment.end_time, 1),
                 "segment_text": segment.text,
+                "mixed": bool(segment_mixed_by_id.get(int(segment.id), False)),
             }
         )
 
@@ -452,12 +513,14 @@ def api_post_stats(p_guid: str) -> flask.Response:
             "content_segments": content_segments,
             "ad_segments_count": ad_segments,
             "estimated_ad_time_seconds": round(estimated_ad_time_seconds, 1),
+            "boundary_refinement_count": len(refined_boundaries),
             "model_call_statuses": model_call_statuses,
             "model_types": model_types,
         },
         "model_calls": model_call_details,
         "transcript_segments": transcript_segments_data,
         "identifications": identifications_data,
+        "refined_boundaries": refined_boundaries,
         "job_info": job_info,
     }
 

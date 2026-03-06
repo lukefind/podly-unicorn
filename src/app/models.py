@@ -93,6 +93,8 @@ class Post(db.Model):  # type: ignore[name-defined, misc]
     processed_with_preset_id = db.Column(
         db.Integer, db.ForeignKey("prompt_preset.id"), nullable=True
     )  # Which preset was used to process this episode
+    refined_ad_boundaries = db.Column(db.JSON, nullable=True)
+    refined_ad_boundaries_updated_at = db.Column(db.DateTime, nullable=True)
 
     segments = db.relationship(
         "TranscriptSegment",
@@ -203,7 +205,7 @@ class UserDownload(db.Model):  # type: ignore[name-defined, misc]
     is_processed = db.Column(db.Boolean, default=True)  # Was it a processed (ad-free) version?
     download_source = db.Column(db.String(20), nullable=False, default="web")
     # Event tracking fields
-    event_type = db.Column(db.String(20), nullable=True, index=True)  # RSS_READ/AUDIO_DOWNLOAD/TRIGGER_OPEN/PROCESS_STARTED/PROCESS_COMPLETE/FAILED
+    event_type = db.Column(db.String(20), nullable=True)  # RSS_READ/AUDIO_DOWNLOAD/TRIGGER_OPEN/PROCESS_STARTED/PROCESS_COMPLETE/FAILED
     auth_type = db.Column(db.String(20), nullable=True)  # combined/feed_scoped/session/none
     decision = db.Column(db.String(30), nullable=True)  # Legacy field for backwards compat
 
@@ -412,6 +414,14 @@ class LLMSettings(db.Model):  # type: ignore[name-defined, misc]
         db.Boolean, nullable=False, default=DEFAULTS.LLM_ENABLE_TOKEN_RATE_LIMITING
     )
     llm_max_input_tokens_per_minute = db.Column(db.Integer, nullable=True)
+    enable_boundary_refinement = db.Column(
+        db.Boolean, nullable=False, default=DEFAULTS.ENABLE_BOUNDARY_REFINEMENT
+    )
+    enable_word_level_boundary_refiner = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINER,
+    )
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)

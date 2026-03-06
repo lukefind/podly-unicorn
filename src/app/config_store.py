@@ -87,6 +87,8 @@ def ensure_defaults() -> None:
             "llm_max_concurrent_calls": DEFAULTS.LLM_DEFAULT_MAX_CONCURRENT_CALLS,
             "llm_max_retry_attempts": DEFAULTS.LLM_DEFAULT_MAX_RETRY_ATTEMPTS,
             "llm_enable_token_rate_limiting": DEFAULTS.LLM_ENABLE_TOKEN_RATE_LIMITING,
+            "enable_boundary_refinement": DEFAULTS.ENABLE_BOUNDARY_REFINEMENT,
+            "enable_word_level_boundary_refiner": DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINER,
         },
     )
 
@@ -427,6 +429,8 @@ def read_combined() -> Dict[str, Any]:
             "llm_max_input_tokens_per_call": llm.llm_max_input_tokens_per_call,
             "llm_enable_token_rate_limiting": llm.llm_enable_token_rate_limiting,
             "llm_max_input_tokens_per_minute": llm.llm_max_input_tokens_per_minute,
+            "enable_boundary_refinement": llm.enable_boundary_refinement,
+            "enable_word_level_boundary_refiner": llm.enable_word_level_boundary_refiner,
         },
         "whisper": whisper_payload,
         "processing": {
@@ -497,6 +501,8 @@ def _update_section_llm(data: Dict[str, Any]) -> None:
         "llm_max_input_tokens_per_call",
         "llm_enable_token_rate_limiting",
         "llm_max_input_tokens_per_minute",
+        "enable_boundary_refinement",
+        "enable_word_level_boundary_refiner",
     ]:
         if key in data:
             new_val = data[key]
@@ -694,6 +700,18 @@ def to_pydantic_config() -> PydanticConfig:
             or DEFAULTS.LLM_DEFAULT_MAX_RETRY_ATTEMPTS
         ),
         llm_max_input_tokens_per_call=data["llm"].get("llm_max_input_tokens_per_call"),
+        enable_boundary_refinement=bool(
+            data["llm"].get(
+                "enable_boundary_refinement",
+                DEFAULTS.ENABLE_BOUNDARY_REFINEMENT,
+            )
+        ),
+        enable_word_level_boundary_refiner=bool(
+            data["llm"].get(
+                "enable_word_level_boundary_refiner",
+                DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINER,
+            )
+        ),
         llm_enable_token_rate_limiting=bool(
             data["llm"].get(
                 "llm_enable_token_rate_limiting",

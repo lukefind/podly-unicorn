@@ -88,6 +88,14 @@ class Config(BaseModel):
         default=DEFAULTS.LLM_MAX_INPUT_TOKENS_PER_MINUTE,
         description="Override default tokens per minute limit for the model",
     )
+    enable_boundary_refinement: bool = Field(
+        default=DEFAULTS.ENABLE_BOUNDARY_REFINEMENT,
+        description="Enable a second-pass LLM refinement step to tighten ad cut windows.",
+    )
+    enable_word_level_boundary_refiner: bool = Field(
+        default=DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINER,
+        description="Estimate more precise intra-segment ad cut points from short phrases.",
+    )
     output: OutputConfig
     processing: ProcessingConfig
     server: Optional[str] = Field(
