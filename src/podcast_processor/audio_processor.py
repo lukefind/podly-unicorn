@@ -249,14 +249,14 @@ class AudioProcessor:
         )
 
         post.processed_audio_path = output_path
-        
+
         # Calculate and store processing statistics
         self._store_processing_statistics(
             post=post,
             original_duration_seconds=original_duration_seconds,
             merged_ad_segments_ms=merged_ad_segments,
         )
-        
+
         self.db_session.commit()
 
         self.logger.info(
@@ -306,7 +306,9 @@ class AudioProcessor:
         if existing_stats:
             # Update existing statistics
             existing_stats.total_ad_segments_removed = len(merged_ad_segments_ms)
-            existing_stats.total_duration_removed_seconds = total_duration_removed_seconds
+            existing_stats.total_duration_removed_seconds = (
+                total_duration_removed_seconds
+            )
             existing_stats.original_duration_seconds = original_duration_seconds
             existing_stats.processed_duration_seconds = processed_duration_seconds
             existing_stats.percentage_removed = percentage_removed

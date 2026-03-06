@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import Identification, ModelCall, Post, TranscriptSegment
+from podcast_processor.boundary_refiner import BoundaryRefiner
 from podcast_processor.llm_concurrency_limiter import (
     ConcurrencyContext,
     LLMConcurrencyLimiter,
@@ -27,7 +28,6 @@ from podcast_processor.token_rate_limiter import (
     configure_rate_limiter_for_model,
 )
 from podcast_processor.transcribe import Segment
-from podcast_processor.boundary_refiner import BoundaryRefiner
 from podcast_processor.word_boundary_refiner import WordBoundaryRefiner
 from shared.config import Config, TestWhisperConfig
 from shared.llm_utils import model_uses_max_completion_tokens

@@ -132,27 +132,25 @@ def test_ad_classifier_persists_refined_boundaries(app) -> None:
             )
         )
 
-        boundary_response = _mock_completion_response(
-            """{
+        boundary_response = _mock_completion_response("""{
               "refined_start": 5.0,
               "refined_end": 15.0,
               "start_adjustment_reason": "kept sponsor intro",
               "end_adjustment_reason": "kept sponsor wrap",
               "confidence_adjustment": 0.0
-            }"""
-        )
-        word_response = _mock_completion_response(
-            """{
+            }""")
+        word_response = _mock_completion_response("""{
               "refined_start_segment_seq": 1,
               "refined_start_phrase": "this episode is brought",
               "refined_end_segment_seq": 2,
               "refined_end_phrase": "use code podly today",
               "start_adjustment_reason": "phrase matched",
               "end_adjustment_reason": "phrase matched"
-            }"""
-        )
+            }""")
 
-        with patch("litellm.completion", side_effect=[boundary_response, word_response]):
+        with patch(
+            "litellm.completion", side_effect=[boundary_response, word_response]
+        ):
             classifier._refine_ad_boundaries(post, segments)
 
         db.session.refresh(post)
@@ -176,7 +174,9 @@ def test_ad_classifier_persists_refined_boundaries(app) -> None:
         assert len(word_calls) == 1
 
 
-def test_post_stats_marks_mixed_segments_when_refined_window_splits_segment(app) -> None:
+def test_post_stats_marks_mixed_segments_when_refined_window_splits_segment(
+    app,
+) -> None:
     app.register_blueprint(post_bp)
 
     with app.app_context():

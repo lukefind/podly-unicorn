@@ -168,7 +168,9 @@ class BoundaryRefiner:
         self.template = self._load_template()
 
     def _load_template(self) -> Template:
-        path = Path(__file__).resolve().parent.parent / "boundary_refinement_prompt.jinja"
+        path = (
+            Path(__file__).resolve().parent.parent / "boundary_refinement_prompt.jinja"
+        )
         if path.exists():
             return Template(path.read_text())
         return Template(
@@ -238,7 +240,9 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_a
 
         try:
             response = litellm.completion(
-                **_build_completion_args(config=self.config, prompt=prompt, max_tokens=2048)
+                **_build_completion_args(
+                    config=self.config, prompt=prompt, max_tokens=2048
+                )
             )
             content = _extract_completion_content(response)
             parsed = self._parse_json(content)
@@ -314,7 +318,9 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_a
             selected = [
                 segment
                 for segment in all_segments
-                if first_seq_num - 2 <= int(segment.get("sequence_num", -1)) <= last_seq_num + 2
+                if first_seq_num - 2
+                <= int(segment.get("sequence_num", -1))
+                <= last_seq_num + 2
             ]
             if selected:
                 return selected
@@ -359,9 +365,13 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_a
             text = str(segment.get("text", "")).lower()
             segment_start = float(segment.get("start_time", ad_start))
             segment_end = float(segment.get("end_time", ad_end))
-            if segment_start < ad_start and any(pattern in text for pattern in intro_patterns):
+            if segment_start < ad_start and any(
+                pattern in text for pattern in intro_patterns
+            ):
                 refined_start = min(refined_start, segment_start)
-            if segment_start > ad_end and any(pattern in text for pattern in outro_patterns):
+            if segment_start > ad_end and any(
+                pattern in text for pattern in outro_patterns
+            ):
                 refined_end = max(refined_end, segment_end)
 
         return self._validate(

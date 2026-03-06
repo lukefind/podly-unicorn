@@ -46,7 +46,10 @@ class WordBoundaryRefiner:
         self.template = self._load_template()
 
     def _load_template(self) -> Template:
-        path = Path(__file__).resolve().parent.parent / "word_boundary_refinement_prompt.jinja"
+        path = (
+            Path(__file__).resolve().parent.parent
+            / "word_boundary_refinement_prompt.jinja"
+        )
         if path.exists():
             return Template(path.read_text())
         return Template(
@@ -109,7 +112,9 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
 
         try:
             response = litellm.completion(
-                **_build_completion_args(config=self.config, prompt=prompt, max_tokens=1536)
+                **_build_completion_args(
+                    config=self.config, prompt=prompt, max_tokens=1536
+                )
             )
             content = _extract_completion_content(response)
             parsed = self._parse_json(content)
@@ -225,7 +230,9 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
             selected = [
                 segment
                 for segment in all_segments
-                if first_seq_num - 2 <= int(segment.get("sequence_num", -1)) <= last_seq_num + 2
+                if first_seq_num - 2
+                <= int(segment.get("sequence_num", -1))
+                <= last_seq_num + 2
             ]
             if selected:
                 return selected
@@ -254,7 +261,9 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
         phrase: Any,
         direction: str,
     ) -> Optional[float]:
-        phrase_tokens = [token.lower() for token in self._split_words(str(phrase or ""))]
+        phrase_tokens = [
+            token.lower() for token in self._split_words(str(phrase or ""))
+        ]
         if not phrase_tokens:
             return None
 
@@ -265,7 +274,9 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
 
         ordered_context = list(context_segments)
         try:
-            ordered_context.sort(key=lambda segment: int(segment.get("sequence_num", -1)))
+            ordered_context.sort(
+                key=lambda segment: int(segment.get("sequence_num", -1))
+            )
         except Exception:
             pass
         if direction == "end":
@@ -276,7 +287,10 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
                 candidates.append(segment)
 
         for segment in candidates:
-            words = [token.lower() for token in self._split_words(str(segment.get("text", "")))]
+            words = [
+                token.lower()
+                for token in self._split_words(str(segment.get("text", "")))
+            ]
             if not words:
                 continue
             start_time = float(segment.get("start_time", 0.0))
@@ -296,7 +310,9 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
             match_start, match_end = match
             seconds_per_word = duration / float(len(words))
             if direction == "start":
-                return min(start_time + (float(match_start) * seconds_per_word), end_time)
+                return min(
+                    start_time + (float(match_start) * seconds_per_word), end_time
+                )
             return min(start_time + (float(match_end + 1) * seconds_per_word), end_time)
 
         return None
@@ -361,7 +377,9 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
         return None
 
     def _split_words(self, text: str) -> List[str]:
-        raw_tokens = [token for token in re.split(r"\s+", (text or "").strip()) if token]
+        raw_tokens = [
+            token for token in re.split(r"\s+", (text or "").strip()) if token
+        ]
         normalized = [self._normalize_token(token) for token in raw_tokens]
         return [token for token in normalized if token]
 
