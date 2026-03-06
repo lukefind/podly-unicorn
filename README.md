@@ -1,7 +1,5 @@
 <div align="center">
-  <img src="frontend/public/images/logos/original-logo.png" alt="Podly" width="200" />
-  <h1>Podly</h1>
-  <p>Ad-block for podcasts. Create an ad-free RSS feed.</p>
+  <img src="frontend/public/images/social-card1200x630.png" alt="Podly social card" width="900" />
   
   <p>
     <a href="https://github.com/podly-pure-podcasts/podly_pure_podcasts"><img src="https://img.shields.io/badge/GitHub-podly-blue?logo=github" alt="GitHub"></a>
