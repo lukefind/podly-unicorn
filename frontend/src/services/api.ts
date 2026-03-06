@@ -554,8 +554,8 @@ export const authApi = {
     return response.data;
   },
 
-  login: async (email: string, password: string): Promise<{ user: { id: number; username: string; role: string } }> => {
-    const response = await api.post('/api/auth/login', { email, password });
+  login: async (identifier: string, password: string): Promise<{ user: { id: number; username: string; role: string } }> => {
+    const response = await api.post('/api/auth/login', { username: identifier, password });
     return response.data;
   },
 

@@ -67,11 +67,11 @@ def login() -> RouteResult:
         return jsonify({"error": "Authentication is disabled."}), 404
 
     payload = request.get_json(silent=True) or {}
-    username = (payload.get("email") or payload.get("username") or "").strip()
+    identifier = (payload.get("username") or payload.get("email") or "").strip()
     password = payload.get("password") or ""
 
-    if not username or not password:
-        return jsonify({"error": "Email and password are required."}), 400
+    if not identifier or not password:
+        return jsonify({"error": "Username or email plus password are required."}), 400
 
     client_identifier = request.remote_addr or "unknown"
     retry_after = failure_rate_limiter.retry_after(client_identifier)
@@ -82,14 +82,14 @@ def login() -> RouteResult:
             {"Retry-After": str(retry_after)},
         )
 
-    authenticated = authenticate(username, password)
+    authenticated = authenticate(identifier, password)
     if authenticated is None:
         backoff = failure_rate_limiter.register_failure(client_identifier)
         response_headers: dict[str, str] = {}
         if backoff:
             response_headers["Retry-After"] = str(backoff)
 
-        response = jsonify({"error": "Invalid email or password."})
+        response = jsonify({"error": "Invalid username/email or password."})
         if response_headers:
             return response, 401, response_headers
         return response, 401

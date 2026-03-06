@@ -109,6 +109,23 @@ def test_logout_clears_session(auth_app: Flask) -> None:
     assert protected.headers.get("WWW-Authenticate") is None
 
 
+def test_login_allows_username_only_account(auth_app: Flask) -> None:
+    with auth_app.app_context():
+        user = User(username="listener", role="user")
+        user.set_password("password123")
+        db.session.add(user)
+        db.session.commit()
+
+    client = auth_app.test_client()
+    response = client.post(
+        "/api/auth/login",
+        json={"username": "listener", "password": "password123"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["user"]["username"] == "listener"
+
+
 def test_protected_route_without_session_returns_json_401(auth_app: Flask) -> None:
     client = auth_app.test_client()
     response = client.get("/api/protected")

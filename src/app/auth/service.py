@@ -57,18 +57,18 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def authenticate(email: str, password: str) -> AuthenticatedUser | None:
-    """Authenticate using email.
+def authenticate(identifier: str, password: str) -> AuthenticatedUser | None:
+    """Authenticate using email or username.
 
     Backwards-compatibility: if no email match exists, fall back to username only
     for existing accounts that do not yet have an email set.
     """
 
-    normalized_email = _normalize_email(email)
-    user = User.query.filter_by(email=normalized_email).first()
+    normalized_identifier = _normalize_email(identifier)
+    user = User.query.filter_by(email=normalized_identifier).first()
     if user is None:
         # Legacy fallback: allow username login only when the account has no email set.
-        legacy = User.query.filter_by(username=_normalize_username(email)).first()
+        legacy = User.query.filter_by(username=_normalize_username(identifier)).first()
         if legacy is None or legacy.email is not None:
             return None
         user = legacy

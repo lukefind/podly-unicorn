@@ -1,7 +1,7 @@
 services:
   podly:
     container_name: podly-pure-podcasts
-    image: podly-unicorn
+    image: podly-pure-podcasts
     build:
       context: .
       dockerfile: Dockerfile
@@ -39,4 +39,4 @@ services:
 
 networks:
   default:
-    name: podly-unicorn-network
+    name: podly-pure-podcasts-network

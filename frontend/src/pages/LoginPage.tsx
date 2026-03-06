@@ -20,7 +20,7 @@ export default function LoginPage() {
   const brandName = getThemeBrandName(theme);
   const brandClass = getThemeBrandClass(theme);
   const nextThemeLabel = getThemeLabel(getNextTheme(theme));
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +40,8 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      await login(email, password);
-      setEmail('');
+      await login(identifier, password);
+      setIdentifier('');
       setPassword('');
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -175,16 +175,16 @@ export default function LoginPage() {
 
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">
+              <label htmlFor="identifier" className="block text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">
                 Email or username
               </label>
               <input
-                id="email"
-                name="email"
+                id="identifier"
+                name="username"
                 type="text"
                 autoComplete="username"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                value={identifier}
+                onChange={(event) => setIdentifier(event.target.value)}
                 className="block w-full rounded-xl border border-purple-200 dark:border-purple-700 bg-white/50 dark:bg-slate-700/50 px-4 py-3 shadow-sm focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-400/20 transition-all dark:text-white dark:placeholder-purple-300/50"
                 placeholder="Email or username"
                 disabled={submitting}

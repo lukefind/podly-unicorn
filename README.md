@@ -220,7 +220,7 @@ LLM_MODEL=xai/grok-3
 ## Updating
 
 ```bash
-cd podly-unicorn
+cd podly_pure_podcasts
 git pull
 docker compose up -d --build
 ```

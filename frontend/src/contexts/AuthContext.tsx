@@ -10,7 +10,7 @@ interface AuthContextValue {
   requireAuth: boolean;
   isAuthenticated: boolean;
   user: AuthUser | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<void>;
   logout: () => void;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -73,13 +73,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void bootstrapAuth();
   }, [bootstrapAuth]);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const trimmedUsername = username.trim();
-    if (!trimmedUsername) {
-      throw new Error('Email is required.');
+  const login = useCallback(async (identifier: string, password: string) => {
+    const trimmedIdentifier = identifier.trim();
+    if (!trimmedIdentifier) {
+      throw new Error('Email or username is required.');
     }
 
-    const response = await authApi.login(trimmedUsername, password);
+    const response = await authApi.login(trimmedIdentifier, password);
     setState({
       status: 'ready',
       requireAuth: true,
