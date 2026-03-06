@@ -17,7 +17,7 @@ OUTPUT_512 = LOGOS_DIR / "web-app-manifest-512x512.png"
 MASKABLE_192 = LOGOS_DIR / "manifest-icon-192.maskable.png"
 MASKABLE_512 = LOGOS_DIR / "manifest-icon-512.maskable.png"
 
-BG_COLOR = (10, 22, 40)
+BG_COLOR = (37, 95, 156)
 
 
 def make_icon(source_path: Path, size: int, safe_zone_ratio: float) -> Image.Image:
