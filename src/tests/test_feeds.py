@@ -35,6 +35,7 @@ class MockPost:
         description="Test description",
         release_date=datetime.datetime(2023, 1, 1, 12, 0, tzinfo=datetime.timezone.utc),
         feed_id=1,
+        image_url="https://example.com/episode.jpg",
     ):
         self.id = id
         self.title = title
@@ -43,6 +44,7 @@ class MockPost:
         self.description = description
         self.release_date = release_date
         self.feed_id = feed_id
+        self.image_url = image_url
         self._audio_len_bytes = 1024
 
     def audio_len_bytes(self):
@@ -266,7 +268,7 @@ def test_feed_item(mock_post, app):
     assert result.guid == mock_post.guid
 
     # Check enclosure
-    assert result.enclosure.url == "http://podly.com:5001/api/posts/test-guid/download"
+    assert result.enclosure.url == "https://podly.com:5001/api/posts/test-guid/download"
     assert result.enclosure.type == "audio/mpeg"
     assert result.enclosure.length == mock_post._audio_len_bytes
 
@@ -299,7 +301,7 @@ def test_feed_item_with_reverse_proxy(mock_post, app):
     assert result.guid == mock_post.guid
 
     # Check enclosure - should use HTTP/2 pseudo-headers
-    assert result.enclosure.url == "http://podly.com:5001/api/posts/test-guid/download"
+    assert result.enclosure.url == "https://podly.com:5001/api/posts/test-guid/download"
     assert result.enclosure.type == "audio/mpeg"
     assert result.enclosure.length == mock_post._audio_len_bytes
 
@@ -414,7 +416,7 @@ def test_generate_feed_xml(mock_feed_item, mock_feed, mock_post, app):
     # Mock PyRSS2Gen.RSS2
     with (
         app.app_context(),
-        mock.patch("app.feeds.PyRSS2Gen.RSS2") as mock_rss_2,
+        mock.patch("app.feeds.ITunesRSS2") as mock_rss_2,
         mock.patch("app.feeds.PyRSS2Gen.Image"),
     ):
         mock_rss = mock_rss_2.return_value
@@ -636,12 +638,14 @@ class TestExtractDescription:
         """content:encoded should be preferred over other fields."""
         entry = mock.MagicMock()
         entry.content = [{"value": "<p>Rich HTML content</p>"}]
-        entry.get = mock.MagicMock(side_effect=lambda k, d="": {
-            "description": "Plain description",
-            "summary": "Summary text",
-        }.get(k, d))
+        entry.get = mock.MagicMock(
+            side_effect=lambda k, d="": {
+                "description": "Plain description",
+                "summary": "Summary text",
+            }.get(k, d)
+        )
         entry.itunes_summary = "iTunes summary"
-        
+
         result = _extract_description(entry)
         assert result == "<p>Rich HTML content</p>"
 
@@ -649,12 +653,14 @@ class TestExtractDescription:
         """description should be used when content:encoded is empty."""
         entry = mock.MagicMock()
         entry.content = None
-        entry.get = mock.MagicMock(side_effect=lambda k, d="": {
-            "description": "Plain description",
-            "summary": "Summary text",
-        }.get(k, d))
+        entry.get = mock.MagicMock(
+            side_effect=lambda k, d="": {
+                "description": "Plain description",
+                "summary": "Summary text",
+            }.get(k, d)
+        )
         entry.itunes_summary = "iTunes summary"
-        
+
         result = _extract_description(entry)
         assert result == "Plain description"
 
@@ -662,12 +668,14 @@ class TestExtractDescription:
         """summary should be used when description is empty."""
         entry = mock.MagicMock()
         entry.content = None
-        entry.get = mock.MagicMock(side_effect=lambda k, d="": {
-            "description": "",
-            "summary": "Summary text",
-        }.get(k, d))
+        entry.get = mock.MagicMock(
+            side_effect=lambda k, d="": {
+                "description": "",
+                "summary": "Summary text",
+            }.get(k, d)
+        )
         entry.itunes_summary = "iTunes summary"
-        
+
         result = _extract_description(entry)
         assert result == "Summary text"
 
@@ -677,7 +685,7 @@ class TestExtractDescription:
         entry.content = None
         entry.get = mock.MagicMock(return_value="")
         entry.itunes_summary = "iTunes summary"
-        
+
         result = _extract_description(entry)
         assert result == "iTunes summary"
 
@@ -685,12 +693,14 @@ class TestExtractDescription:
         """Empty <description/> tag should fall back to other fields (Mac Power Users case)."""
         entry = mock.MagicMock()
         entry.content = [{"value": "<p>Full show notes from content:encoded</p>"}]
-        entry.get = mock.MagicMock(side_effect=lambda k, d="": {
-            "description": "",  # Empty description tag
-            "summary": "",
-        }.get(k, d))
+        entry.get = mock.MagicMock(
+            side_effect=lambda k, d="": {
+                "description": "",  # Empty description tag
+                "summary": "",
+            }.get(k, d)
+        )
         entry.itunes_summary = "Short iTunes summary"
-        
+
         result = _extract_description(entry)
         assert result == "<p>Full show notes from content:encoded</p>"
 
@@ -698,12 +708,14 @@ class TestExtractDescription:
         """Whitespace-only description should fall back to other fields."""
         entry = mock.MagicMock()
         entry.content = None
-        entry.get = mock.MagicMock(side_effect=lambda k, d="": {
-            "description": "   \n\t  ",
-            "summary": "Actual summary",
-        }.get(k, d))
+        entry.get = mock.MagicMock(
+            side_effect=lambda k, d="": {
+                "description": "   \n\t  ",
+                "summary": "Actual summary",
+            }.get(k, d)
+        )
         entry.itunes_summary = ""
-        
+
         result = _extract_description(entry)
         assert result == "Actual summary"
 
@@ -713,6 +725,6 @@ class TestExtractDescription:
         entry.content = None
         entry.get = mock.MagicMock(return_value="")
         entry.itunes_summary = ""
-        
+
         result = _extract_description(entry)
         assert result == ""

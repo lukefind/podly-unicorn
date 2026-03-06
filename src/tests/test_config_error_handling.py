@@ -4,8 +4,6 @@ Tests for configuration error handling and validation.
 
 import importlib
 
-import pytest  # type: ignore[import]
-
 from shared.config import Config
 
 app_module = importlib.import_module("app.__init__")
@@ -118,13 +116,12 @@ class TestConfigurationErrorHandling:
 class TestEnvKeyValidation:
     """Tests for environment-based API key validation."""
 
-    def test_llm_and_groq_conflict_raises(self, monkeypatch):
+    def test_llm_and_groq_conflict_is_allowed(self, monkeypatch):
         monkeypatch.setenv("LLM_API_KEY", "llm-value")
         monkeypatch.setenv("GROQ_API_KEY", "groq-value")
         monkeypatch.delenv("WHISPER_REMOTE_API_KEY", raising=False)
 
-        with pytest.raises(SystemExit):
-            app_module._validate_env_key_conflicts()
+        app_module._validate_env_key_conflicts()
 
     def test_whisper_remote_allows_different_key(self, monkeypatch):
         monkeypatch.setenv("LLM_API_KEY", "llm-value")
