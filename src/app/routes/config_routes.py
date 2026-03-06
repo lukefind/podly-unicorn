@@ -169,6 +169,16 @@ def _hydrate_runtime_config(data: Dict[str, Any]) -> None:
         "llm_max_input_tokens_per_minute",
         data["llm"].get("llm_max_input_tokens_per_minute"),
     )
+    data["llm"]["enable_boundary_refinement"] = getattr(
+        runtime_config,
+        "enable_boundary_refinement",
+        data["llm"].get("enable_boundary_refinement"),
+    )
+    data["llm"]["enable_word_level_boundary_refiner"] = getattr(
+        runtime_config,
+        "enable_word_level_boundary_refiner",
+        data["llm"].get("enable_word_level_boundary_refiner"),
+    )
 
     # Whisper overlay (handle both dict and typed objects)
     data.setdefault("whisper", {})

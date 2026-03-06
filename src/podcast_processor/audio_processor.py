@@ -47,6 +47,15 @@ class AudioProcessor:
         """
         self.logger.info(f"Retrieving ad segments from database for post {post.id}.")
 
+        refined_segments = self._get_refined_ad_segments(post)
+        if refined_segments:
+            self.logger.info(
+                "Using %s refined ad boundaries for post %s.",
+                len(refined_segments),
+                post.id,
+            )
+            return refined_segments
+
         ad_identifications = (
             self.identification_query.join(
                 TranscriptSegment,
@@ -86,6 +95,34 @@ class AudioProcessor:
         # Sort by start time, as processing might expect this order
         ad_segments_times.sort(key=lambda x: x[0])
         return ad_segments_times
+
+    def _get_refined_ad_segments(self, post: Post) -> List[Tuple[float, float]]:
+        if not getattr(self.config, "enable_boundary_refinement", False):
+            return []
+
+        raw_boundaries = getattr(post, "refined_ad_boundaries", None) or []
+        if not isinstance(raw_boundaries, list):
+            return []
+
+        refined_segments: List[Tuple[float, float]] = []
+        for item in raw_boundaries:
+            if not isinstance(item, dict):
+                continue
+            start_raw = item.get("refined_start")
+            end_raw = item.get("refined_end")
+            if start_raw is None or end_raw is None:
+                continue
+            try:
+                start = float(start_raw)
+                end = float(end_raw)
+            except (TypeError, ValueError):
+                continue
+            if end <= start:
+                continue
+            refined_segments.append((start, end))
+
+        refined_segments.sort(key=lambda segment: segment[0])
+        return refined_segments
 
     def merge_ad_segments(
         self,

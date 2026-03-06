@@ -1172,7 +1172,24 @@ export default function ConfigPage() {
                   onChange={(val) => setField(['llm', 'llm_max_input_tokens_per_minute'], val)}
                 />
               </Field>
+              <Field label="Enable Boundary Refinement">
+                <input
+                  type="checkbox"
+                  checked={!!pending?.llm?.enable_boundary_refinement}
+                  onChange={(e) => setField(['llm', 'enable_boundary_refinement'], e.target.checked)}
+                />
+              </Field>
+              <Field label="Enable Word-Level Boundary Refiner">
+                <input
+                  type="checkbox"
+                  checked={!!pending?.llm?.enable_word_level_boundary_refiner}
+                  onChange={(e) => setField(['llm', 'enable_word_level_boundary_refiner'], e.target.checked)}
+                />
+              </Field>
             </div>
+            <p className={`text-xs mt-3 ${isOriginal ? 'text-blue-300/60' : 'text-gray-600 dark:text-purple-300'}`}>
+              Boundary refinement runs an extra LLM pass after ad detection to tighten the cut start and end. The word-level option then tries to place the cut inside the transcript segment for cleaner transitions.
+            </p>
             <div className="flex justify-center">
               <button
                 onClick={() => {
@@ -1490,7 +1507,7 @@ export default function ConfigPage() {
                     </label>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <h4 className={`text-sm font-semibold ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'}`}>Email (SMTP) Configuration</h4>
                   {pending?.email?.smtp_host && pending?.email?.smtp_username ? (

@@ -307,6 +307,14 @@ export default function ProcessingStatsButton({
                           <div className="text-xs sm:text-sm mt-1" style={{ color: isOriginal ? '#93c5fd' : isDark ? '#a78bfa' : '#6b7280' }}>AI Calls</div>
                         </button>
                       </div>
+                      {(stats.processing_stats?.boundary_refinement_count || 0) > 0 && (
+                        <p
+                          className="text-sm text-left"
+                          style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#4b5563' }}
+                        >
+                          Refined cut windows: {stats.processing_stats?.boundary_refinement_count}
+                        </p>
+                      )}
 
                       {/* Model Performance */}
                       <div className="grid grid-cols-1 gap-3 sm:gap-4">
@@ -639,7 +647,9 @@ export default function ProcessingStatsButton({
                                           : (isOriginal ? '#6ee7b7' : isDark ? '#86efac' : '#065f46')
                                       }}
                                     >
-                                      {segment.primary_label === 'ad' ? 'Ad' : 'Content'}
+                                      {segment.primary_label === 'ad'
+                                        ? (segment.mixed ? 'Ad (mixed)' : 'Ad')
+                                        : 'Content'}
                                     </span>
                                   </td>
                                   <td className="px-4 py-3 text-sm max-w-md" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>
@@ -712,7 +722,9 @@ export default function ProcessingStatsButton({
                                           : (isOriginal ? '#6ee7b7' : isDark ? '#86efac' : '#065f46')
                                       }}
                                     >
-                                      {identification.label}
+                                      {identification.label === 'ad'
+                                        ? (identification.mixed ? 'ad (mixed)' : 'ad')
+                                        : identification.label}
                                     </span>
                                   </td>
                                   <td className="px-4 py-3 text-sm" style={{ color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#4b5563' }}>

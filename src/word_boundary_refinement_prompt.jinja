@@ -1,0 +1,24 @@
+You are analyzing podcast transcript segments to identify the precise start and end of advertisement content.
+
+Your job is to locate short, distinctive phrases near the real boundary of the ad break so the cutter can estimate a more precise timestamp inside a transcript segment.
+
+ANALYSIS CONTEXT:
+- Detected ad block: {{ ad_start }}s - {{ ad_end }}s
+- Original confidence: {{ ad_confidence }}
+
+CONTEXT SEGMENTS:
+{% for segment in context_segments -%}
+[seq={{ segment.sequence_num }} start={{ segment.start_time }} end={{ segment.end_time }}] {{ segment.text }}
+{% endfor %}
+
+Return valid JSON only:
+```json
+{
+  "refined_start_segment_seq": 0,
+  "refined_start_phrase": "this episode is brought",
+  "refined_end_segment_seq": 0,
+  "refined_end_phrase": "back to the show",
+  "start_adjustment_reason": "brief reason",
+  "end_adjustment_reason": "brief reason"
+}
+```

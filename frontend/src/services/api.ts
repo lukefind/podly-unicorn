@@ -376,6 +376,7 @@ export const feedsApi = {
       ad_segments_count: number;
       ad_percentage: number;
       estimated_ad_time_seconds: number;
+      boundary_refinement_count: number;
       model_call_statuses: Record<string, number>;
       model_types: Record<string, number>;
     };
@@ -399,6 +400,7 @@ export const feedsApi = {
       end_time: number;
       text: string;
       primary_label: 'ad' | 'content';
+      mixed?: boolean;
       identifications: Array<{
         id: number;
         label: string;
@@ -416,6 +418,19 @@ export const feedsApi = {
       segment_start_time: number;
       segment_end_time: number;
       segment_text: string;
+      mixed?: boolean;
+    }>;
+    refined_boundaries: Array<{
+      orig_start: number;
+      orig_end: number;
+      refined_start: number;
+      refined_end: number;
+      first_seq_num: number | null;
+      last_seq_num: number | null;
+      confidence: number | null;
+      start_adjustment_reason: string | null;
+      end_adjustment_reason: string | null;
+      refined_by: string | null;
     }>;
     job_info: {
       job_id: string;
@@ -480,6 +495,7 @@ export const feedsApi = {
       ad_segments_count: number;
       ad_percentage: number;
       estimated_ad_time_seconds: number;
+      boundary_refinement_count: number;
       model_call_statuses: Record<string, number>;
       model_types: Record<string, number>;
     };
@@ -503,6 +519,7 @@ export const feedsApi = {
       end_time: number;
       text: string;
       primary_label: 'ad' | 'content';
+      mixed?: boolean;
       identifications: Array<{
         id: number;
         label: string;
@@ -520,6 +537,19 @@ export const feedsApi = {
       segment_start_time: number;
       segment_end_time: number;
       segment_text: string;
+      mixed?: boolean;
+    }>;
+    refined_boundaries: Array<{
+      orig_start: number;
+      orig_end: number;
+      refined_start: number;
+      refined_end: number;
+      first_seq_num: number | null;
+      last_seq_num: number | null;
+      confidence: number | null;
+      start_adjustment_reason: string | null;
+      end_adjustment_reason: string | null;
+      refined_by: string | null;
     }>;
   }> => {
     return feedsApi.getPostStats(guid);

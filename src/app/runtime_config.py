@@ -41,6 +41,8 @@ else:
         llm_enable_token_rate_limiting=DEFAULTS.LLM_ENABLE_TOKEN_RATE_LIMITING,
         llm_max_input_tokens_per_call=DEFAULTS.LLM_MAX_INPUT_TOKENS_PER_CALL,
         llm_max_input_tokens_per_minute=DEFAULTS.LLM_MAX_INPUT_TOKENS_PER_MINUTE,
+        enable_boundary_refinement=DEFAULTS.ENABLE_BOUNDARY_REFINEMENT,
+        enable_word_level_boundary_refiner=DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINER,
         automatically_whitelist_new_episodes=DEFAULTS.APP_AUTOMATICALLY_WHITELIST_NEW_EPISODES,
         number_of_episodes_to_whitelist_from_archive_of_new_feed=DEFAULTS.APP_NUM_EPISODES_TO_WHITELIST_FROM_ARCHIVE_OF_NEW_FEED,
         whisper=LocalWhisperConfig(model=DEFAULTS.WHISPER_LOCAL_MODEL),
