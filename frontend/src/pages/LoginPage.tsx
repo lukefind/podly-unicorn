@@ -265,7 +265,7 @@ export default function LoginPage() {
               </span>
               <span>•</span>
               <a 
-                href="https://github.com/lukefind/podly-unicorn" 
+                href="https://github.com/podly-pure-podcasts/podly_pure_podcasts" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 hover:text-purple-600 dark:hover:text-purple-300 transition-colors"

@@ -15,7 +15,7 @@ export function getNextTheme(theme: Theme): Theme {
 }
 
 export function getThemeLabel(theme: Theme): string {
-  if (theme === 'original') return 'Original';
+  if (theme === 'original') return 'Blue';
   return theme === 'dark' ? 'Dark' : 'Light';
 }
 
@@ -29,8 +29,8 @@ export function getThemeLogoPath(theme: Theme): string {
     : '/images/logos/unicorn-logo.png';
 }
 
-export function getThemeBrandName(theme: Theme): string {
-  return theme === 'original' ? 'Podly' : 'Podly Unicorn';
+export function getThemeBrandName(_theme: Theme): string {
+  return 'Podly';
 }
 
 export function getThemeBrandClass(theme: Theme): string {

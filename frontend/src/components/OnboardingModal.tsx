@@ -8,11 +8,11 @@ interface OnboardingModalProps {
 
 const ONBOARDING_STEPS = [
   {
-    title: 'Welcome to Podly Unicorn! 🦄',
+    title: 'Welcome to Podly! 🎧',
     icon: '👋',
     content: (
       <div className="space-y-3">
-        <p>Podly Unicorn automatically removes ads from your favorite podcasts using AI.</p>
+        <p>Podly automatically removes ads from your favorite podcasts using AI.</p>
         <p>Let's get you started in just a few steps!</p>
       </div>
     ),

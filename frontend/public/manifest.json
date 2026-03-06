@@ -1,5 +1,5 @@
 {
-  "name": "Podly Unicorn",
+  "name": "Podly",
   "short_name": "Podly",
   "description": "Ad-free podcasts with AI-powered ad removal",
   "start_url": "/",
@@ -21,7 +21,7 @@
       "purpose": "any"
     },
     {
-      "src": "/images/logos/unicorn-logo.png",
+      "src": "/images/logos/original-logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"

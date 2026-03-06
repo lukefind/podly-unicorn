@@ -13,8 +13,8 @@ Sign up at [console.groq.com](https://console.groq.com/keys) and create an API k
 ### 2. Install & Run
 
 ```bash
-git clone https://github.com/lukefind/podly-unicorn.git
-cd podly-unicorn
+git clone https://github.com/podly-pure-podcasts/podly_pure_podcasts.git
+cd podly_pure_podcasts
 cp .env.local.example .env.local
 # Edit .env.local with auth settings (recommended):
 # REQUIRE_AUTH=true
@@ -120,5 +120,5 @@ See the [full upgrade guide](../README.md#upgrading-from-podly-pure-podcasts--ea
 
 ## Getting Help
 
-- [GitHub Issues](https://github.com/lukefind/podly-unicorn/issues)
-- [Telegram Community](https://t.me/+AV5-w_GSd2VjNjBk)
+- [GitHub Issues](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues)
+- [Discord Community](https://discord.gg/FRB98GtF6N)

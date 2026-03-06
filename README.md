@@ -1,24 +1,23 @@
 <div align="center">
-  <img src="frontend/public/images/logos/unicorn-logo.png" alt="Podly Unicorn" width="200" />
-  <h1>Podly Unicorn</h1>
+  <img src="frontend/public/images/logos/original-logo.png" alt="Podly" width="200" />
+  <h1>Podly</h1>
+  <p>Ad-block for podcasts. Create an ad-free RSS feed.</p>
   
   <p>
-    <a href="https://github.com/lukefind/podly-unicorn"><img src="https://img.shields.io/badge/GitHub-podly--unicorn-purple?logo=github" alt="GitHub"></a>
-    <a href="https://github.com/jdrbc/podly_pure_podcasts/blob/main/LICENCE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-    <a href="https://t.me/+AV5-w_GSd2VjNjBk"><img src="https://img.shields.io/badge/Telegram-Join%20Community-229ED9?logo=telegram" alt="Telegram"></a>
+    <a href="https://github.com/podly-pure-podcasts/podly_pure_podcasts"><img src="https://img.shields.io/badge/GitHub-podly-blue?logo=github" alt="GitHub"></a>
+    <a href="https://github.com/podly-pure-podcasts/podly_pure_podcasts/blob/main/LICENCE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+    <a href="https://discord.gg/FRB98GtF6N"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   </p>
 </div>
 
 ---
 
-## What is Podly Unicorn?
+## What is Podly?
 
-Podly Unicorn automatically removes advertisements from podcasts using AI. Add your favorite shows, and Podly creates ad-free RSS feeds you can subscribe to in any podcast app.
-
-This is a fork of [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podcasts) with significant UI/UX improvements and new features.
+Podly automatically removes advertisements from podcasts using AI. Add your favorite shows, and Podly creates ad-free RSS feeds you can subscribe to in any podcast app.
 
 <div align="center">
-  <img src="frontend/public/images/screenshots/dashboard-desktop.png" alt="Podly Unicorn Dashboard" width="700" />
+  <img src="frontend/public/images/screenshots/dashboard-desktop.png" alt="Podly Dashboard" width="700" />
   <p><em>Dashboard showing podcast statistics and ad removal progress</em></p>
 </div>
 
@@ -129,8 +128,8 @@ If logs show `reason=not_whitelisted`, that episode is disabled for processing. 
 ### 1. Clone and Configure
 
 ```bash
-git clone https://github.com/lukefind/podly-unicorn.git
-cd podly-unicorn
+git clone https://github.com/podly-pure-podcasts/podly_pure_podcasts.git
+cd podly_pure_podcasts
 cp .env.local.example .env.local
 ```
 
@@ -288,15 +287,16 @@ docker compose up --build
 
 ---
 
-## Credits
+## Contributing
 
-Fork of [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podcasts) by [@jdrbc](https://github.com/jdrbc).
+See [contributing guide](docs/contributors.md) for local setup & contribution instructions.
 
 ---
 
 <div align="center">
   <p>
-    <a href="https://github.com/lukefind/podly-unicorn">GitHub</a> •
-    <a href="https://github.com/lukefind/podly-unicorn/issues">Issues</a>
+    <a href="https://github.com/podly-pure-podcasts/podly_pure_podcasts">GitHub</a> •
+    <a href="https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues">Issues</a> •
+    <a href="https://discord.gg/FRB98GtF6N">Discord</a>
   </p>
 </div>

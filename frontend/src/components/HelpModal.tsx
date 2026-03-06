@@ -75,7 +75,7 @@ export default function HelpModal({ isOpen, onClose, onReplayTutorial }: HelpMod
       case 'getting-started':
         return (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100">Welcome to Podly Unicorn!</h3>
+            <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100">Welcome to Podly!</h3>
             <p className="text-gray-600 dark:text-gray-300">
               Podly automatically removes ads from your favorite podcasts using AI.
             </p>
@@ -374,7 +374,7 @@ export default function HelpModal({ isOpen, onClose, onReplayTutorial }: HelpMod
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Need more help?{' '}
               <a 
-                href="https://github.com/lukefind/podly-unicorn/issues" 
+                href="https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-purple-600 dark:text-purple-400 hover:underline"

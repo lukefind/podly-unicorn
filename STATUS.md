@@ -91,8 +91,8 @@
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/lukefind/podly-unicorn/issues)
-- **Community**: [Telegram](https://t.me/+AV5-w_GSd2VjNjBk)
+- **Issues**: [GitHub Issues](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues)
+- **Community**: [Discord](https://discord.gg/FRB98GtF6N)
 - **Documentation**: See README.md and docs/ folder
 
 ---

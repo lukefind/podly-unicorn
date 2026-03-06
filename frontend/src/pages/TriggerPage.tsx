@@ -210,11 +210,11 @@ export default function TriggerPage() {
   // Missing params error
   if (!guid || !tokenId || !secret) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-800 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-700 via-blue-800 to-blue-950 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-center">
-            <h1 className="text-2xl font-bold text-white">Podly Unicorn</h1>
-            <p className="text-purple-200 text-sm mt-1">Ad-free podcast processing</p>
+          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 p-6 text-center">
+            <h1 className="text-2xl font-bold text-white">Podly</h1>
+            <p className="text-blue-200 text-sm mt-1">Ad-free podcast processing</p>
           </div>
           <div className="p-6 text-center">
             <div className="text-4xl mb-4">&#9888;</div>
@@ -229,11 +229,11 @@ export default function TriggerPage() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-800 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-700 via-blue-800 to-blue-950 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-center">
-            <h1 className="text-2xl font-bold text-white">Podly Unicorn</h1>
-            <p className="text-purple-200 text-sm mt-1">Ad-free podcast processing</p>
+          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 p-6 text-center">
+            <h1 className="text-2xl font-bold text-white">Podly</h1>
+            <p className="text-blue-200 text-sm mt-1">Ad-free podcast processing</p>
           </div>
           <div className="p-6 text-center">
             <div className="text-4xl mb-4 text-red-500">&#10060;</div>
@@ -242,7 +242,7 @@ export default function TriggerPage() {
 
             {/* Retry suggestion */}
             {errorDetails?.retry_suggested && (
-              <p className="text-sm text-purple-600 mb-4">
+              <p className="text-sm text-blue-600 mb-4">
                 This may be a temporary issue. Please try again in a few minutes.
               </p>
             )}
@@ -292,11 +292,11 @@ export default function TriggerPage() {
   // Ready state - show return instructions
   if (status?.state === 'ready') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-800 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-700 via-blue-800 to-blue-950 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-center">
-            <h1 className="text-2xl font-bold text-white">Podly Unicorn</h1>
-            <p className="text-purple-200 text-sm mt-1">Ad-free podcast processing</p>
+          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 p-6 text-center">
+            <h1 className="text-2xl font-bold text-white">Podly</h1>
+            <p className="text-blue-200 text-sm mt-1">Ad-free podcast processing</p>
           </div>
           <div className="p-6">
             <div className="text-center mb-6">
@@ -314,11 +314,11 @@ export default function TriggerPage() {
             </div>
 
             {/* Primary instruction - not a button, just prominent text */}
-            <div className="bg-purple-50 rounded-xl p-4 mb-4 text-center">
-              <p className="text-purple-800 font-semibold text-lg mb-1">
+            <div className="bg-blue-50 rounded-xl p-4 mb-4 text-center">
+              <p className="text-blue-800 font-semibold text-lg mb-1">
                 Close this tab now
               </p>
-              <p className="text-purple-600 text-sm">
+              <p className="text-blue-600 text-sm">
                 and return to your podcast app
               </p>
             </div>
@@ -327,7 +327,7 @@ export default function TriggerPage() {
             <div className="border-t border-gray-100 pt-4">
               <button
                 onClick={handleCopyFeedUrl}
-                className="w-full py-2 px-4 text-purple-600 text-sm font-medium hover:bg-purple-50 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full py-2 px-4 text-blue-600 text-sm font-medium hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 {copiedFeedUrl ? (
                   <>
@@ -354,11 +354,11 @@ export default function TriggerPage() {
 
   // Processing state
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-700 via-blue-800 to-blue-950 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-center">
-          <h1 className="text-2xl font-bold text-white">Podly Unicorn</h1>
-          <p className="text-purple-200 text-sm mt-1">Ad-free podcast processing</p>
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 p-6 text-center">
+          <h1 className="text-2xl font-bold text-white">Podly</h1>
+          <p className="text-blue-200 text-sm mt-1">Ad-free podcast processing</p>
         </div>
         <div className="p-6">
           {/* Temporary unavailable warning - shown when polling fails but we have previous status */}
