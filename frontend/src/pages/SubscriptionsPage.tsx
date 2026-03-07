@@ -11,6 +11,16 @@ export default function SubscriptionsPage() {
   const { user, requireAuth } = useAuth();
   const { theme } = useTheme();
   const isOriginal = theme === 'original';
+  const originalModalStyles = {
+    panel: { backgroundColor: 'var(--original-modal-base)', borderColor: 'var(--original-modal-border)' },
+    header: { borderColor: 'rgba(96, 165, 250, 0.38)', background: 'linear-gradient(to right, #14467e, #1d5995, #14467e)' },
+    section: { backgroundColor: 'var(--original-modal-surface-alt)', border: '1px solid rgba(96, 165, 250, 0.28)' },
+    divider: { borderColor: 'rgba(96, 165, 250, 0.28)' },
+    footer: { borderColor: 'rgba(96, 165, 250, 0.28)', backgroundColor: 'var(--original-modal-footer)' },
+    closeButton: { color: '#dbeafe', borderColor: 'rgba(96, 165, 250, 0.45)', backgroundColor: 'var(--original-modal-base)' },
+    confirmHeader: { borderColor: 'rgba(96, 165, 250, 0.35)', backgroundColor: 'var(--original-modal-danger)' },
+    confirmFooter: { borderColor: 'rgba(96, 165, 250, 0.35)', backgroundColor: 'var(--original-modal-footer)' },
+  };
   const [expandedSubscribers, setExpandedSubscribers] = useState<Record<number, boolean>>({});
   const [settingsModalFeedId, setSettingsModalFeedId] = useState<number | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: 'unsubscribe-all' | 'delete'; feedId: number; feedTitle: string } | null>(null);
@@ -321,12 +331,12 @@ export default function SubscriptionsPage() {
         >
           <div 
             className="modal-content bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden border"
-            style={isOriginal ? { backgroundColor: '#0a2249', borderColor: 'rgba(96, 165, 250, 0.48)' } : undefined}
+            style={isOriginal ? originalModalStyles.panel : undefined}
             onClick={(e) => e.stopPropagation()}
           >
             <div
               className="p-4 border-b border-gray-100 bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50"
-              style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.38)', background: 'linear-gradient(to right, #14467e, #1d5995, #14467e)' } : undefined}
+              style={isOriginal ? originalModalStyles.header : undefined}
             >
               <div className="flex items-center justify-between">
                 <h3 className={`font-semibold ${isOriginal ? 'text-blue-100' : 'text-gray-900'}`}>Feed Settings</h3>
@@ -347,7 +357,7 @@ export default function SubscriptionsPage() {
               {/* Visibility Toggle */}
               <div
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                style={isOriginal ? { backgroundColor: 'rgba(21, 57, 108, 0.84)', border: '1px solid rgba(96, 165, 250, 0.28)' } : undefined}
+                style={isOriginal ? originalModalStyles.section : undefined}
               >
                 <div>
                   <div className={`font-medium text-sm ${isOriginal ? 'text-blue-100' : 'text-gray-900'}`}>Hide from Browse</div>
@@ -378,7 +388,7 @@ export default function SubscriptionsPage() {
               {/* Auto-Process Toggle */}
               <div
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                style={isOriginal ? { backgroundColor: 'rgba(21, 57, 108, 0.84)', border: '1px solid rgba(96, 165, 250, 0.28)' } : undefined}
+                style={isOriginal ? originalModalStyles.section : undefined}
               >
                 <div>
                   <div className={`font-medium text-sm ${isOriginal ? 'text-blue-100' : 'text-gray-900'}`}>Auto-Process</div>
@@ -412,7 +422,7 @@ export default function SubscriptionsPage() {
             </div>
 
             {/* Danger Zone */}
-            <div className="p-4 border-t border-gray-100" style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.28)' } : undefined}>
+            <div className="p-4 border-t border-gray-100" style={isOriginal ? originalModalStyles.divider : undefined}>
               <div className="text-xs font-medium text-red-600 mb-3">Danger Zone</div>
               <div className="space-y-2">
                 <button
@@ -440,11 +450,11 @@ export default function SubscriptionsPage() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-100 bg-gray-50" style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.28)', backgroundColor: 'rgba(11, 37, 79, 0.75)' } : undefined}>
+            <div className="p-4 border-t border-gray-100 bg-gray-50" style={isOriginal ? originalModalStyles.footer : undefined}>
               <button
                 onClick={() => setSettingsModalFeedId(null)}
                 className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                style={isOriginal ? { color: '#dbeafe', borderColor: 'rgba(96, 165, 250, 0.45)', backgroundColor: 'rgba(8, 24, 52, 0.92)' } : undefined}
+                style={isOriginal ? originalModalStyles.closeButton : undefined}
               >
                 Close
               </button>
@@ -462,12 +472,12 @@ export default function SubscriptionsPage() {
         >
           <div 
             className="modal-content bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden border"
-            style={isOriginal ? { backgroundColor: '#0a2249', borderColor: 'rgba(96, 165, 250, 0.45)' } : undefined}
+            style={isOriginal ? originalModalStyles.panel : undefined}
             onClick={(e) => e.stopPropagation()}
           >
             <div
               className="p-4 border-b border-gray-100 bg-red-50"
-              style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.35)', backgroundColor: 'rgba(127, 29, 29, 0.28)' } : undefined}
+              style={isOriginal ? originalModalStyles.confirmHeader : undefined}
             >
               <h3 className={`font-semibold ${isOriginal ? 'text-red-100' : 'text-red-900'}`}>
                 {confirmAction.type === 'delete' ? 'Delete Feed?' : 'Unsubscribe All Users?'}
@@ -483,7 +493,7 @@ export default function SubscriptionsPage() {
             </div>
             <div
               className="p-4 border-t border-gray-100 bg-gray-50 flex gap-2"
-              style={isOriginal ? { borderColor: 'rgba(96, 165, 250, 0.35)', backgroundColor: 'rgba(16, 48, 94, 0.82)' } : undefined}
+              style={isOriginal ? originalModalStyles.confirmFooter : undefined}
             >
               <button
                 onClick={() => setConfirmAction(null)}

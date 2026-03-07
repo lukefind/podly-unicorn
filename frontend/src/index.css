@@ -625,6 +625,12 @@ html.theme-original body {
 
 html.theme-original body {
   color: #e0f2fe;
+  --original-modal-base: #0a2249;
+  --original-modal-surface: #0f2d5c;
+  --original-modal-surface-alt: #14396c;
+  --original-modal-footer: #0b254f;
+  --original-modal-border: rgba(96, 165, 250, 0.45);
+  --original-modal-danger: #4c1d1d;
 }
 
 .original-brand-text {
@@ -1006,16 +1012,35 @@ html.theme-original pre {
   color: #dbeafe !important;
 }
 
-html.theme-original .modal-content .bg-white {
-  background-color: rgba(7, 20, 42, 0.94) !important;
+html.theme-original .modal-content,
+html.theme-original .modal-content [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+}
+
+html.theme-original .modal-content .bg-white,
+html.theme-original .modal-content .bg-white\/80,
+html.theme-original .modal-content .bg-white\/70,
+html.theme-original .modal-content .bg-white\/60 {
+  background-color: var(--original-modal-base) !important;
 }
 
 html.theme-original .modal-content .bg-gray-50 {
-  background: rgba(10, 24, 49, 0.84) !important;
+  background: var(--original-modal-footer) !important;
 }
 
 html.theme-original .modal-content .bg-gray-100 {
-  background: rgba(14, 36, 74, 0.72) !important;
+  background: var(--original-modal-surface-alt) !important;
+}
+
+html.theme-original .modal-content [class*="bg-slate-"] {
+  background-color: var(--original-modal-surface) !important;
+}
+
+html.theme-original .modal-content [style*="background-color: white"],
+html.theme-original .modal-content [style*="background: white"],
+html.theme-original .modal-content [style*="background: #fff"],
+html.theme-original .modal-content [style*="background-color: #fff"] {
+  background-color: var(--original-modal-base) !important;
 }
 
 html.theme-original [class*="shadow-purple"] {
