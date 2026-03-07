@@ -12,7 +12,9 @@
 
 ## What is Podly?
 
-Podly automatically removes advertisements from podcasts using AI. Add your favorite shows, and Podly creates ad-free RSS feeds you can subscribe to in any podcast app.
+Podly is a self-hosted podcast ad-removal server with a web app. It transcribes episodes, uses LLMs to detect ad segments, and publishes cleaned RSS feeds you can use in your normal podcast player.
+
+You manage feeds, presets, processing, and users in the browser. Listening still happens in your podcast app, through direct downloads, or in Podly's built-in audio player.
 
 <div align="center">
   <img src="frontend/public/images/screenshots/dashboard-desktop.png" alt="Podly Dashboard" width="700" />
@@ -27,91 +29,76 @@ Podly automatically removes advertisements from podcasts using AI. Add your favo
     </tr>
     <tr>
       <td align="center"><em>Mobile podcasts view</em></td>
-      <td align="center"><em>Processed episode details</em></td>
+      <td align="center"><em>Presets page</em></td>
     </tr>
   </table>
 </div>
 
 ---
 
-## Updates from Original App
+## Highlights
 
-### 🎨 Completely Redesigned UI
-- Pastel unicorn theme with purple/pink gradients (light & dark mode)
-- Episode-specific thumbnails in RSS feeds (when available from source)
+### Podcast-App Workflow
+- Add shows by search, by browsing feeds already on the server, or by pasting an RSS URL
+- Copy either a per-show Podly RSS feed or one combined all-in-one feed
+- Start processing from the web UI or from the `Process this episode (remove ads)` link inside episode notes
+- Listen through your podcast app, download audio directly, or use the built-in player
 
-### 🆕 First-Time User Onboarding
-- Interactive tutorial on first login
-- Step-by-step guide: find podcasts, enable episodes, subscribe in your app
-- Explains auto-enable, auto-process, and on-demand processing
-- "Replay Tutorial" option in Help modal
+### Processing Controls
+- On-demand processing by default so RSS polling does not accidentally start jobs
+- Optional auto-process for new episodes on a per-feed basis
+- Reprocess episodes after changing prompts or settings
+- Recent episodes auto-enable when you add a show, and new releases auto-enable as they arrive
 
-### 👥 Multi-User Authentication System
-- Per-user feed subscriptions - each user sees only their podcasts
-- Private subscriptions - hide your podcasts from other users
-- Browse Podcasts on Server - discover feeds other users have added (unless made private)
-- User-specific dashboard stats - see your own episodes processed and ad time saved
-- Request access / signup flow with admin approval
+### Ad Detection and AI Configuration
+- Built-in Conservative, Balanced, and Aggressive presets
+- Custom presets and per-show default preset overrides
+- Saved encrypted API key profiles in the Settings UI
+- Groq, xAI, OpenAI, Anthropic, Google Gemini, and custom OpenAI-compatible providers
+- Local, remote, or Groq-based Whisper transcription
 
-### 📻 All-in-One Combined Feed
-- Single RSS feed with all your subscribed podcasts combined
-- Add one feed URL to your podcast app, get all your ad-free shows
-- Feed uses Podly logo, episodes keep their original artwork
-- Click "All-in-One Podly RSS" button on Podcasts page to copy the URL
+### Multi-User and Admin Features
+- Session auth for the web app with tokenized RSS/feed links for podcast apps
+- Public and private feed subscriptions plus server-wide podcast discovery
+- Optional signup requests with admin approval and password reset flows
+- Feed visibility controls, user statistics, subscription management, and repair tools
 
-### 🎛️ Prompt Presets System
-- 3 built-in presets: Conservative, Balanced, Aggressive
-- Custom presets - create your own ad detection prompts
-- Per-show preset overrides - different presets for different podcasts
-- Preset tracking - see which preset was used for each episode
-
-### 📊 Enhanced Statistics & Monitoring
-- Per-user statistics (admin) - episodes processed, downloads, ad time removed
-- Processing progress indicators on episode cards
-
-### ⚙️ Admin Controls
-- Feed visibility controls - hide sensitive feeds from browse page
-- Disable auto-process for all users on a feed
-- Feed status badges - Public, Private, Hidden, Auto indicators
-- User management - view all subscriptions and usage
-- Database maintenance tools - repair processed paths after migrations
-- Signup controls - enable/disable user registration
-
-### 🔄 Auto-Process New Episodes
-- Per-feed toggle to automatically process new episodes
-- Shared across users - if anyone enables it, new episodes auto-process
-- Visual indicators showing which feeds have auto-process enabled
-
-### 📱 Mobile Optimizations
-- Fully responsive design for phones and tablets
-- Touch-friendly controls and modals
-- Optimized layouts for small screens
+### UI and Mobile
+- Responsive desktop and mobile web app
+- Blue, Light, and Dark themes
+- Installable PWA over HTTPS
+- First-run onboarding plus an in-app help modal
 
 ---
 
 ## How It Works
 
-1. **Add a podcast** — Paste an RSS feed URL or search the built-in podcast catalog
-2. **Subscribe in your podcast app** — Copy the Podly RSS feed URL and add it to your app
-3. **Trigger processing** — Tap the episode link in your podcast app to open the trigger page
-4. **Wait for processing** — Podly transcribes the audio, detects ads, and removes them
-5. **Listen ad-free** — Return to your podcast app and play the episode
+1. **Add a podcast** — Search, browse, or paste an RSS feed URL
+2. **Enable episodes** — Podly auto-enables recent episodes, and you can enable/disable anything else
+3. **Choose your feed** — Copy either a per-show Podly RSS link or the combined all-in-one feed
+4. **Start processing** — Use the web UI or tap the trigger link in your podcast app
+5. **Listen ad-free** — Refresh your feed and play the processed version, or download/play it from the web app
 
 ### On-Demand Processing
 
-Episodes are processed **only when you explicitly request it** by tapping the trigger link in the episode description. This prevents accidental processing from RSS readers or podcast app prefetching.
+Podly does **not** process every episode automatically by default. That keeps resource usage predictable and avoids accidental mass processing from RSS polling or podcast-app prefetching.
 
-When you tap "Process this episode" in your podcast app:
-1. A progress page opens showing processing status
-2. When complete, close the tab and return to your podcast app
-3. Refresh the feed and play the ad-free episode
+You can start processing in three ways:
+1. **Web UI** — Click **Process** on an enabled episode
+2. **Podcast app** — Tap `Process this episode (remove ads)` in the episode description
+3. **Auto-process** — Enable it in show settings to process new episodes after feed refresh
+
+When you trigger an episode from your podcast app:
+1. A progress page opens in the browser
+2. When it says **Episode Ready**, close the tab
+3. Refresh the feed in your podcast app and play the processed episode
 
 ### Authentication Modes and RSS Behavior
 
 `REQUIRE_AUTH=true` is recommended for podcast app use.
 
-- `REQUIRE_AUTH=true`: Podly generates tokenized RSS/feed links (`feed_token` + `feed_secret`). Podcast apps can use trigger and download links directly.
-- `REQUIRE_AUTH=false`: Feed URLs are public and not tokenized. In the current release, trigger and download endpoints still rely on token/session auth, so podcast-app on-demand links may fail with auth-related errors.
+- `REQUIRE_AUTH=true`: Podly generates tokenized RSS/feed links (`feed_token` + `feed_secret`) so podcast apps can use feed, trigger, and download flows directly.
+- `REQUIRE_AUTH=false`: Feed URLs are public, but podcast-app trigger/download links are more limited in the current release because those endpoints still rely on token or session auth.
 
 If logs show `reason=not_whitelisted`, that episode is disabled for processing. Enable it in the Podcasts page first.
 
@@ -185,15 +172,16 @@ Podly can be installed as a Progressive Web App on your phone or tablet for a na
 
 ### LLM Providers
 
-You can configure LLM providers via **Settings** in the web UI, or via environment variables in `.env.local`.
+You can configure LLM providers in **Settings** after startup, or through environment variables in `.env.local`. The fastest path is **Settings → Quick Setup** with a Groq key. For advanced setups, use **Settings → LLM Configuration** to save encrypted key profiles or point Podly at env-backed keys.
 
-| Provider | Model | Notes |
-|----------|-------|-------|
-| **Groq** | `groq/openai/gpt-oss-120b` | Free tier, fast |
-| **xAI Grok** | `xai/grok-3` | Recommended for accuracy (~$0.10/episode) |
-| **OpenAI** | `gpt-4o` | High quality |
+| Provider | Example Models | Notes |
+|----------|----------------|-------|
+| **Groq** | `groq/openai/gpt-oss-120b`, `groq/llama-3.3-70b-versatile` | Fast, good default, free tier available |
+| **xAI (Grok)** | `xai/grok-3`, `xai/grok-3-mini` | Strong ad detection quality |
+| **OpenAI** | `gpt-4o-mini`, `gpt-4o`, `gpt-4.1` | Standard OpenAI-compatible path |
 | **Anthropic** | `anthropic/claude-3-7-sonnet-latest` | High quality alternative |
-| **Google Gemini** | `gemini/gemini-2.0-flash` | Fast, good value |
+| **Google Gemini** | `gemini/gemini-2.0-flash` | Fast and cost-effective |
+| **Custom / Other** | OpenAI-compatible models | Use a custom base URL and API key |
 
 Models with a provider prefix (e.g. `groq/`, `xai/`, `anthropic/`) are routed automatically — no Base URL needed.
 
@@ -204,14 +192,15 @@ LLM_MODEL=xai/grok-3
 # OPENAI_BASE_URL is optional — xai/ prefix auto-routes
 ```
 
-> **Tip:** You can also save and manage encrypted API keys in **Settings → LLM Configuration** without editing env vars.
+> **Tip:** You can save encrypted API keys or select env-backed key references in **Settings → LLM Configuration** without editing the runtime config by hand.
 
 ### Whisper (Transcription)
 
 | Mode | Config | Notes |
 |------|--------|-------|
-| **Groq** | `WHISPER_TYPE=groq` | Fast, cheap, recommended |
-| **Local** | `WHISPER_TYPE=local` | Free, requires RAM |
+| **Groq** | `WHISPER_TYPE=groq` | Fast, recommended default |
+| **Local** | `WHISPER_TYPE=local` | Runs on your own machine, no transcription API cost |
+| **Remote** | `WHISPER_TYPE=remote` | Use an OpenAI-compatible remote Whisper endpoint |
 
 ---
 
