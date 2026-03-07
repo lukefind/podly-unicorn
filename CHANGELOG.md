@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/lukefind/podly-unicorn/compare/v1.0.2...v1.0.3) (2026-03-07)
+
+
+### Bug Fixes
+
+* stabilize docs-only CI and subscriptions lint ([5bc8499](https://github.com/lukefind/podly-unicorn/commit/5bc8499225f6ed2f03b80ffce5a2b9f8af117e18))
+
 ## [1.0.2](https://github.com/lukefind/podly-unicorn/compare/v1.0.1...v1.0.2) (2026-03-07)
 
 
