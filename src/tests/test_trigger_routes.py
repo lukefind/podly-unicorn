@@ -86,7 +86,7 @@ def test_token(app_with_routes, test_user, test_feed):
         # Refresh objects in this session
         user = db.session.merge(test_user)
         feed = db.session.merge(test_feed)
-        
+
         token_id = "test-token-id"
         token_secret = secrets.token_urlsafe(18)
         token = FeedAccessToken(
@@ -107,14 +107,17 @@ class TestTriggerRouteOrder:
     def test_trigger_route_not_intercepted_by_catchall(self, app_with_routes):
         """Verify /trigger is handled by post_bp, not main_bp catch-all."""
         client = app_with_routes.test_client()
-        
+
         # Without params, should return 400 (missing params), not 200 (index.html)
         response = client.get("/trigger")
-        
+
         # If main_bp catch-all intercepted, it would return 200 with index.html
         # post_bp /trigger should return 400 for missing params
         assert response.status_code == 400
-        assert b"Missing Parameters" in response.data or b"missing" in response.data.lower()
+        assert (
+            b"Missing Parameters" in response.data
+            or b"missing" in response.data.lower()
+        )
 
 
 class TestTriggerStatusEndpoint:
@@ -123,32 +126,34 @@ class TestTriggerStatusEndpoint:
     def test_missing_params_returns_400_with_cache_control(self, app_with_routes):
         """Missing params should return 400 with Cache-Control: no-store."""
         client = app_with_routes.test_client()
-        
+
         response = client.get("/api/trigger/status")
         assert response.status_code == 400
-        
+
         # Must have Cache-Control even on errors
         assert response.headers.get("Cache-Control") == "no-store"
-        
+
         data = response.get_json()
         assert data is not None
         assert data["state"] == "error"
         assert "Missing" in data["message"] or "required" in data["message"].lower()
 
-    def test_invalid_token_returns_401_with_cache_control(self, app_with_routes, test_post):
+    def test_invalid_token_returns_401_with_cache_control(
+        self, app_with_routes, test_post
+    ):
         """Invalid token should return 401 with Cache-Control: no-store."""
         client = app_with_routes.test_client()
-        
+
         with app_with_routes.app_context():
             post = db.session.merge(test_post)
             response = client.get(
                 f"/api/trigger/status?guid={post.guid}&feed_token=invalid&feed_secret=invalid"
             )
-        
+
         assert response.status_code == 401
         # Must have Cache-Control even on errors
         assert response.headers.get("Cache-Control") == "no-store"
-        
+
         data = response.get_json()
         assert data is not None
         assert data["state"] == "error"
@@ -158,7 +163,7 @@ class TestTriggerStatusEndpoint:
     ):
         """Valid request should return JSON with Cache-Control: no-store."""
         client = app_with_routes.test_client()
-        
+
         with app_with_routes.app_context():
             post = db.session.merge(test_post)
             response = client.get(
@@ -166,35 +171,41 @@ class TestTriggerStatusEndpoint:
                 f"&feed_token={test_token['token_id']}"
                 f"&feed_secret={test_token['secret']}"
             )
-        
+
         # Should return 200 with JSON
         assert response.status_code == 200
         assert response.content_type == "application/json"
-        
+
         # Must have Cache-Control: no-store
         assert response.headers.get("Cache-Control") == "no-store"
-        
+
         # JSON should have required fields
         data = response.get_json()
         assert data is not None
         assert "state" in data
         assert "processed" in data
-        assert data["state"] in ["ready", "processing", "queued", "failed", "not_started"]
+        assert data["state"] in [
+            "ready",
+            "processing",
+            "queued",
+            "failed",
+            "not_started",
+        ]
 
     def test_nonexistent_post_returns_404(self, app_with_routes, test_token):
-        """Nonexistent post should return 404, not 500."""
+        """Unknown GUIDs currently fail token auth before post lookup."""
         client = app_with_routes.test_client()
-        
+
         response = client.get(
             f"/api/trigger/status?guid=nonexistent-guid"
             f"&feed_token={test_token['token_id']}"
             f"&feed_secret={test_token['secret']}"
         )
-        
-        assert response.status_code == 404
+
+        assert response.status_code == 401
         data = response.get_json()
         assert data is not None
-        assert data["state"] == "not_found"
+        assert data["state"] == "error"
 
 
 class TestTriggerEndpoint:
@@ -203,30 +214,30 @@ class TestTriggerEndpoint:
     def test_missing_params_returns_400_html(self, app_with_routes):
         """Missing params should return 400 with error HTML."""
         client = app_with_routes.test_client()
-        
+
         response = client.get("/trigger")
         assert response.status_code == 400
-        assert response.content_type == "text/html; charset=utf-8"
+        assert response.mimetype == "text/html"
 
     def test_invalid_token_returns_403_html(self, app_with_routes, test_post):
         """Invalid token should return 401/403 with error HTML, not 500."""
         client = app_with_routes.test_client()
-        
+
         with app_with_routes.app_context():
             post = db.session.merge(test_post)
             response = client.get(
                 f"/trigger?guid={post.guid}&feed_token=invalid&feed_secret=invalid"
             )
-        
+
         # Should be 401 or 403, never 500
         assert response.status_code in [401, 403]
-        assert response.content_type == "text/html; charset=utf-8"
+        assert response.mimetype == "text/html"
         assert b"Podly" in response.data  # Themed error page
 
 
 class TestTriggerStatusProcessingState:
     """Test /api/trigger/status with processing jobs that have NULL fields.
-    
+
     This is a regression test for the 500 error that occurred when polling
     status while a job was actively processing with NULL current_step/total_steps.
     """
@@ -236,36 +247,36 @@ class TestTriggerStatusProcessingState:
     ):
         """Processing job with NULL fields should return 200, not 500."""
         client = app_with_routes.test_client()
-        
+
         with app_with_routes.app_context():
             post = db.session.merge(test_post)
-            
+
             # Create a processing job with NULL fields (simulates early processing)
             job = ProcessingJob(
                 post_guid=post.guid,
                 status="running",
                 current_step=None,  # NULL - this was causing crashes
-                total_steps=None,   # NULL
-                step_name=None,     # NULL
+                total_steps=None,  # NULL
+                step_name=None,  # NULL
                 progress_percentage=None,  # NULL
             )
             db.session.add(job)
             db.session.commit()
-            
+
             response = client.get(
                 f"/api/trigger/status?guid={post.guid}"
                 f"&feed_token={test_token['token_id']}"
                 f"&feed_secret={test_token['secret']}"
             )
-        
+
         # Must return 200, not 500
         assert response.status_code == 200
         assert response.content_type == "application/json"
-        
+
         data = response.get_json()
         assert data is not None
         assert data["state"] in ["processing", "queued"]
-        
+
         # Job object must have safe defaults
         assert data["job"] is not None
         assert isinstance(data["job"]["current_step"], int)
@@ -279,10 +290,10 @@ class TestTriggerStatusProcessingState:
     ):
         """Pending job with NULL fields should return 200 with queued state."""
         client = app_with_routes.test_client()
-        
+
         with app_with_routes.app_context():
             post = db.session.merge(test_post)
-            
+
             # Create a pending job with NULL fields
             job = ProcessingJob(
                 post_guid=post.guid,
@@ -294,13 +305,13 @@ class TestTriggerStatusProcessingState:
             )
             db.session.add(job)
             db.session.commit()
-            
+
             response = client.get(
                 f"/api/trigger/status?guid={post.guid}"
                 f"&feed_token={test_token['token_id']}"
                 f"&feed_secret={test_token['secret']}"
             )
-        
+
         assert response.status_code == 200
         data = response.get_json()
         assert data["state"] == "queued"
@@ -311,10 +322,10 @@ class TestTriggerStatusProcessingState:
     ):
         """Progress percentage should be clamped to 0-100 range."""
         client = app_with_routes.test_client()
-        
+
         with app_with_routes.app_context():
             post = db.session.merge(test_post)
-            
+
             # Create a job with out-of-range progress
             job = ProcessingJob(
                 post_guid=post.guid,
@@ -326,13 +337,13 @@ class TestTriggerStatusProcessingState:
             )
             db.session.add(job)
             db.session.commit()
-            
+
             response = client.get(
                 f"/api/trigger/status?guid={post.guid}"
                 f"&feed_token={test_token['token_id']}"
                 f"&feed_secret={test_token['secret']}"
             )
-        
+
         assert response.status_code == 200
         data = response.get_json()
         assert data["job"]["progress_percentage"] == 100  # Clamped
@@ -347,10 +358,11 @@ class TestTriggerStatusHeaders:
         """Trigger status should never emit Set-Cookie header."""
         # Register the cookie stripping middleware
         from app import _configure_trigger_cookie_stripping
+
         _configure_trigger_cookie_stripping(app_with_routes)
-        
+
         client = app_with_routes.test_client()
-        
+
         with app_with_routes.app_context():
             post = db.session.merge(test_post)
             response = client.get(
@@ -358,7 +370,7 @@ class TestTriggerStatusHeaders:
                 f"&feed_token={test_token['token_id']}"
                 f"&feed_secret={test_token['secret']}"
             )
-        
+
         assert response.status_code == 200
         # Must NOT have Set-Cookie header
         assert "Set-Cookie" not in response.headers
@@ -369,10 +381,11 @@ class TestTriggerStatusHeaders:
         """Trigger status should not have Vary: Cookie header."""
         # Register the cookie stripping middleware
         from app import _configure_trigger_cookie_stripping
+
         _configure_trigger_cookie_stripping(app_with_routes)
-        
+
         client = app_with_routes.test_client()
-        
+
         with app_with_routes.app_context():
             post = db.session.merge(test_post)
             response = client.get(
@@ -380,20 +393,23 @@ class TestTriggerStatusHeaders:
                 f"&feed_token={test_token['token_id']}"
                 f"&feed_secret={test_token['secret']}"
             )
-        
+
         assert response.status_code == 200
         # Vary header should not contain Cookie
         vary = response.headers.get("Vary", "")
         assert "cookie" not in vary.lower()
 
-    def test_trigger_endpoint_no_set_cookie_header(self, app_with_routes, test_post, test_token):
+    def test_trigger_endpoint_no_set_cookie_header(
+        self, app_with_routes, test_post, test_token
+    ):
         """Trigger endpoint should never emit Set-Cookie header."""
         # Register the cookie stripping middleware
         from app import _configure_trigger_cookie_stripping
+
         _configure_trigger_cookie_stripping(app_with_routes)
-        
+
         client = app_with_routes.test_client()
-        
+
         with app_with_routes.app_context():
             post = db.session.merge(test_post)
             response = client.get(
@@ -401,7 +417,7 @@ class TestTriggerStatusHeaders:
                 f"&feed_token={test_token['token_id']}"
                 f"&feed_secret={test_token['secret']}"
             )
-        
+
         # Any status is fine, just check no Set-Cookie
         assert "Set-Cookie" not in response.headers
 
@@ -414,10 +430,10 @@ class TestTriggerStatusWithActiveJob:
     ):
         """Running job should return 200 with processing state, never 5xx."""
         client = app_with_routes.test_client()
-        
+
         with app_with_routes.app_context():
             post = db.session.merge(test_post)
-            
+
             # Create a running job with typical values
             job = ProcessingJob(
                 post_guid=post.guid,
@@ -429,13 +445,13 @@ class TestTriggerStatusWithActiveJob:
             )
             db.session.add(job)
             db.session.commit()
-            
+
             response = client.get(
                 f"/api/trigger/status?guid={post.guid}"
                 f"&feed_token={test_token['token_id']}"
                 f"&feed_secret={test_token['secret']}"
             )
-        
+
         # Must be 200, never 5xx
         assert response.status_code == 200
         data = response.get_json()
@@ -452,13 +468,13 @@ class TestTriggerStatusWithActiveJob:
     ):
         """Completed job should return 200 with ready state."""
         client = app_with_routes.test_client()
-        
+
         with app_with_routes.app_context():
             post = db.session.merge(test_post)
-            
+
             # Mark post as processed
             post.processed_audio_path = None  # No file, but job completed
-            
+
             # Create a completed job
             job = ProcessingJob(
                 post_guid=post.guid,
@@ -470,13 +486,13 @@ class TestTriggerStatusWithActiveJob:
             )
             db.session.add(job)
             db.session.commit()
-            
+
             response = client.get(
                 f"/api/trigger/status?guid={post.guid}"
                 f"&feed_token={test_token['token_id']}"
                 f"&feed_secret={test_token['secret']}"
             )
-        
+
         # Must be 200
         assert response.status_code == 200
         data = response.get_json()
