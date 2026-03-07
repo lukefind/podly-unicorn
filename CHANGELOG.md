@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/lukefind/podly-unicorn/compare/v1.0.1...v1.0.2) (2026-03-07)
+
+
+### Bug Fixes
+
+* handle docs-only docker validation skips ([4a0f3b4](https://github.com/lukefind/podly-unicorn/commit/4a0f3b49eab9998b02946047a604f1aa6963ae3c))
+
 ## [1.0.1](https://github.com/lukefind/podly-unicorn/compare/v1.0.0...v1.0.1) (2026-03-07)
 
 
