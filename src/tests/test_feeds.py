@@ -36,8 +36,6 @@ class MockPost:
         release_date=datetime.datetime(2023, 1, 1, 12, 0, tzinfo=datetime.timezone.utc),
         feed_id=1,
         image_url="https://example.com/episode.jpg",
-        duration=3600,
-        statistics=None,
     ):
         self.id = id
         self.title = title
@@ -47,8 +45,6 @@ class MockPost:
         self.release_date = release_date
         self.feed_id = feed_id
         self.image_url = image_url
-        self.duration = duration
-        self.statistics = statistics
         self._audio_len_bytes = 1024
 
     def audio_len_bytes(self):
@@ -275,7 +271,6 @@ def test_feed_item(mock_post, app):
     assert result.enclosure.url == "https://podly.com:5001/api/posts/test-guid/download"
     assert result.enclosure.type == "audio/mpeg"
     assert result.enclosure.length == mock_post._audio_len_bytes
-    assert result.itunes_duration == "1:00:00"
 
 
 def test_feed_item_with_reverse_proxy(mock_post, app):
@@ -439,23 +434,6 @@ def test_generate_feed_xml(mock_feed_item, mock_feed, mock_post, app):
     mock_rss.to_xml.assert_called_once_with("utf-8")
 
     assert result == "<rss></rss>"
-
-
-def test_generate_feed_xml_includes_processed_itunes_duration(mock_feed, app):
-    mock_feed.posts = [
-        MockPost(
-            duration=3600,
-            statistics=mock.Mock(processed_duration_seconds=3419.5),
-        )
-    ]
-
-    with (
-        app.app_context(),
-        mock.patch("app.feeds._get_base_url", return_value="https://podly.com"),
-    ):
-        result = generate_feed_xml(mock_feed)
-
-    assert "<itunes:duration>56:59</itunes:duration>" in result
 
 
 @mock.patch("app.feeds.Post")
