@@ -32,14 +32,23 @@ class ITunesImage:
 
 
 class ITunesRSSItem(PyRSS2Gen.RSSItem):
-    """Extended RSSItem that supports iTunes image, author, content:encoded, and itunes:summary."""
+    """Extended RSSItem that supports common podcast-specific elements."""
 
-    def __init__(self, itunes_image_url: Optional[str] = None, itunes_author: Optional[str] = None, content_encoded: Optional[str] = None, itunes_summary: Optional[str] = None, **kwargs: Any):
+    def __init__(
+        self,
+        itunes_image_url: Optional[str] = None,
+        itunes_author: Optional[str] = None,
+        content_encoded: Optional[str] = None,
+        itunes_summary: Optional[str] = None,
+        itunes_duration: Optional[str] = None,
+        **kwargs: Any,
+    ):
         super().__init__(**kwargs)
         self.itunes_image_url = itunes_image_url
         self.itunes_author = itunes_author
         self.content_encoded = content_encoded
         self.itunes_summary = itunes_summary
+        self.itunes_duration = itunes_duration
 
     def publish(self, handler: Any) -> None:
         handler.startElement("item", {})
@@ -96,6 +105,9 @@ class ITunesRSSItem(PyRSS2Gen.RSSItem):
             handler.startElement("itunes:summary", {})
             handler.characters(self.itunes_summary)
             handler.endElement("itunes:summary")
+
+        if self.itunes_duration:
+            PyRSS2Gen._element(handler, "itunes:duration", self.itunes_duration)
 
         handler.endElement("item")
 
@@ -494,6 +506,7 @@ def feed_item(
         itunes_author=itunes_author,
         content_encoded=content_encoded,
         itunes_summary=itunes_summary,
+        itunes_duration=_format_itunes_duration(_get_post_duration_seconds(post)),
     )
 
     return item
@@ -774,6 +787,33 @@ def _format_pub_date(release_date: Optional[datetime.datetime]) -> Optional[str]
     return format_datetime(normalized.astimezone(datetime.timezone.utc))
 
 
+def _get_post_duration_seconds(post: Post) -> Optional[float]:
+    """Return the best available playback duration for RSS metadata."""
+    statistics = getattr(post, "statistics", None)
+    processed_duration = getattr(statistics, "processed_duration_seconds", None)
+    if processed_duration is not None:
+        return float(processed_duration)
+
+    if post.duration is not None:
+        return float(post.duration)
+
+    return None
+
+
+def _format_itunes_duration(duration_seconds: Optional[float]) -> Optional[str]:
+    """Format seconds as an iTunes-compatible duration string."""
+    if duration_seconds is None:
+        return None
+
+    total_seconds = max(0, int(duration_seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes}:{seconds:02d}"
+
+
 # sometimes feed entry ids are the post url or something else
 def get_guid(entry: feedparser.FeedParserDict) -> str:
     try:
@@ -790,5 +830,3 @@ def get_duration(entry: feedparser.FeedParserDict) -> Optional[int]:
     except Exception:  # pylint: disable=broad-except
         logger.error("Failed to get duration")
         return None
-
-
