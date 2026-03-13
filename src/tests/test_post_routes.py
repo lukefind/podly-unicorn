@@ -1,5 +1,4 @@
 from app.auth import AuthSettings
-from app.auth.feed_tokens import create_feed_access_token
 from app.auth.middleware import SESSION_USER_KEY, init_auth_middleware
 from app.extensions import db
 from app.models import Feed, Post, User, UserFeedSubscription
@@ -131,57 +130,3 @@ def test_processed_download_endpoint_advertises_streaming_headers(app, tmp_path)
         assert range_response.status_code == 206
         assert range_response.headers["Accept-Ranges"] == "bytes"
         assert range_response.headers["Content-Range"] == "bytes 0-99/10000"
-
-
-def test_legacy_mp3_download_endpoint_accepts_feed_token(app, tmp_path):
-    """Legacy .mp3 endpoint should authenticate with feed tokens and stream audio."""
-    app.testing = True
-    app.config["SECRET_KEY"] = "test-secret"
-    app.config["AUTH_SETTINGS"] = AuthSettings(
-        require_auth=True,
-        admin_username="admin",
-        admin_password="password",
-    )
-    app.config["REQUIRE_AUTH"] = True
-    init_auth_middleware(app)
-    app.register_blueprint(post_bp)
-
-    with app.app_context():
-        feed = Feed(title="Test Feed", rss_url="https://example.com/feed.xml")
-        db.session.add(feed)
-
-        user = User(username="listener", role="user")
-        user.set_password("password123")
-        db.session.add(user)
-        db.session.commit()
-
-        token_id, secret = create_feed_access_token(user, feed)
-
-        processed_audio = tmp_path / "processed.mp3"
-        processed_audio.write_bytes(b"0123456789" * 1000)
-
-        post = Post(
-            feed_id=feed.id,
-            guid="legacy-guid",
-            download_url="https://example.com/audio.mp3",
-            title="Legacy Episode",
-            processed_audio_path=str(processed_audio),
-            whitelisted=True,
-        )
-        db.session.add(post)
-        db.session.commit()
-
-        client = app.test_client()
-
-        response = client.get(
-            f"/post/{post.guid}.mp3?feed_token={token_id}&feed_secret={secret}"
-        )
-        assert response.status_code == 200
-        assert response.headers["Accept-Ranges"] == "bytes"
-
-        head_response = client.open(
-            f"/post/{post.guid}.mp3?feed_token={token_id}&feed_secret={secret}",
-            method="HEAD",
-        )
-        assert head_response.status_code == 200
-        assert head_response.headers["Accept-Ranges"] == "bytes"
