@@ -272,7 +272,7 @@ def test_feed_item(mock_post, app):
     assert result.guid == mock_post.guid
 
     # Check enclosure
-    assert result.enclosure.url == "https://podly.com:5001/api/posts/test-guid/download"
+    assert result.enclosure.url == "https://podly.com:5001/post/test-guid.mp3"
     assert result.enclosure.type == "audio/mpeg"
     assert result.enclosure.length == mock_post._audio_len_bytes
     assert result.itunes_duration == "1:00:00"
@@ -306,7 +306,7 @@ def test_feed_item_with_reverse_proxy(mock_post, app):
     assert result.guid == mock_post.guid
 
     # Check enclosure - should use HTTP/2 pseudo-headers
-    assert result.enclosure.url == "https://podly.com:5001/api/posts/test-guid/download"
+    assert result.enclosure.url == "https://podly.com:5001/post/test-guid.mp3"
     assert result.enclosure.type == "audio/mpeg"
     assert result.enclosure.length == mock_post._audio_len_bytes
 
@@ -339,7 +339,7 @@ def test_feed_item_with_reverse_proxy_custom_port(mock_post, app):
     assert result.guid == mock_post.guid
 
     # Check enclosure - should use HTTPS with custom port
-    assert result.enclosure.url == "https://podly.com:8443/api/posts/test-guid/download"
+    assert result.enclosure.url == "https://podly.com:8443/post/test-guid.mp3"
     assert result.enclosure.type == "audio/mpeg"
     assert result.enclosure.length == mock_post._audio_len_bytes
 

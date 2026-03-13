@@ -398,7 +398,7 @@ def get_combined_episodes() -> Response:
             base_url = _get_base_url()
             token_id, secret = token_pair
             trigger_url = f"{base_url}/trigger?guid={post.guid}&feed_token={token_id}&feed_secret={secret}"
-            enclosure_url = f"{base_url}/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+            enclosure_url = f"{base_url}/post/{post.guid}.mp3?feed_token={token_id}&feed_secret={secret}"
         
         episodes.append({
             "id": post.id,

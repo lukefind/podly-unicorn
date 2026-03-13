@@ -465,11 +465,11 @@ def feed_item(
     # Generate URLs that will be proxied by the frontend to the backend
     if feed_token_override:
         token_id, secret = feed_token_override
-        audio_url = f"{base_url}/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+        audio_url = f"{base_url}/post/{post.guid}.mp3?feed_token={token_id}&feed_secret={secret}"
         # Trigger URL uses feed-scoped token - this is the explicit user action to start processing
         trigger_url = f"{base_url}/trigger?guid={post.guid}&feed_token={token_id}&feed_secret={secret}"
     else:
-        audio_url = _append_feed_token_params(f"{base_url}/api/posts/{post.guid}/download")
+        audio_url = _append_feed_token_params(f"{base_url}/post/{post.guid}.mp3")
         # Build trigger URL with current request's feed token
         trigger_url = _append_feed_token_params(f"{base_url}/trigger?guid={post.guid}")
 

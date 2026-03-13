@@ -1244,7 +1244,7 @@ def _handle_trigger_processing() -> flask.Response:
     feed_title = feed.title if feed else "Unknown Show"
     
     # Build download URL for when ready
-    download_url = f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+    download_url = f"/post/{post.guid}.mp3?feed_token={token_id}&feed_secret={secret}"
     
     # Record trigger page open event
     _record_user_event(post, auth_result.user, "TRIGGER_OPEN", "feed_scoped", "", "trigger")
@@ -1649,7 +1649,7 @@ def _handle_trigger_status() -> flask.Response:
         return response, 403
     
     # Build download URL
-    download_url = f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+    download_url = f"/post/{post.guid}.mp3?feed_token={token_id}&feed_secret={secret}"
     
     # Check if processed
     is_processed = post.processed_audio_path and Path(post.processed_audio_path).exists()
