@@ -81,6 +81,18 @@ def _track_user_download(post: Post, is_processed: bool = True) -> None:
         )
 
 
+def _send_streamable_audio(path: Path) -> flask.Response:
+    """Serve audio with explicit range support for podcast clients."""
+    response = send_file(
+        path_or_file=path.resolve(),
+        mimetype="audio/mpeg",
+        as_attachment=False,
+        conditional=True,
+    )
+    response.headers["Accept-Ranges"] = "bytes"
+    return response
+
+
 def _record_user_event(
     post: Post,
     current_user: Any,
@@ -752,12 +764,7 @@ def api_get_post_audio(p_guid: str) -> ResponseReturnValue:
         )
 
     try:
-        response = send_file(
-            path_or_file=Path(post.processed_audio_path).resolve(),
-            mimetype="audio/mpeg",
-            as_attachment=False,
-        )
-        response.headers["Accept-Ranges"] = "bytes"
+        response = _send_streamable_audio(Path(post.processed_audio_path))
         return response
     except Exception as e:  # pylint: disable=broad-except
         logger.error(f"Error serving audio file for {p_guid}: {e}")
@@ -1004,12 +1011,7 @@ def api_download_post(p_guid: str) -> flask.Response:
         return response
 
     try:
-        response = send_file(
-            path_or_file=Path(post.processed_audio_path).resolve(),
-            mimetype="audio/mpeg",
-            as_attachment=True,
-            download_name=f"{post.title}.mp3",
-        )
+        response = _send_streamable_audio(Path(post.processed_audio_path))
     except Exception as e:  # pylint: disable=broad-except
         logger.error(f"Error serving file for {p_guid}: {e}")
         return flask.make_response(("Error serving file", 500))
