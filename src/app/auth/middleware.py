@@ -64,7 +64,7 @@ _PUBLIC_EXTENSIONS: tuple[str, ...] = (
 _TOKEN_PROTECTED_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"^/feed/[^/]+$"),
     re.compile(r"^/api/posts/[^/]+/(audio|download(?:/original)?)$"),
-    re.compile(r"^/post/[^/]+(?:\\.mp3|/original\\.mp3)$"),
+    re.compile(r"^/post/[^/]+(?:\.mp3|/original\.mp3)$"),
     re.compile(r"^/trigger$"),  # Trigger page authenticates via feed token
     re.compile(r"^/api/trigger/status$"),  # Trigger status polling endpoint
 )
