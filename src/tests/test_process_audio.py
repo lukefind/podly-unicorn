@@ -1,4 +1,6 @@
+import struct
 import tempfile
+import wave
 from pathlib import Path
 
 from podcast_processor.audio import (
@@ -9,6 +11,29 @@ from podcast_processor.audio import (
 
 TEST_FILE_DURATION = 66_048
 TEST_FILE_PATH = "src/tests/data/count_0_99.mp3"
+TEST_WAV_SAMPLE_RATE = 8_000
+TEST_WAV_SAMPLE_VALUE = 10_000
+
+
+def _write_constant_wave(path: Path, duration_ms: int) -> None:
+    frame_count = int(TEST_WAV_SAMPLE_RATE * duration_ms / 1000)
+    frame = struct.pack("<h", TEST_WAV_SAMPLE_VALUE)
+
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(TEST_WAV_SAMPLE_RATE)
+        wav_file.writeframes(frame * frame_count)
+
+
+def _read_wave_sample(path: Path, time_ms: int) -> int:
+    with wave.open(str(path), "rb") as wav_file:
+        frame_index = min(
+            int(TEST_WAV_SAMPLE_RATE * time_ms / 1000),
+            wav_file.getnframes() - 1,
+        )
+        wav_file.setpos(frame_index)
+        return struct.unpack("<h", wav_file.readframes(1))[0]
 
 
 def test_get_duration_ms() -> None:
@@ -94,6 +119,32 @@ def test_clip_segment_with_fade_end() -> None:
             f"Duration mismatch: expected {expected_duration}ms, got {actual_duration}ms, "
             f"difference: {abs(actual_duration - expected_duration)}ms"
         )
+
+
+def test_clip_segment_with_fade_fades_into_ad_preview() -> None:
+    fade_len_ms = 1_000
+    ad_start_offset_ms, ad_end_offset_ms = 3_000, 7_000
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        input_path = Path(temp_dir) / "input.wav"
+        output_path = Path(temp_dir) / "output.wav"
+
+        _write_constant_wave(input_path, duration_ms=10_000)
+
+        clip_segments_with_fade(
+            [(ad_start_offset_ms, ad_end_offset_ms)],
+            fade_len_ms,
+            str(input_path),
+            str(output_path),
+        )
+
+        leading_sample = abs(_read_wave_sample(output_path, ad_start_offset_ms + 50))
+        midpoint_sample = abs(_read_wave_sample(output_path, ad_start_offset_ms + 400))
+        trailing_sample = abs(_read_wave_sample(output_path, ad_start_offset_ms + 950))
+
+        assert leading_sample < midpoint_sample
+        assert midpoint_sample > TEST_WAV_SAMPLE_VALUE // 2
+        assert trailing_sample < midpoint_sample
 
 
 def test_split_audio() -> None:

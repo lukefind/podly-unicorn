@@ -53,19 +53,26 @@ def _clip_segments_complex(
 
     last_end = 0
     for start_ms, end_ms in ad_segments_ms:
+        leading_preview_end_ms = min(start_ms + fade_ms, end_ms)
+        trailing_preview_start_ms = max(end_ms - fade_ms, start_ms)
+
         trimmed_list.extend(
             [
-                ffmpeg.input(in_path).filter(
-                    "atrim", start=last_end / 1000.0, end=start_ms / 1000.0
+                _trim_audio_segment(
+                    in_path,
+                    start_ms=last_end,
+                    end_ms=start_ms,
                 ),
-                ffmpeg.input(in_path)
-                .filter(
-                    "atrim", start=start_ms / 1000.0, end=(start_ms + fade_ms) / 1000.0
-                )
-                .filter("afade", t="out", ss=0, d=fade_ms / 1000.0),
-                ffmpeg.input(in_path)
-                .filter("atrim", start=(end_ms - fade_ms) / 1000.0, end=end_ms / 1000.0)
-                .filter("afade", t="in", ss=0, d=fade_ms / 1000.0),
+                _build_leading_ad_preview(
+                    in_path,
+                    start_ms=start_ms,
+                    end_ms=leading_preview_end_ms,
+                ),
+                _trim_audio_segment(
+                    in_path,
+                    start_ms=trailing_preview_start_ms,
+                    end_ms=end_ms,
+                ).filter("afade", t="in", ss=0, d=(end_ms - trailing_preview_start_ms) / 1000.0),
             ]
         )
 
@@ -73,12 +80,61 @@ def _clip_segments_complex(
 
     if last_end != audio_duration_ms:
         trimmed_list.append(
-            ffmpeg.input(in_path).filter(
-                "atrim", start=last_end / 1000.0, end=audio_duration_ms / 1000.0
+            _trim_audio_segment(
+                in_path,
+                start_ms=last_end,
+                end_ms=audio_duration_ms,
             )
         )
 
     ffmpeg.concat(*trimmed_list, v=0, a=1).output(out_path).overwrite_output().run()
+
+
+def _trim_audio_segment(
+    in_path: str,
+    *,
+    start_ms: int,
+    end_ms: int,
+):
+    return (
+        ffmpeg.input(in_path)
+        .filter(
+            "atrim",
+            start=start_ms / 1000.0,
+            end=end_ms / 1000.0,
+        )
+        .filter("asetpts", "PTS-STARTPTS")
+    )
+
+
+def _build_leading_ad_preview(
+    in_path: str,
+    *,
+    start_ms: int,
+    end_ms: int,
+):
+    clip_duration_ms = end_ms - start_ms
+    fade_in_duration_seconds = max(clip_duration_ms, 0) / 2000.0
+    fade_out_start_seconds = max(clip_duration_ms, 0) / 2000.0
+    fade_out_duration_seconds = max(clip_duration_ms, 0) / 2000.0
+
+    stream = _trim_audio_segment(
+        in_path,
+        start_ms=start_ms,
+        end_ms=end_ms,
+    )
+
+    if clip_duration_ms <= 0:
+        return stream
+
+    return (
+        stream.filter("afade", t="in", ss=0, d=fade_in_duration_seconds).filter(
+            "afade",
+            t="out",
+            st=fade_out_start_seconds,
+            d=fade_out_duration_seconds,
+        )
+    )
 
 
 def _clip_segments_simple(
