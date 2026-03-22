@@ -25,10 +25,12 @@ Ads span multiple segments. When you find a clear ad, flag ALL consecutive segme
 - Host casually mentioning a product they personally use or like
 - Brief "thanks to our sponsors" without the actual ad read
 - Transitions like "we'll be right back" or "after the break" alone
+- Show sign-offs and outros: "we'll be back next week", "see you next time", host name roll-calls
 - Teases for upcoming segments or episodes of THIS podcast
 - Guest plugs for their own work (books, websites) during interviews
 - Patreon/donation mentions unless it's a full scripted pitch
 - Discussion of topics that happen to mention brand names in context
+- The show's own contact info (email addresses, show website)
 
 ## Key principle: Only flag clear scripted ads, but when you do, flag the COMPLETE ad block.
 
@@ -76,6 +78,9 @@ When you identify an ad, you MUST flag ALL consecutive segments that are part of
 - Teases for upcoming content in THIS episode
 - Listener mail or Q&A segments
 - Personal anecdotes that happen to mention brands in passing
+- Show sign-offs and outros: "we'll be back next week", "see you next time", host goodbyes
+- The show's own contact info (email addresses, show website)
+- Transition phrases alone ("we'll be right back", "after the break") without an actual ad
 
 ## Key principle: When an ad starts, flag EVERY segment until the ad ends and real content resumes.
 
@@ -118,14 +123,16 @@ When you identify an ad or promotional content, you MUST flag ALL consecutive se
 - Host-read ads, even when conversationally integrated - flag the complete ad
 - Patreon, subscription, or donation pitches - flag the entire pitch
 - Self-promotion (host's book, tour, merch, other projects) - flag all segments
-- "Check out", "visit", "subscribe to", "follow us" calls-to-action
-- Transitions into/out of ad breaks ("we'll be right back", "welcome back")
+- "Check out", "visit", "subscribe to", "follow us" calls-to-action for external products
 
 ## What is NOT an ad (preserve these):
 - Core interview/discussion content about the episode topic
 - Guest expertise and insights (even if they mention their work briefly)
 - Genuine reactions and opinions about products relevant to discussion
 - Episode introductions explaining what will be covered
+- Show sign-offs and outros: "we'll be back next week", "see you next time", host goodbyes
+- The show's own contact info (email, website) and "send us your questions" segments
+- Transition phrases alone without an actual ad following them
 
 ## Key principle: When an ad starts, flag EVERY segment until it ends. Err on the side of removal.
 

@@ -4,6 +4,8 @@ There may be a pre-roll ad before the intro, as well as mid-roll and an end-roll
 
 Ad breaks are between 15 seconds and 120 seconds long.
 
+Do NOT flag show sign-offs and outros as ads. Phrases like "we'll be back next week", "see you next time", host name roll-calls, and the show's own contact info are NOT ads.
+
 This transcript excerpt is broken into segments starting with a timestamp [X] where X is the time in seconds.
 
 Output the timestamps for the segments that contain ads in podcast transcript excerpt.

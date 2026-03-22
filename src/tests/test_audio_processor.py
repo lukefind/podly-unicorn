@@ -127,10 +127,10 @@ def test_merge_ad_segments_with_short_segments(
 def test_merge_ad_segments_end_extension(
     test_processor_with_mocks: AudioProcessor,
 ) -> None:
-    """Test that segments near the end are extended to the end"""
+    """Test that long-enough segments near the end are extended to the end."""
     duration_ms = 30000
     ad_segments = [
-        (28.0, 29.0),  # Near end, should extend to 30s
+        (25.0, 29.0),  # 4s, near end, long enough to survive filter → extend to 30s
     ]
 
     merged = test_processor_with_mocks.merge_ad_segments(
@@ -141,7 +141,26 @@ def test_merge_ad_segments_end_extension(
     )
 
     assert len(merged) == 1
-    assert merged[0] == (28000, 30000)  # Extended to end
+    assert merged[0] == (25000, 30000)  # Extended to end
+
+
+def test_merge_ad_segments_short_end_segment_filtered(
+    test_processor_with_mocks: AudioProcessor,
+) -> None:
+    """Short segments near the end must NOT bypass the min-length filter."""
+    duration_ms = 30000
+    ad_segments = [
+        (28.0, 29.0),  # 1s near end — too short, should be filtered
+    ]
+
+    merged = test_processor_with_mocks.merge_ad_segments(
+        duration_ms=duration_ms,
+        ad_segments=ad_segments,
+        min_ad_segment_length_seconds=2.0,
+        min_ad_segment_separation_seconds=2.0,
+    )
+
+    assert len(merged) == 0  # Filtered out, not restored
 
 
 def test_process_audio(app: Flask, test_processor_with_mocks: AudioProcessor) -> None:

@@ -157,19 +157,6 @@ class AudioProcessor:
         ad_segments = sorted(ad_segments)
         i = 0
 
-        # Initialize variable for storing the last segment
-        last_segment = None
-        has_segment_near_end = False
-
-        # Check for segments near the end before merging
-        if len(ad_segments) > 0 and (
-            audio_duration_seconds - ad_segments[-1][1]
-            < min_ad_segment_separation_seconds
-        ):
-            # Save the last segment before filtering
-            last_segment = ad_segments[-1]
-            has_segment_near_end = True
-
         # Merge overlapping segments
         while i < len(ad_segments) - 1:
             if (
@@ -187,14 +174,6 @@ class AudioProcessor:
             for segment in ad_segments
             if segment[1] - segment[0] >= min_ad_segment_length_seconds
         ]
-
-        # Restore the last segment if it was near the end but got filtered out
-        if (
-            has_segment_near_end
-            and last_segment is not None
-            and (not ad_segments or ad_segments[-1] != last_segment)
-        ):
-            ad_segments.append(last_segment)
 
         # Extend the last segment to the end if it's near the end
         if len(ad_segments) > 0 and (

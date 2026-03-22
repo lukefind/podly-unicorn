@@ -884,8 +884,25 @@ class AdClassifier:
             for segment in transcript_segments
         ]
 
+        REFINEMENT_MIN_DURATION_SECONDS = 5.0
+
         refined_boundaries: List[Dict[str, Any]] = []
         for group in ad_groups:
+            group_duration = float(group["orig_end"]) - float(group["orig_start"])
+            segment_count = (
+                int(group["last_seq_num"]) - int(group["first_seq_num"]) + 1
+            )
+            if group_duration < REFINEMENT_MIN_DURATION_SECONDS and segment_count <= 1:
+                self.logger.info(
+                    "Skipping boundary refinement for tiny single-segment ad group "
+                    "(%.1fs, %d segment) at seq %s of post %s — likely false positive",
+                    group_duration,
+                    segment_count,
+                    group["first_seq_num"],
+                    post.id,
+                )
+                continue
+
             boundary_refinement = self.boundary_refiner.refine(
                 group["orig_start"],
                 group["orig_end"],
