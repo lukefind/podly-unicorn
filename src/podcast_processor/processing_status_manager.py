@@ -6,7 +6,7 @@ from typing import Any, Optional
 from sqlalchemy.orm import object_session
 
 from app.jobs_manager_run_service import recalculate_run_counts
-from app.models import ProcessingJob
+from app.models import Post, ProcessingJob, ProcessingStatistics
 
 
 class ProcessingStatusManager:
@@ -45,11 +45,37 @@ class ProcessingStatusManager:
             progress_percentage=0.0,
             created_at=datetime.utcnow(),
         )
+        post = Post.query.filter_by(guid=post_guid).first()
+        if post:
+            self.sync_job_snapshot_from_post(job, post)
         self.db_session.add(job)
         if run_id:
             recalculate_run_counts(self.db_session)
         self.db_session.commit()
         return job
+
+    def sync_job_snapshot_from_post(self, job: ProcessingJob, post: Post) -> None:
+        """Copy durable feed/post snapshot fields onto a job record."""
+        job.feed_id = post.feed_id
+        job.post_title = post.title
+        job.feed_title = post.feed.title if post.feed else None
+
+    def sync_job_metrics_from_post(self, job: ProcessingJob, post: Post) -> None:
+        """Persist the latest processing metrics onto the job row."""
+        self.sync_job_snapshot_from_post(job, post)
+
+        stats = getattr(post, "statistics", None)
+        if stats is None:
+            stats = ProcessingStatistics.query.filter_by(post_id=post.id).first()
+        if stats is None:
+            return
+
+        job.total_ad_segments_removed = stats.total_ad_segments_removed
+        job.total_duration_removed_seconds = stats.total_duration_removed_seconds
+        job.original_duration_seconds = stats.original_duration_seconds
+        job.processed_duration_seconds = stats.processed_duration_seconds
+        job.percentage_removed = stats.percentage_removed
+        self.db_session.commit()
 
     def cancel_existing_jobs(self, post_guid: str, current_job_id: str) -> None:
         """Delete any existing active jobs for this post (called when we acquire the lock)."""

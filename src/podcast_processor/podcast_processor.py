@@ -294,6 +294,7 @@ class PodcastProcessor:
         # Update the database with the processed audio path
         post.processed_audio_path = processed_audio_path
         self.db_session.commit()
+        self.status_manager.sync_job_metrics_from_post(job, post)
 
         # Mark job complete
         self.status_manager.update_job_status(

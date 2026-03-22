@@ -352,6 +352,9 @@ class ProcessingJob(db.Model):  # type: ignore[name-defined, misc]
         db.String(36), db.ForeignKey("jobs_manager_run.id"), index=True
     )
     post_guid = db.Column(db.String(255), nullable=False, index=True)
+    feed_id = db.Column(db.Integer, nullable=True, index=True)
+    feed_title = db.Column(db.Text, nullable=True)
+    post_title = db.Column(db.Text, nullable=True)
     triggered_by_user_id = db.Column(
         db.Integer, db.ForeignKey("users.id"), nullable=True, index=True
     )  # User who triggered this job
@@ -368,6 +371,11 @@ class ProcessingJob(db.Model):  # type: ignore[name-defined, misc]
     started_at = db.Column(db.DateTime)
     completed_at = db.Column(db.DateTime)
     error_message = db.Column(db.Text)
+    total_ad_segments_removed = db.Column(db.Integer, nullable=True)
+    total_duration_removed_seconds = db.Column(db.Float, nullable=True)
+    original_duration_seconds = db.Column(db.Float, nullable=True)
+    processed_duration_seconds = db.Column(db.Float, nullable=True)
+    percentage_removed = db.Column(db.Float, nullable=True)
     scheduler_job_id = db.Column(db.String(255))  # APScheduler job ID
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 

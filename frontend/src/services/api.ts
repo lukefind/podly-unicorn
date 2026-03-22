@@ -3,6 +3,7 @@ import type {
   Feed,
   Episode,
   Job,
+  JobsDashboard,
   JobManagerStatus,
   CombinedConfig,
   LLMConfig,
@@ -812,7 +813,32 @@ export const jobsApi = {
   clearHistory: async (): Promise<{ status: string; deleted_count: number; message: string }> => {
     const response = await api.post('/api/jobs/clear-history');
     return response.data;
-  }
+  },
+  getDashboard: async (days: number = 30): Promise<JobsDashboard> => {
+    const response = await api.get('/api/jobs/dashboard', { params: { days } });
+    return response.data;
+  },
+};
+
+export const adminApi = {
+  exportTranscript: (postGuid: string, format: 'json' | 'txt' | 'srt' = 'json') =>
+    buildAbsoluteUrl(`/api/posts/${postGuid}/transcript/export?format=${format}`),
+  exportTranscriptsBulk: async (params: { post_guids?: string[]; feed_id?: number; format?: string }) => {
+    const response = await api.post('/api/transcripts/export-bulk', params, { responseType: 'blob' });
+    return response;
+  },
+  backupDatabase: async () => {
+    const response = await api.post('/api/admin/backup', {}, { responseType: 'blob' });
+    return response;
+  },
+  restoreDatabase: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/api/admin/restore', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
 };
 
 export const presetsApi = {

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import type { FormEvent, ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { configApi, authApi, feedsApi } from '../services/api';
+import { adminApi, configApi, authApi, feedsApi } from '../services/api';
 import { toast } from 'react-hot-toast';
 import type {
   CombinedConfig,
@@ -134,6 +134,16 @@ export default function ConfigPage() {
     enabled: showSecurityControls && user.role === 'admin',
   });
 
+  const { data: adminFeeds } = useQuery<Array<{ id: number; title: string }>>({
+    queryKey: ['admin-feed-export-list'],
+    queryFn: async () => {
+      const response = await feedsApi.getAdminFeedSubscriptions();
+      return response.feeds.map(feed => ({ id: feed.id, title: feed.title }));
+    },
+    enabled: showSecurityControls && user.role === 'admin',
+    staleTime: 60_000,
+  });
+
   const approvePendingMutation = useMutation({
     mutationFn: async (userId: number) => authApi.approvePendingUser(userId),
     onSuccess: async () => {
@@ -172,6 +182,9 @@ export default function ConfigPage() {
   const [whisperStatus, setWhisperStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const [whisperMessage, setWhisperMessage] = useState<string>('');
   const [whisperError, setWhisperError] = useState<string>('');
+  const [transcriptExportFeedId, setTranscriptExportFeedId] = useState('all');
+  const [transcriptExportFormat, setTranscriptExportFormat] = useState<'json' | 'txt' | 'srt'>('json');
+  const [transcriptExporting, setTranscriptExporting] = useState(false);
   const initialProbeDone = useRef(false);
   const groqRecommendedModel = useMemo(() => 'groq/openai/gpt-oss-120b', []);
   const groqRecommendedWhisper = useMemo(() => 'whisper-large-v3-turbo', []);
@@ -184,6 +197,25 @@ export default function ConfigPage() {
       return error.message;
     }
     return fallback;
+  };
+
+  const downloadBlobResponse = async (
+    response: Awaited<ReturnType<typeof adminApi.backupDatabase>>,
+    fallbackFilename: string,
+  ) => {
+    const blob = response.data instanceof Blob ? response.data : new Blob([response.data]);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const disposition = response.headers['content-disposition'];
+    const filename = disposition
+      ? disposition.split('filename=')[1]?.replace(/"/g, '') || fallbackFilename
+      : fallbackFilename;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   };
 
   const handlePasswordSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1762,31 +1794,155 @@ export default function ConfigPage() {
 
       {showSecurityControls && user?.role === 'admin' && (
         <Section title="Database Maintenance">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h4 className={`text-sm font-medium ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'}`}>Repair Processed Audio Paths</h4>
-              <p className={`text-xs mt-1 ${isOriginal ? 'text-blue-300/60' : 'text-gray-500 dark:text-gray-400'}`}>
-                Scan for processed audio files on disk and update database records where the path is missing.
-              </p>
+          <div className="space-y-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h4 className={`text-sm font-medium ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'}`}>Repair Processed Audio Paths</h4>
+                <p className={`text-xs mt-1 ${isOriginal ? 'text-blue-300/60' : 'text-gray-500 dark:text-gray-400'}`}>
+                  Scan for processed audio files on disk and update database records where the path is missing.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    toast.loading('Scanning for processed files...', { id: 'repair-paths' });
+                    const result = await feedsApi.repairProcessedPaths();
+                    toast.success(
+                      `Repaired ${result.repaired} of ${result.checked} posts checked${result.total_errors > 0 ? ` (${result.total_errors} errors)` : ''}`,
+                      { id: 'repair-paths', duration: 5000 }
+                    );
+                  } catch (err) {
+                    toast.error('Failed to repair paths', { id: 'repair-paths' });
+                  }
+                }}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+              >
+                Repair Paths
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  toast.loading('Scanning for processed files...', { id: 'repair-paths' });
-                  const result = await feedsApi.repairProcessedPaths();
-                  toast.success(
-                    `Repaired ${result.repaired} of ${result.checked} posts checked${result.total_errors > 0 ? ` (${result.total_errors} errors)` : ''}`,
-                    { id: 'repair-paths', duration: 5000 }
-                  );
-                } catch (err) {
-                  toast.error('Failed to repair paths', { id: 'repair-paths' });
-                }
-              }}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
-            >
-              Repair Paths
-            </button>
+
+            <div className={`border-t ${isOriginal ? 'border-blue-400/20' : 'border-gray-200 dark:border-purple-800'} pt-6`}>
+              <h4 className={`text-sm font-medium mb-1 ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'}`}>Bulk Transcript Export</h4>
+              <p className={`text-xs mb-3 ${isOriginal ? 'text-blue-300/60' : 'text-gray-500 dark:text-gray-400'}`}>
+                Download transcript archives for offline analysis and prompt refinement. One file per episode plus a manifest is included.
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <label className={`mb-1 block text-xs font-medium ${isOriginal ? 'text-blue-200' : 'text-gray-700 dark:text-purple-100'}`}>
+                    Scope
+                  </label>
+                  <select
+                    value={transcriptExportFeedId}
+                    onChange={(e) => setTranscriptExportFeedId(e.target.value)}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm ${isOriginal ? 'border-blue-300/30 bg-blue-950/40 text-blue-50' : 'border-gray-200 bg-white text-gray-900 dark:border-purple-800 dark:bg-slate-900 dark:text-purple-50'}`}
+                  >
+                    <option value="all">All podcasts</option>
+                    {(adminFeeds ?? []).map((feed) => (
+                      <option key={feed.id} value={String(feed.id)}>
+                        {feed.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:w-44">
+                  <label className={`mb-1 block text-xs font-medium ${isOriginal ? 'text-blue-200' : 'text-gray-700 dark:text-purple-100'}`}>
+                    Format
+                  </label>
+                  <select
+                    value={transcriptExportFormat}
+                    onChange={(e) => setTranscriptExportFormat(e.target.value as 'json' | 'txt' | 'srt')}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm ${isOriginal ? 'border-blue-300/30 bg-blue-950/40 text-blue-50' : 'border-gray-200 bg-white text-gray-900 dark:border-purple-800 dark:bg-slate-900 dark:text-purple-50'}`}
+                  >
+                    <option value="json">JSON</option>
+                    <option value="txt">TXT</option>
+                    <option value="srt">SRT</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setTranscriptExporting(true);
+                    try {
+                      toast.loading('Preparing transcript archive...', { id: 'transcript-export' });
+                      const response = await adminApi.exportTranscriptsBulk({
+                        feed_id: transcriptExportFeedId === 'all' ? undefined : Number(transcriptExportFeedId),
+                        format: transcriptExportFormat,
+                      });
+                      await downloadBlobResponse(response, `transcripts_export.${transcriptExportFormat}.zip`);
+                      toast.success('Transcript archive downloaded', { id: 'transcript-export' });
+                    } catch (error) {
+                      toast.error(getErrorMessage(error, 'Failed to export transcripts.'), { id: 'transcript-export' });
+                    } finally {
+                      setTranscriptExporting(false);
+                    }
+                  }}
+                  disabled={transcriptExporting}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {transcriptExporting ? 'Exporting...' : 'Download Archive'}
+                </button>
+              </div>
+            </div>
+
+            <div className={`border-t ${isOriginal ? 'border-blue-400/20' : 'border-gray-200 dark:border-purple-800'} pt-6`}>
+              <h4 className={`text-sm font-medium mb-1 ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'}`}>Database Backup</h4>
+              <p className={`text-xs mb-3 ${isOriginal ? 'text-blue-300/60' : 'text-gray-500 dark:text-gray-400'}`}>
+                Download a copy of the SQLite database for safekeeping.
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    toast.loading('Creating backup...', { id: 'db-backup' });
+                    const response = await adminApi.backupDatabase();
+                    await downloadBlobResponse(response, 'podly_backup.db');
+                    toast.success('Backup downloaded', { id: 'db-backup' });
+                  } catch (error) {
+                    toast.error(getErrorMessage(error, 'Failed to create backup.'), { id: 'db-backup' });
+                  }
+                }}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Download Backup
+              </button>
+            </div>
+
+            <div className={`border-t ${isOriginal ? 'border-blue-400/20' : 'border-gray-200 dark:border-purple-800'} pt-6`}>
+              <h4 className={`text-sm font-medium mb-1 ${isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'}`}>Restore Database</h4>
+              <p className={`text-xs mb-3 ${isOriginal ? 'text-blue-300/60' : 'text-gray-500 dark:text-gray-400'}`}>
+                Upload a previously downloaded backup to restore. A pre-restore backup is saved automatically.
+              </p>
+              <label className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Upload & Restore
+                <input
+                  type="file"
+                  accept=".db,.sqlite,.sqlite3"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (!window.confirm(
+                      `Restore database from "${file.name}"?\n\nThis will replace the current database. A pre-restore backup will be saved automatically.\n\nThe app will need to be restarted after restore.`
+                    )) {
+                      e.target.value = '';
+                      return;
+                    }
+                    try {
+                      toast.loading('Restoring database...', { id: 'db-restore' });
+                      const result = await adminApi.restoreDatabase(file);
+                      toast.success(result?.message || 'Database restored. Please restart the app.', { id: 'db-restore', duration: 10000 });
+                    } catch (err) {
+                      toast.error(getErrorMessage(err, 'Restore failed'), { id: 'db-restore' });
+                    }
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
           </div>
         </Section>
       )}

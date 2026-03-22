@@ -251,9 +251,11 @@ class JobsManager:
                     {
                         "job_id": job.id,
                         "post_guid": job.post_guid,
-                        "post_title": post.title if post else None,
-                        "feed_id": post.feed_id if post else None,
-                        "feed_title": post.feed.title if post and post.feed else None,
+                        "post_title": post.title if post else job.post_title,
+                        "feed_id": post.feed_id if post else job.feed_id,
+                        "feed_title": (
+                            post.feed.title if post and post.feed else job.feed_title
+                        ),
                         "status": job.status,
                         "priority": int(prio) if prio is not None else 0,
                         "step": job.current_step,
@@ -304,9 +306,11 @@ class JobsManager:
                     {
                         "job_id": job.id,
                         "post_guid": job.post_guid,
-                        "post_title": post.title if post else None,
-                        "feed_id": post.feed_id if post else None,
-                        "feed_title": post.feed.title if post and post.feed else None,
+                        "post_title": post.title if post else job.post_title,
+                        "feed_id": post.feed_id if post else job.feed_id,
+                        "feed_title": (
+                            post.feed.title if post and post.feed else job.feed_title
+                        ),
                         "status": job.status,
                         "priority": int(prio) if prio is not None else 0,
                         "step": job.current_step,
@@ -423,6 +427,45 @@ class JobsManager:
                     logger.error(f"Failed to update stuck job {job.id}: {e}")
 
             return count
+
+    def recover_interrupted_jobs(self) -> Dict[str, Any]:
+        """Preserve history and mark in-flight jobs as failed after a restart."""
+
+        def _recover() -> Dict[str, Any]:
+            preserved_count = ProcessingJob.query.filter(
+                ProcessingJob.status.in_(["completed", "failed", "cancelled", "skipped"])
+            ).count()
+            interrupted_jobs = ProcessingJob.query.filter(
+                ProcessingJob.status.in_(["pending", "running"])
+            ).all()
+
+            recovered_count = 0
+            for job in interrupted_jobs:
+                job.status = "failed"
+                job.error_message = "Job interrupted by application restart"
+                if not job.completed_at:
+                    job.completed_at = datetime.utcnow()
+                recovered_count += 1
+
+            if interrupted_jobs:
+                recalculate_run_counts(_db.session)
+            _db.session.commit()
+
+            return {
+                "status": "success",
+                "preserved_count": preserved_count,
+                "recovered_count": recovered_count,
+                "message": (
+                    f"Preserved {preserved_count} historical jobs and recovered "
+                    f"{recovered_count} interrupted jobs"
+                ),
+            }
+
+        scheduler_app = getattr(scheduler, "app", None)
+        if scheduler_app is not None:
+            with scheduler_app.app_context():
+                return _recover()
+        return _recover()
 
     def clear_all_jobs(self) -> Dict[str, Any]:
         """

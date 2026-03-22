@@ -319,9 +319,9 @@ export default function ProcessingStatsButton({
                       {/* Model Performance */}
                       <div className="grid grid-cols-1 gap-3 sm:gap-4">
                         {/* Model Call Status */}
-                        <div 
+                        <div
                           className="rounded-xl p-4 sm:p-5 shadow-sm border"
-                          style={{ 
+                          style={{
                             backgroundColor: isOriginal ? 'rgba(36, 82, 145, 0.44)' : isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
                             borderColor: isOriginal ? 'rgba(59, 130, 246, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
                           }}
@@ -481,6 +481,39 @@ export default function ProcessingStatsButton({
                           </div>
                         </div>
                       </div>
+
+                      {/* Export Transcript */}
+                      {(stats.transcript_segments?.length ?? 0) > 0 && (
+                        <div
+                          className="rounded-xl p-4 sm:p-5 shadow-sm border"
+                          style={{
+                            backgroundColor: isOriginal ? 'rgba(36, 82, 145, 0.44)' : isDark ? 'rgba(139, 92, 246, 0.15)' : '#faf5ff',
+                            borderColor: isOriginal ? 'rgba(59, 130, 246, 0.35)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff'
+                          }}
+                        >
+                          <h4 className="font-semibold mb-3 text-left text-sm sm:text-base" style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e9d5ff' : '#1f2937' }}>Export Transcript</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {(['json', 'txt', 'srt'] as const).map((fmt) => (
+                              <a
+                                key={fmt}
+                                href={`/api/posts/${episodeGuid}/transcript/export?format=${fmt}`}
+                                download
+                                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5"
+                                style={{
+                                  backgroundColor: isOriginal ? 'rgba(34, 74, 136, 0.5)' : isDark ? 'rgba(139, 92, 246, 0.2)' : '#f3e8ff',
+                                  borderColor: isOriginal ? 'rgba(96, 165, 250, 0.45)' : isDark ? 'rgba(139, 92, 246, 0.3)' : '#e9d5ff',
+                                  color: isOriginal ? '#bfdbfe' : isDark ? '#c4b5fd' : '#7c3aed',
+                                }}
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                {fmt.toUpperCase()}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

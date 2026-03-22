@@ -255,6 +255,76 @@ export interface PromptPreset {
   user_prompt_template?: string;
 }
 
+// ----- Jobs Dashboard Types -----
+
+export interface JobsDashboardOverview {
+  total_all_time: number;
+  total_period: number;
+  by_status: Record<string, number>;
+  by_trigger_source: Record<string, number>;
+}
+
+export interface JobsDashboardDaily {
+  date: string;
+  total: number;
+  completed?: number;
+  failed?: number;
+  skipped?: number;
+  pending?: number;
+  running?: number;
+  cancelled?: number;
+}
+
+export interface JobsDashboardUserRow {
+  user_id: number;
+  username: string;
+  total: number;
+  completed: number;
+  failed: number;
+}
+
+export interface JobsDashboardFeedRow {
+  feed_id: number | null;
+  title: string;
+  image_url: string | null;
+  total: number;
+  completed: number;
+}
+
+export interface JobsDashboardPerformance {
+  completed_count: number;
+  avg_duration_seconds: number;
+  min_duration_seconds: number;
+  max_duration_seconds: number;
+  total_ads_removed: number;
+  total_time_removed_seconds: number;
+  avg_percentage_removed: number;
+}
+
+export interface JobsDashboardRecentJob {
+  job_id: string;
+  post_guid: string;
+  post_title: string | null;
+  feed_title: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  triggered_by: string | null;
+  trigger_source: string | null;
+  ads_removed: number | null;
+  time_removed_seconds: number | null;
+  percentage_removed: number | null;
+}
+
+export interface JobsDashboard {
+  period_days: number;
+  overview: JobsDashboardOverview;
+  daily: JobsDashboardDaily[];
+  by_user: JobsDashboardUserRow[];
+  by_feed: JobsDashboardFeedRow[];
+  performance: JobsDashboardPerformance;
+  recent_completed: JobsDashboardRecentJob[];
+}
+
 export interface ProcessingStatsSummary {
   total_episodes_processed: number;
   total_ad_segments_removed: number;

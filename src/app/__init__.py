@@ -390,11 +390,11 @@ def _start_scheduler_and_jobs(app: Flask) -> None:
     )
 
     jobs_manager = get_jobs_manager()
-    clear_result = jobs_manager.clear_all_jobs()
-    if clear_result["status"] == "success":
-        logger.info(f"Startup: {clear_result['message']}")
+    recovery_result = jobs_manager.recover_interrupted_jobs()
+    if recovery_result["status"] == "success":
+        logger.info(f"Startup: {recovery_result['message']}")
     else:
-        logger.warning(f"Startup job clearing failed: {clear_result['message']}")
+        logger.warning(f"Startup job recovery failed: {recovery_result['message']}")
 
     add_background_job(
         10

@@ -12,6 +12,7 @@ import PodcastsLayout from './layouts/PodcastsLayout';
 import FeedDetailView from './pages/FeedDetailView';
 import CombinedEpisodesView from './pages/CombinedEpisodesView';
 import JobsPage from './pages/JobsPage';
+import JobsDashboardPage from './pages/JobsDashboardPage';
 import PresetsPage from './pages/PresetsPage';
 import ConfigPage from './pages/ConfigPage';
 import LoginPage from './pages/LoginPage';
@@ -138,6 +139,7 @@ function AppShell() {
               <Route path="combined" element={<CombinedEpisodesView />} />
             </Route>
             <Route path="/jobs" element={<JobsPage />} />
+            {showSettingsRoute && <Route path="/jobs/dashboard" element={<JobsDashboardPage />} />}
             {showSettingsRoute && <Route path="/subscriptions" element={<SubscriptionsPage />} />}
             {showSettingsRoute && <Route path="/presets" element={<PresetsPage />} />}
             {showSettingsRoute && <Route path="/settings" element={<ConfigPage />} />}

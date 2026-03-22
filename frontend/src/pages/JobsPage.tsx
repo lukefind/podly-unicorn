@@ -4,6 +4,7 @@ import { jobsApi } from '../services/api';
 import type { Job, JobManagerRun, JobManagerStatus } from '../types';
 import { copyTextToClipboard } from '../services/clipboard';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useAuth } from '../contexts/AuthContext';
 
 function getStatusColor(status: string) {
   switch (status) {
@@ -69,6 +70,7 @@ function formatDateTime(value: string | null): string {
 }
 
 export default function JobsPage() {
+  const { requireAuth, user } = useAuth();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [managerStatus, setManagerStatus] = useState<JobManagerStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -203,6 +205,7 @@ export default function JobsPage() {
 
   const run: JobManagerRun | null = managerStatus?.run ?? null;
   const hasActiveWork = run ? run.queued_jobs + run.running_jobs > 0 : false;
+  const showDashboardLink = !requireAuth || user?.role === 'admin';
 
   return (
     <div className="space-y-4">
@@ -268,6 +271,17 @@ export default function JobsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end">
+          {showDashboardLink && (
+            <Link
+              to="/jobs/dashboard"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-purple-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-purple-700 hover:bg-purple-50 transition-colors flex-1 sm:flex-none"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 2 2 5-5m0 0v4m0-4h-4M5 5v14h14" />
+              </svg>
+              Dashboard
+            </Link>
+          )}
           <button
             onClick={() => { void refresh(); }}
             className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 px-3 py-1.5 text-sm font-medium text-white hover:shadow-lg hover:shadow-purple-500/30 transition-all flex-1 sm:flex-none"
@@ -302,7 +316,7 @@ export default function JobsPage() {
               All History
             </button>
           </div>
-          {mode === 'all' && jobs.some(j => ['completed', 'failed', 'cancelled', 'skipped'].includes(j.status)) && (
+          {showDashboardLink && mode === 'all' && jobs.some(j => ['completed', 'failed', 'cancelled', 'skipped'].includes(j.status)) && (
             <button
               onClick={() => { void clearHistory(); }}
               className="px-3 py-1.5 text-sm font-medium text-pink-600 border border-pink-200 rounded-xl hover:bg-pink-50 transition-colors disabled:opacity-50 w-full sm:w-auto"
@@ -351,7 +365,25 @@ export default function JobsPage() {
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
               <span>Step {job.step}/{job.total_steps}{job.step_name ? ` · ${job.step_name}` : ''}</span>
-              <span>Priority {job.priority}</span>
+              {job.completed_at && (
+                <span title={`Completed: ${formatDateTime(job.completed_at)}`}>
+                  {formatDateTime(job.completed_at)}
+                </span>
+              )}
+              {job.started_at && job.completed_at && (() => {
+                const dur = (new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000;
+                if (dur > 0) {
+                  const m = Math.floor(dur / 60);
+                  const s = Math.round(dur % 60);
+                  return <span title="Processing duration">{m > 0 ? `${m}m ${s}s` : `${s}s`}</span>;
+                }
+                return null;
+              })()}
+              {!job.completed_at && job.created_at && (
+                <span title={`Created: ${formatDateTime(job.created_at)}`}>
+                  {formatDateTime(job.created_at)}
+                </span>
+              )}
               {job.triggered_by_username && <span>by {job.triggered_by_username}</span>}
               {!job.triggered_by_username && job.trigger_source === 'auto_feed_refresh' && <span>by System</span>}
               <span>
