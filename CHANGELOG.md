@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/lukefind/podly-unicorn/compare/v1.0.3...v1.0.4) (2026-03-22)
+
+
+### Bug Fixes
+
+* prevent false positive amplification at episode endings ([516e1f4](https://github.com/lukefind/podly-unicorn/commit/516e1f430697fc7e54c359473a7ec54da2ca1d3e))
+
 ## [1.0.3](https://github.com/lukefind/podly-unicorn/compare/v1.0.2...v1.0.3) (2026-03-07)
 
 
