@@ -167,19 +167,19 @@ export default function JobsDashboardPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className={`text-2xl font-bold ${textPrimary}`}>Jobs Dashboard</h1>
-          <p className={`${textSecondary} mt-1 text-sm`}>Processing analytics and history</p>
+          <h1 className={`text-2xl font-bold ${textPrimary}`}>Jobs</h1>
+          <p className={`${textSecondary} mt-1 text-sm`}>Overview, analytics, and recent processing activity</p>
         </div>
         <div className="flex items-center gap-2">
           <Link
-            to="/jobs"
+            to="/jobs/history"
             className={`px-3 py-1.5 text-sm font-medium rounded-xl border transition-colors ${
               isOriginal
                 ? 'border-blue-400/30 text-blue-200 hover:bg-blue-800/30'
                 : 'border-purple-200 text-purple-700 hover:bg-purple-50'
             }`}
           >
-            Job List
+            History
           </Link>
           <div className="flex rounded-xl border border-purple-200 overflow-hidden">
             {[7, 30, 90].map((d) => (

@@ -4,10 +4,12 @@ import { feedsApi, presetsApi } from '../services/api';
 import { toast } from 'react-hot-toast';
 import type { PromptPreset, Feed } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { theme } = useTheme();
+  const { requireAuth, user } = useAuth();
   const isOriginal = theme === 'original';
 
   const { data: feeds } = useQuery({
@@ -54,6 +56,7 @@ export default function DashboardPage() {
   const activePreset = presets?.find((p: PromptPreset) => p.is_active);
   const activeJobs = jobs?.filter((j: { status: string }) => j.status === 'running' || j.status === 'pending') || [];
   const feedsArray = Array.isArray(feeds) ? feeds : [];
+  const showJobsOverviewLink = !requireAuth || user?.role === 'admin';
 
   const getAggressivenessColor = (level: string) => {
     switch (level) {
@@ -253,14 +256,26 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Active Jobs Card */}
+        {/* Jobs Card */}
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-purple-200/50 shadow-sm overflow-hidden unicorn-card" style={originalCardStyle}>
           <div className={isOriginal ? 'p-6 border-b' : 'p-6 border-b border-purple-100/50 bg-gradient-to-r from-cyan-50/50 via-purple-50/50 to-pink-50/50'} style={originalSectionHeaderStyle}>
             <div className="flex items-center justify-between">
-              <h2 className={`text-lg font-semibold ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>Active Jobs 💫</h2>
-              <Link to="/jobs" className={`text-sm font-medium ${isOriginal ? 'text-blue-200 hover:text-cyan-200' : 'text-purple-600 hover:text-purple-700'}`}>
-                View All →
-              </Link>
+              <div>
+                <h2 className={`text-lg font-semibold ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>Jobs 💫</h2>
+                <p className={`mt-1 text-xs ${isOriginal ? 'text-blue-200' : 'text-purple-500'}`}>
+                  {activeJobs.length > 0 ? `${activeJobs.length} active right now` : 'Overview, queue, and recent history'}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                {showJobsOverviewLink && (
+                  <Link to="/jobs" className={`text-sm font-medium ${isOriginal ? 'text-blue-200 hover:text-cyan-200' : 'text-purple-600 hover:text-purple-700'}`}>
+                    Overview →
+                  </Link>
+                )}
+                <Link to="/jobs/history" className={`text-sm font-medium ${isOriginal ? 'text-blue-200 hover:text-cyan-200' : 'text-purple-600 hover:text-purple-700'}`}>
+                  History →
+                </Link>
+              </div>
             </div>
           </div>
           <div>

@@ -209,6 +209,24 @@ export default function JobsPage() {
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-purple-900">Jobs History</h1>
+          <p className="mt-1 text-sm text-purple-600">Detailed processing queue and historical job log.</p>
+        </div>
+        {showDashboardLink && (
+          <Link
+            to="/jobs"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-purple-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-purple-700 hover:bg-purple-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12h18M12 3l9 9-9 9" />
+            </svg>
+            Overview
+          </Link>
+        )}
+      </div>
+
       <div className="rounded-xl border border-purple-200/50 bg-white/80 backdrop-blur-sm p-4 shadow-sm unicorn-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -263,23 +281,23 @@ export default function JobsPage() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h3 className="text-xl font-semibold text-gray-900">{mode === 'active' ? 'Active Jobs' : 'All Jobs'}</h3>
+          <h3 className="text-xl font-semibold text-gray-900">{mode === 'active' ? 'Active Queue' : 'Job History'}</h3>
           <p className="text-sm text-gray-600">
             {mode === 'active'
               ? 'Queued and running jobs, ordered by priority.'
-              : 'All jobs ordered by priority (running/pending first).'}
+              : 'Completed and in-progress jobs ordered with active work first.'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end">
           {showDashboardLink && (
             <Link
-              to="/jobs/dashboard"
+              to="/jobs"
               className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-purple-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-purple-700 hover:bg-purple-50 transition-colors flex-1 sm:flex-none"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 2 2 5-5m0 0v4m0-4h-4M5 5v14h14" />
               </svg>
-              Dashboard
+              Overview
             </Link>
           )}
           <button
@@ -313,7 +331,7 @@ export default function JobsPage() {
               }`}
               disabled={loading}
             >
-              All History
+              History
             </button>
           </div>
           {showDashboardLink && mode === 'all' && jobs.some(j => ['completed', 'failed', 'cancelled', 'skipped'].includes(j.status)) && (

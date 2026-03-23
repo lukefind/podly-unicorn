@@ -138,8 +138,21 @@ function AppShell() {
               <Route index element={<FeedDetailView />} />
               <Route path="combined" element={<CombinedEpisodesView />} />
             </Route>
-            <Route path="/jobs" element={<JobsPage />} />
-            {showSettingsRoute && <Route path="/jobs/dashboard" element={<JobsDashboardPage />} />}
+            <Route
+              path="/jobs"
+              element={
+                showSettingsRoute ? (
+                  <JobsDashboardPage />
+                ) : (
+                  <Navigate to="/jobs/history" replace />
+                )
+              }
+            />
+            <Route path="/jobs/history" element={<JobsPage />} />
+            <Route
+              path="/jobs/dashboard"
+              element={<Navigate to={showSettingsRoute ? '/jobs' : '/jobs/history'} replace />}
+            />
             {showSettingsRoute && <Route path="/subscriptions" element={<SubscriptionsPage />} />}
             {showSettingsRoute && <Route path="/presets" element={<PresetsPage />} />}
             {showSettingsRoute && <Route path="/settings" element={<ConfigPage />} />}
