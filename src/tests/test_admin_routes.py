@@ -144,6 +144,25 @@ def test_backup_database_requires_auth_when_auth_enabled(
     assert response.status_code == 401
 
 
+def test_backup_database_downloads_file_when_sqlite_uri_has_query_params(
+    app_with_admin_routes: Flask,
+) -> None:
+    admin_id = _create_user(app_with_admin_routes, "backup-admin", "admin")
+
+    db_uri = app_with_admin_routes.config["SQLALCHEMY_DATABASE_URI"]
+    app_with_admin_routes.config["SQLALCHEMY_DATABASE_URI"] = f"{db_uri}?timeout=90"
+
+    client = app_with_admin_routes.test_client()
+    _login(client, admin_id)
+
+    response = client.post("/api/admin/backup")
+
+    assert response.status_code == 200
+    assert response.headers["Content-Type"].startswith("application/x-sqlite3")
+    assert "attachment;" in response.headers["Content-Disposition"]
+    assert response.data.startswith(b"SQLite format 3")
+
+
 def test_restore_rejects_invalid_database_upload(app_with_admin_routes: Flask) -> None:
     admin_id = _create_user(app_with_admin_routes, "restore-admin", "admin")
 

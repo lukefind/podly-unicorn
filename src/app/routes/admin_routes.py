@@ -10,6 +10,7 @@ from datetime import datetime
 import flask
 from flask import Blueprint, g, request, send_file
 from flask.typing import ResponseReturnValue
+from sqlalchemy.engine.url import make_url
 
 from app.extensions import db
 from app.models import Identification, Post, TranscriptSegment
@@ -140,8 +141,12 @@ def api_export_transcripts_bulk() -> ResponseReturnValue:
 def _get_db_path() -> str:
     """Resolve the SQLite database path from the app config."""
     uri = flask.current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
-    if uri.startswith("sqlite:///"):
-        return uri.replace("sqlite:///", "", 1)
+    if uri:
+        url = make_url(uri)
+        if url.drivername.startswith("sqlite") and url.database:
+            if url.database == ":memory:":
+                return url.database
+            return os.path.abspath(url.database)
     return os.path.join(
         flask.current_app.instance_path, "sqlite3.db"
     )
