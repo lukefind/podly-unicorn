@@ -1,5 +1,8 @@
 name: Validation
 
+env:
+  PINNED_PIPENV_VERSION: "2026.0.3"
+
 on:
   push:
     branches:
@@ -32,7 +35,7 @@ jobs:
         run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends ffmpeg
 
       - name: Install pipenv
-        run: pip install pipenv
+        run: pip install "pipenv==${PINNED_PIPENV_VERSION}"
 
       - name: Cache pipenv virtualenv
         uses: actions/cache@v4
@@ -121,7 +124,7 @@ jobs:
 
       - name: Install pipenv
         if: ${{ steps.changed.outputs.python_files != '' }}
-        run: pip install pipenv
+        run: pip install "pipenv==${PINNED_PIPENV_VERSION}"
 
       - name: Cache pipenv virtualenv
         if: ${{ steps.changed.outputs.python_files != '' }}
