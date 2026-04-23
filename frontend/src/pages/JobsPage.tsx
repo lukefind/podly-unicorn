@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { jobsApi } from '../services/api';
 import type { Job, JobManagerRun, JobManagerStatus } from '../types';
 import { copyTextToClipboard } from '../services/clipboard';
@@ -71,6 +71,7 @@ function formatDateTime(value: string | null): string {
 
 export default function JobsPage() {
   const { requireAuth, user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [managerStatus, setManagerStatus] = useState<JobManagerStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -82,6 +83,8 @@ export default function JobsPage() {
   const previousHasActiveWork = useRef<boolean>(false);
   const [selectedJobError, setSelectedJobError] = useState<{ title: string; error: string; jobId: string } | null>(null);
   useEscapeKey(!!selectedJobError, () => setSelectedJobError(null));
+  const statusFilter = searchParams.get('status')?.trim().toLowerCase() || null;
+  const filteredStatusLabel = statusFilter ? `${statusFilter.charAt(0).toUpperCase()}${statusFilter.slice(1)}` : null;
 
   const loadStatus = useCallback(async () => {
     try {
@@ -206,6 +209,12 @@ export default function JobsPage() {
   const run: JobManagerRun | null = managerStatus?.run ?? null;
   const hasActiveWork = run ? run.queued_jobs + run.running_jobs > 0 : false;
   const showDashboardLink = !requireAuth || user?.role === 'admin';
+  const visibleJobs = useMemo(() => {
+    if (mode !== 'all' || !statusFilter) {
+      return jobs;
+    }
+    return jobs.filter((job) => job.status.toLowerCase() === statusFilter);
+  }, [jobs, mode, statusFilter]);
 
   return (
     <div className="space-y-4">
@@ -281,7 +290,13 @@ export default function JobsPage() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h3 className="text-xl font-semibold text-gray-900">{mode === 'active' ? 'Active Queue' : 'Job History'}</h3>
+          <h3 className="text-xl font-semibold text-gray-900">
+            {mode === 'active'
+              ? 'Active Queue'
+              : filteredStatusLabel
+              ? `${filteredStatusLabel} Job History`
+              : 'Job History'}
+          </h3>
           <p className="text-sm text-gray-600">
             {mode === 'active'
               ? 'Queued and running jobs, ordered by priority.'
@@ -346,16 +361,41 @@ export default function JobsPage() {
         </div>
       </div>
 
+      {filteredStatusLabel && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50/70 px-4 py-3 text-sm text-red-800">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-red-700">
+              Filtered
+            </span>
+            <span>
+              {mode === 'all'
+                ? `Showing only ${filteredStatusLabel.toLowerCase()} jobs from history.`
+                : `History is filtered to ${filteredStatusLabel.toLowerCase()} jobs. Switch back to History to view them.`}
+            </span>
+          </div>
+          <Link
+            to="/jobs/history"
+            className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-1.5 font-medium text-red-700 transition-colors hover:bg-red-100"
+          >
+            Clear Filter
+          </Link>
+        </div>
+      )}
+
       {error && (
         <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
       )}
 
-      {jobs.length === 0 && !loading ? (
-        <div className="text-sm text-gray-600">No jobs to display.</div>
+      {visibleJobs.length === 0 && !loading ? (
+        <div className="text-sm text-gray-600">
+          {filteredStatusLabel && mode === 'all'
+            ? `No ${filteredStatusLabel.toLowerCase()} jobs to display.`
+            : 'No jobs to display.'}
+        </div>
       ) : null}
 
       <div className="bg-white/80 backdrop-blur-sm border border-purple-200/50 rounded-xl overflow-hidden unicorn-card">
-        {jobs.map((job, idx) => (
+        {visibleJobs.map((job, idx) => (
           <div key={job.job_id} className={`px-4 py-3.5 ${idx > 0 ? 'border-t border-purple-100/40' : ''}`}>
             <div className="flex items-center justify-between gap-2 mb-1">
               {job.feed_id ? (

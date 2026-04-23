@@ -104,7 +104,7 @@ function StatCard({
 }: {
   label: string;
   value: string | number;
-  sub?: string;
+  sub?: ReactNode;
   icon: ReactNode;
   style?: CSSProperties;
 }) {
@@ -131,6 +131,7 @@ export default function JobsDashboardPage() {
   const { theme } = useTheme();
   const isOriginal = theme === 'original';
   const [days, setDays] = useState(30);
+  const failedHistoryHref = '/jobs/history?status=failed';
 
   const { data: dashboard, isLoading } = useQuery<JobsDashboard>({
     queryKey: ['jobs-dashboard', days],
@@ -217,7 +218,19 @@ export default function JobsDashboardPage() {
         <StatCard
           label="Completed"
           value={overview?.by_status?.completed ?? 0}
-          sub={`${overview?.by_status?.failed ?? 0} failed`}
+          sub={
+            <Link
+              to={failedHistoryHref}
+              className={`inline-flex items-center gap-1 text-xs font-medium transition-colors ${
+                isOriginal ? 'text-red-200 hover:text-red-100' : 'text-red-600 hover:text-red-700'
+              }`}
+            >
+              {overview?.by_status?.failed ?? 0} failed
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          }
           style={cardStyle}
           icon={
             <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -293,18 +306,38 @@ export default function JobsDashboardPage() {
           <div className="p-6 space-y-3">
             {overview?.by_status && Object.entries(overview.by_status)
               .sort(([, a], [, b]) => b - a)
-              .map(([status, count]) => (
-                <div key={status} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: STATUS_COLORS[status] || '#6b7280' }}
-                    />
-                    <span className="text-sm capitalize text-gray-700">{status}</span>
+              .map(([status, count]) => {
+                const rowContent = (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: STATUS_COLORS[status] || '#6b7280' }}
+                      />
+                      <span className="text-sm capitalize text-gray-700">{status}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900">{count}</span>
+                  </>
+                );
+
+                if (status === 'failed') {
+                  return (
+                    <Link
+                      key={status}
+                      to={failedHistoryHref}
+                      className="flex items-center justify-between rounded-lg px-2 py-1 -mx-2 hover:bg-red-50/60 transition-colors"
+                    >
+                      {rowContent}
+                    </Link>
+                  );
+                }
+
+                return (
+                  <div key={status} className="flex items-center justify-between">
+                    {rowContent}
                   </div>
-                  <span className="text-sm font-semibold text-gray-900">{count}</span>
-                </div>
-              ))}
+                );
+              })}
             {overview?.by_trigger_source && (
               <>
                 <div className="border-t border-gray-100 pt-3 mt-3">
