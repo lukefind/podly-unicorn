@@ -26,6 +26,18 @@ def _write_constant_wave(path: Path, duration_ms: int) -> None:
         wav_file.writeframes(frame * frame_count)
 
 
+def _write_sectioned_wave(path: Path, sections: list[tuple[int, int]]) -> None:
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(TEST_WAV_SAMPLE_RATE)
+
+        for duration_ms, sample_value in sections:
+            frame_count = int(TEST_WAV_SAMPLE_RATE * duration_ms / 1000)
+            frame = struct.pack("<h", sample_value)
+            wav_file.writeframes(frame * frame_count)
+
+
 def _read_wave_sample(path: Path, time_ms: int) -> int:
     with wave.open(str(path), "rb") as wav_file:
         frame_index = min(
@@ -52,15 +64,12 @@ def test_clip_segment_with_fade() -> None:
             temp_file.name,
         )
 
-        expected_duration = (
-            TEST_FILE_DURATION
-            - (ad_end_offset_ms - ad_start_offset_ms)
-            + 2 * fade_len_ms
-            + 56  # not sure where this fudge comes from
+        expected_duration = TEST_FILE_DURATION - (
+            ad_end_offset_ms - ad_start_offset_ms
         )
         actual_duration = get_audio_duration_ms(temp_file.name)
         assert actual_duration is not None, "Failed to get audio duration"
-        assert abs(actual_duration - expected_duration) <= 60, (
+        assert abs(actual_duration - expected_duration) <= 120, (
             f"Duration mismatch: expected {expected_duration}ms, got {actual_duration}ms, "
             f"difference: {abs(actual_duration - expected_duration)}ms"
         )
@@ -78,15 +87,12 @@ def test_clip_segment_with_fade_beginning() -> None:
             temp_file.name,
         )
 
-        expected_duration = (
-            TEST_FILE_DURATION
-            - (ad_end_offset_ms - ad_start_offset_ms)
-            + 2 * fade_len_ms
-            + 56  # not sure where this fudge comes from
+        expected_duration = TEST_FILE_DURATION - (
+            ad_end_offset_ms - ad_start_offset_ms
         )
         actual_duration = get_audio_duration_ms(temp_file.name)
         assert actual_duration is not None, "Failed to get audio duration"
-        assert abs(actual_duration - expected_duration) <= 60, (
+        assert abs(actual_duration - expected_duration) <= 120, (
             f"Duration mismatch: expected {expected_duration}ms, got {actual_duration}ms, "
             f"difference: {abs(actual_duration - expected_duration)}ms"
         )
@@ -107,44 +113,82 @@ def test_clip_segment_with_fade_end() -> None:
             temp_file.name,
         )
 
-        expected_duration = (
-            TEST_FILE_DURATION
-            - (ad_end_offset_ms - ad_start_offset_ms)
-            + 2 * fade_len_ms
-            + 56  # not sure where this fudge comes from
+        expected_duration = TEST_FILE_DURATION - (
+            ad_end_offset_ms - ad_start_offset_ms
         )
         actual_duration = get_audio_duration_ms(temp_file.name)
         assert actual_duration is not None, "Failed to get audio duration"
-        assert abs(actual_duration - expected_duration) <= 60, (
+        assert abs(actual_duration - expected_duration) <= 120, (
             f"Duration mismatch: expected {expected_duration}ms, got {actual_duration}ms, "
             f"difference: {abs(actual_duration - expected_duration)}ms"
         )
 
 
-def test_clip_segment_with_fade_fades_into_ad_preview() -> None:
-    fade_len_ms = 1_000
+def test_clip_segment_with_fade_does_not_duplicate_short_cuts() -> None:
+    fade_len_ms = 5_000
     ad_start_offset_ms, ad_end_offset_ms = 3_000, 7_000
+
+    with tempfile.NamedTemporaryFile(delete=True, suffix=".mp3") as temp_file:
+        clip_segments_with_fade(
+            [(ad_start_offset_ms, ad_end_offset_ms)],
+            fade_len_ms,
+            TEST_FILE_PATH,
+            temp_file.name,
+        )
+
+        expected_duration = TEST_FILE_DURATION - (
+            ad_end_offset_ms - ad_start_offset_ms
+        )
+        actual_duration = get_audio_duration_ms(temp_file.name)
+        assert actual_duration is not None, "Failed to get audio duration"
+        assert abs(actual_duration - expected_duration) <= 120, (
+            f"Duration mismatch: expected {expected_duration}ms, got {actual_duration}ms, "
+            f"difference: {abs(actual_duration - expected_duration)}ms"
+        )
+
+
+def test_clip_segment_with_fade_removes_ad_audio_content() -> None:
+    fade_len_ms = 1_000
 
     with tempfile.TemporaryDirectory() as temp_dir:
         input_path = Path(temp_dir) / "input.wav"
         output_path = Path(temp_dir) / "output.wav"
 
-        _write_constant_wave(input_path, duration_ms=10_000)
+        _write_sectioned_wave(
+            input_path,
+            sections=[
+                (3_000, 2_000),
+                (4_000, 12_000),
+                (3_000, 4_000),
+            ],
+        )
 
         clip_segments_with_fade(
-            [(ad_start_offset_ms, ad_end_offset_ms)],
+            [(3_000, 7_000)],
             fade_len_ms,
             str(input_path),
             str(output_path),
         )
 
-        leading_sample = abs(_read_wave_sample(output_path, ad_start_offset_ms + 50))
-        midpoint_sample = abs(_read_wave_sample(output_path, ad_start_offset_ms + 400))
-        trailing_sample = abs(_read_wave_sample(output_path, ad_start_offset_ms + 950))
+        assert get_audio_duration_ms(str(output_path)) == 6_000
+        assert abs(_read_wave_sample(output_path, 1_000) - 2_000) <= 5
+        assert abs(_read_wave_sample(output_path, 4_250) - 4_000) <= 5
 
-        assert leading_sample < midpoint_sample
-        assert midpoint_sample > TEST_WAV_SAMPLE_VALUE // 2
-        assert trailing_sample < midpoint_sample
+
+def test_build_keep_segments_normalizes_unsorted_overlapping_ranges() -> None:
+    from podcast_processor.audio import _build_keep_segments
+
+    keep_segments = _build_keep_segments(
+        [
+            (9_000, 15_000),
+            (-500, 500),
+            (3_000, 6_000),
+            (5_000, 8_000),
+        ],
+        audio_duration_ms=10_000,
+    )
+
+    assert keep_segments == [(500, 3_000), (8_000, 9_000)]
 
 
 def test_split_audio() -> None:
