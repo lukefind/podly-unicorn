@@ -1,6 +1,8 @@
+import os
 from unittest import mock
 
 import pytest
+import requests
 
 from app.models import Feed, Post
 from podcast_processor.podcast_downloader import (
@@ -123,7 +125,10 @@ def test_download_episode_new_file(mock_get, test_post, downloader, app):
 
         # Check that we tried to download the file
         mock_get.assert_called_once_with(
-            "https://example.com/podcast.mp3", headers=mock.ANY, stream=True, timeout=60
+            "https://example.com/podcast.mp3",
+            headers=mock.ANY,
+            stream=True,
+            timeout=(10, 60),
         )
 
         # Check that the file was created with the correct content
@@ -151,7 +156,10 @@ def test_download_episode_download_failed(mock_get, test_post, downloader, app):
 
         # Check that we tried to download the file
         mock_get.assert_called_once_with(
-            "https://example.com/podcast.mp3", headers=mock.ANY, stream=True, timeout=60
+            "https://example.com/podcast.mp3",
+            headers=mock.ANY,
+            stream=True,
+            timeout=(10, 60),
         )
 
         # Check that no file was created
@@ -195,3 +203,140 @@ def test_download_episode_invalid_post_title(mock_get, test_post, downloader, ap
             # Check that None was returned
             assert result is None
             mock_get.assert_not_called()
+
+
+def _successful_response(*chunks):
+    response = mock.MagicMock()
+    response.status_code = 200
+    response.iter_content.return_value = list(chunks)
+    response.__enter__.return_value = response
+    response.__exit__.return_value = None
+    return response
+
+
+@mock.patch("podcast_processor.podcast_downloader.time.sleep")
+@mock.patch("podcast_processor.podcast_downloader.requests.get")
+def test_download_episode_retries_timeout_then_succeeds(
+    mock_get, mock_sleep, test_post, downloader, app
+):
+    mock_get.side_effect = [
+        requests.ReadTimeout("temporary timeout"),
+        _successful_response(b"complete audio"),
+    ]
+
+    with app.app_context():
+        destination = downloader.get_and_make_download_path(test_post.title)
+        result = downloader.download_episode(test_post, str(destination))
+
+    assert result == str(destination)
+    assert destination.read_bytes() == b"complete audio"
+    assert mock_get.call_count == 2
+    mock_sleep.assert_called_once_with(1)
+
+
+@mock.patch("podcast_processor.podcast_downloader.time.sleep")
+@mock.patch("podcast_processor.podcast_downloader.requests.get")
+def test_download_episode_exhausts_transient_failures_without_partial_file(
+    mock_get, mock_sleep, test_post, downloader, app
+):
+    mock_get.side_effect = requests.ConnectionError("temporary connection failure")
+
+    with app.app_context():
+        destination = downloader.get_and_make_download_path(test_post.title)
+        with pytest.raises(DownloadError, match="three attempts"):
+            downloader.download_episode(test_post, str(destination))
+
+    assert mock_get.call_count == 3
+    assert mock_sleep.call_args_list == [mock.call(1), mock.call(2)]
+    assert not destination.exists()
+    assert not destination.with_name(destination.name + ".part").exists()
+
+
+@mock.patch("podcast_processor.podcast_downloader.time.sleep")
+@mock.patch("podcast_processor.podcast_downloader.requests.get")
+def test_download_episode_removes_zero_byte_destination_before_retrying(
+    mock_get, _mock_sleep, test_post, downloader, app
+):
+    mock_get.side_effect = requests.ConnectionError("temporary connection failure")
+
+    with app.app_context():
+        destination = downloader.get_and_make_download_path(test_post.title)
+        destination.write_bytes(b"")
+
+        with pytest.raises(DownloadError):
+            downloader.download_episode(test_post, str(destination))
+
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize("status_code, expected_calls", [(503, 3), (404, 1)])
+@mock.patch("podcast_processor.podcast_downloader.time.sleep")
+@mock.patch("podcast_processor.podcast_downloader.requests.get")
+def test_download_episode_retries_only_transient_http_errors(
+    mock_get,
+    mock_sleep,
+    status_code,
+    expected_calls,
+    test_post,
+    downloader,
+    app,
+):
+    response = mock.MagicMock()
+    response.status_code = status_code
+    response.__enter__.return_value = response
+    response.__exit__.return_value = None
+    mock_get.return_value = response
+
+    with app.app_context():
+        destination = downloader.get_and_make_download_path(test_post.title)
+        with pytest.raises(DownloadError):
+            downloader.download_episode(test_post, str(destination))
+
+    assert mock_get.call_count == expected_calls
+    assert mock_sleep.call_count == max(0, expected_calls - 1)
+
+
+@mock.patch("podcast_processor.podcast_downloader.requests.get")
+def test_download_episode_removes_partial_file_when_stream_fails(
+    mock_get, test_post, downloader, app
+):
+    response = _successful_response()
+    response.iter_content.side_effect = requests.ConnectionError("stream interrupted")
+    mock_get.return_value = response
+
+    with app.app_context():
+        destination = downloader.get_and_make_download_path(test_post.title)
+        with mock.patch("podcast_processor.podcast_downloader.time.sleep"):
+            with pytest.raises(DownloadError):
+                downloader.download_episode(test_post, str(destination))
+
+    assert not destination.exists()
+    assert not destination.with_name(destination.name + ".part").exists()
+
+
+@mock.patch("podcast_processor.podcast_downloader.requests.get")
+def test_download_episode_atomically_replaces_destination(
+    mock_get, test_post, downloader, app
+):
+    with app.app_context():
+        destination = downloader.get_and_make_download_path(test_post.title)
+        part_path = destination.with_name(destination.name + ".part")
+
+        def chunks():
+            assert not destination.exists()
+            yield b"first"
+            assert not destination.exists()
+            yield b"second"
+
+        response = _successful_response()
+        response.iter_content.return_value = chunks()
+        mock_get.return_value = response
+
+        with mock.patch(
+            "podcast_processor.podcast_downloader.os.replace", wraps=os.replace
+        ) as mock_replace:
+            downloader.download_episode(test_post, str(destination))
+
+    mock_replace.assert_called_once_with(str(part_path), str(destination))
+    assert destination.read_bytes() == b"firstsecond"
+    assert not part_path.exists()

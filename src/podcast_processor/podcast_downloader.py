@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -19,7 +20,9 @@ DOWNLOAD_DIR = str(get_in_root())
 
 
 class DownloadError(Exception):
-    def __init__(self, message: str, status_code: Optional[int] = None, url: str | None = None):
+    def __init__(
+        self, message: str, status_code: Optional[int] = None, url: str | None = None
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.url = url
@@ -55,10 +58,12 @@ class PodcastDownloader:
 
         # First, check if the file truly exists and has nonzero size.
         try:
-            if os.path.isfile(download_path) and os.path.getsize(download_path) > 0:
-                self.logger.info("Episode already downloaded.")
-                return download_path
-            self.logger.info("File is zero bytes, re-downloading.")  # else
+            if os.path.isfile(download_path):
+                if os.path.getsize(download_path) > 0:
+                    self.logger.info("Episode already downloaded.")
+                    return download_path
+                self.logger.info("File is zero bytes, re-downloading.")
+                os.remove(download_path)
 
         except FileNotFoundError:
             # Covers both "file actually missing" and "broken symlink"
@@ -76,42 +81,77 @@ class PodcastDownloader:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             "Referer": referer,
         }
-        with requests.get(
-            audio_link, stream=True, timeout=60, headers=headers
-        ) as response:
-            if response.status_code == 200:
-                with open(download_path, "wb") as file:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        file.write(chunk)
+        partial_path = f"{download_path}.part"
+
+        def remove_partial() -> None:
+            try:
+                os.remove(partial_path)
+            except FileNotFoundError:
+                pass
+
+        for attempt in range(3):
+            remove_partial()
+            try:
+                with requests.get(
+                    audio_link,
+                    stream=True,
+                    timeout=(10, 60),
+                    headers=headers,
+                ) as response:
+                    status_code = response.status_code
+                    if status_code != 200:
+                        self.logger.info(
+                            "Failed to download the podcast episode, response: %s",
+                            status_code,
+                        )
+                        parsed_url = None
+                        try:
+                            parsed_url = requests.utils.urlparse(audio_link)
+                        except Exception:
+                            pass
+
+                        host = parsed_url.hostname if parsed_url else None
+                        if status_code == 403 and host and "podtrac.com" in host:
+                            raise DownloadError(
+                                "Download blocked by host (HTTP 403). Podtrac often blocks datacenter IPs. "
+                                "Use a proxy/egress IP or a different source.",
+                                status_code=status_code,
+                                url=audio_link,
+                            )
+
+                        error = DownloadError(
+                            f"Download failed (HTTP {status_code}).",
+                            status_code=status_code,
+                            url=audio_link,
+                        )
+                        if (status_code == 429 or status_code >= 500) and attempt < 2:
+                            time.sleep(attempt + 1)
+                            continue
+                        raise error
+
+                    with open(partial_path, "wb") as file:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            file.write(chunk)
+
+                os.replace(partial_path, download_path)
                 self.logger.info("Download complete.")
-            else:
-                status_code = response.status_code
-                self.logger.info(
-                    "Failed to download the podcast episode, response: %s",
-                    status_code,
-                )
-                parsed_url = None
-                try:
-                    parsed_url = requests.utils.urlparse(audio_link)
-                except Exception:
-                    pass
-
-                host = parsed_url.hostname if parsed_url else None
-                if status_code == 403 and host and "podtrac.com" in host:
-                    raise DownloadError(
-                        "Download blocked by host (HTTP 403). Podtrac often blocks datacenter IPs. "
-                        "Use a proxy/egress IP or a different source.",
-                        status_code=status_code,
-                        url=audio_link,
-                    )
-
+                return download_path
+            except (requests.Timeout, requests.ConnectionError) as error:
+                remove_partial()
+                if attempt < 2:
+                    time.sleep(attempt + 1)
+                    continue
                 raise DownloadError(
-                    f"Download failed (HTTP {status_code}).",
-                    status_code=status_code,
-                    url=audio_link,
-                )
+                    "Download failed after three attempts due to a transient network error."
+                ) from error
+            except requests.RequestException as error:
+                remove_partial()
+                raise DownloadError("Download request failed.") from error
+            except Exception:
+                remove_partial()
+                raise
 
-        return download_path
+        raise DownloadError("Download failed after three attempts.")
 
     def get_and_make_download_path(self, post_title: str) -> Path:
         """
@@ -153,7 +193,7 @@ def find_audio_link(entry: Any) -> str:
         "audio/wav",
         "audio/flac",
     ]
-    
+
     # First pass: look for exact audio type matches
     for link in entry.links:
         link_type = getattr(link, "type", "") or ""
@@ -161,7 +201,7 @@ def find_audio_link(entry: Any) -> str:
             href = link.href
             assert isinstance(href, str)
             return href
-    
+
     # Second pass: look for any audio/* type
     for link in entry.links:
         link_type = getattr(link, "type", "") or ""
@@ -169,11 +209,14 @@ def find_audio_link(entry: Any) -> str:
             href = link.href
             assert isinstance(href, str)
             return href
-    
+
     # Third pass: look for enclosure with audio file extension
     for link in entry.links:
         href = getattr(link, "href", "") or ""
-        if any(href.lower().endswith(ext) for ext in [".mp3", ".ogg", ".m4a", ".mp4", ".aac", ".wav", ".flac"]):
+        if any(
+            href.lower().endswith(ext)
+            for ext in [".mp3", ".ogg", ".m4a", ".mp4", ".aac", ".wav", ".flac"]
+        ):
             assert isinstance(href, str)
             return href
 

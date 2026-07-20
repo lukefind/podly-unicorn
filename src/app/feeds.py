@@ -9,7 +9,13 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import feedparser  # type: ignore[import-untyped]
 import PyRSS2Gen  # type: ignore[import-untyped]
+import requests
 from flask import current_app, g, request
+
+from app.extensions import db
+from app.models import Feed, Post, User, UserFeedSubscription
+from app.runtime_config import config
+from podcast_processor.podcast_downloader import find_audio_link
 
 # Markers for idempotent CTA injection - never append blindly, always replace by marker
 PODLY_CTA_START = "<!-- PODLY_TRIGGER_START -->"
@@ -34,7 +40,14 @@ class ITunesImage:
 class ITunesRSSItem(PyRSS2Gen.RSSItem):
     """Extended RSSItem that supports iTunes image, author, content:encoded, and itunes:summary."""
 
-    def __init__(self, itunes_image_url: Optional[str] = None, itunes_author: Optional[str] = None, content_encoded: Optional[str] = None, itunes_summary: Optional[str] = None, **kwargs: Any):
+    def __init__(
+        self,
+        itunes_image_url: Optional[str] = None,
+        itunes_author: Optional[str] = None,
+        content_encoded: Optional[str] = None,
+        itunes_summary: Optional[str] = None,
+        **kwargs: Any,
+    ):
         super().__init__(**kwargs)
         self.itunes_image_url = itunes_image_url
         self.itunes_author = itunes_author
@@ -73,24 +86,26 @@ class ITunesRSSItem(PyRSS2Gen.RSSItem):
             if isinstance(self.pubDate, str):
                 PyRSS2Gen._element(handler, "pubDate", self.pubDate)
             else:
-                PyRSS2Gen._element(handler, "pubDate", PyRSS2Gen._format_date(self.pubDate))
+                PyRSS2Gen._element(
+                    handler, "pubDate", PyRSS2Gen._format_date(self.pubDate)
+                )
         if self.source is not None:
             self.source.publish(handler)
 
         # Add iTunes image if available
         if self.itunes_image_url:
             ITunesImage(self.itunes_image_url).publish(handler)
-        
+
         # Add iTunes author (show name) if available
         if self.itunes_author:
             PyRSS2Gen._element(handler, "itunes:author", self.itunes_author)
-        
+
         # Add content:encoded for richer HTML content (preferred by many podcast apps)
         if self.content_encoded:
             handler.startElement("content:encoded", {})
             handler.characters(self.content_encoded)
             handler.endElement("content:encoded")
-        
+
         # Add itunes:summary - many podcast apps prefer this over description
         if self.itunes_summary:
             handler.startElement("itunes:summary", {})
@@ -129,7 +144,9 @@ class ITunesRSS2(PyRSS2Gen.RSS2):
         if self.pubDate is not None:
             PyRSS2Gen._element(handler, "pubDate", PyRSS2Gen._format_date(self.pubDate))
         if self.lastBuildDate is not None:
-            PyRSS2Gen._element(handler, "lastBuildDate", PyRSS2Gen._format_date(self.lastBuildDate))
+            PyRSS2Gen._element(
+                handler, "lastBuildDate", PyRSS2Gen._format_date(self.lastBuildDate)
+            )
         for category in self.categories:
             if isinstance(category, str):
                 PyRSS2Gen._element(handler, "category", category)
@@ -160,21 +177,17 @@ class ITunesRSS2(PyRSS2Gen.RSS2):
         handler.endElement("channel")
         handler.endElement("rss")
 
-from app.extensions import db
-from app.models import Feed, Post, User, UserFeedSubscription
-from app.runtime_config import config
-from podcast_processor.podcast_downloader import find_audio_link
 
 logger = logging.getLogger("global_logger")
 
 
 def build_trigger_cta(trigger_url: str, html: bool = True) -> str:
     """Build a canonical CTA block with markers for idempotent injection.
-    
+
     Args:
         trigger_url: The URL to the trigger page
         html: If True, include HTML formatting; if False, plain text only
-    
+
     Returns:
         CTA block wrapped in PODLY_TRIGGER_START/END markers
     """
@@ -183,40 +196,37 @@ def build_trigger_cta(trigger_url: str, html: bool = True) -> str:
         inner = (
             f'<p style="margin-top: 16px; padding: 12px; background: #f3e8ff; '
             f'border-radius: 8px; border: 1px solid #c4b5fd;">'
-            f'<strong>Process this episode (remove ads)</strong><br/>'
+            f"<strong>Process this episode (remove ads)</strong><br/>"
             f'<a href="{trigger_url}" style="color: #7c3aed;">Tap here to queue ad removal</a><br/>'
-            f'<small>Or copy: {trigger_url}</small>'
-            f'</p>'
+            f"<small>Or copy: {trigger_url}</small>"
+            f"</p>"
         )
     else:
         # Plain text version - for itunes:summary
         inner = (
-            f"---\n"
-            f"Process this episode (remove ads):\n"
-            f"{trigger_url}\n"
-            f"---"
+            f"---\n" f"Process this episode (remove ads):\n" f"{trigger_url}\n" f"---"
         )
-    
+
     return f"{PODLY_CTA_START}\n{inner}\n{PODLY_CTA_END}"
 
 
 def inject_trigger_cta(original: str, trigger_url: str, html: bool = True) -> str:
     """Inject or replace the trigger CTA in a description string.
-    
+
     This is idempotent - calling it multiple times produces the same result.
     If a CTA block already exists (detected by markers), it is replaced.
     Otherwise, the CTA is appended.
-    
+
     Args:
         original: The original description text
         trigger_url: The URL to the trigger page
         html: If True, use HTML formatting; if False, plain text only
-    
+
     Returns:
         Description with exactly one CTA block
     """
     cta_block = build_trigger_cta(trigger_url, html=html)
-    
+
     if PODLY_CTA_START in original:
         # Replace existing block (idempotent)
         return _CTA_PATTERN.sub(cta_block, original)
@@ -227,14 +237,15 @@ def inject_trigger_cta(original: str, trigger_url: str, html: bool = True) -> st
 
 def _get_base_url() -> str:
     import os
-    from app.models import EmailSettings
+
     from app.extensions import db
-    
+    from app.models import EmailSettings
+
     # Priority 1: Environment variable PUBLIC_BASE_URL
     env_base_url = os.environ.get("PUBLIC_BASE_URL")
     if env_base_url:
         return env_base_url.rstrip("/")
-    
+
     # Priority 2: app_base_url from EmailSettings (configured in UI)
     try:
         email_settings = db.session.get(EmailSettings, 1)
@@ -242,7 +253,7 @@ def _get_base_url() -> str:
             return email_settings.app_base_url.rstrip("/")
     except Exception:
         pass  # Database not available or settings not configured
-    
+
     # Priority 3: Detect from request headers
     try:
         # Check various ways HTTP/2 pseudo-headers might be available
@@ -256,12 +267,9 @@ def _get_base_url() -> str:
             or request.headers.get("authority")
             or request.environ.get("HTTP2_AUTHORITY")
         )
-        
+
         # Prefer X-Forwarded-Host over Host header (set by reverse proxy)
-        host = (
-            request.headers.get("X-Forwarded-Host")
-            or request.headers.get("Host")
-        )
+        host = request.headers.get("X-Forwarded-Host") or request.headers.get("Host")
 
         if http2_scheme and http2_authority:
             return f"{http2_scheme}://{http2_authority}"
@@ -278,13 +286,15 @@ def _get_base_url() -> str:
                 or request.scheme == "https"
             )
             scheme = "https" if is_https else "http"
-            
+
             # Strip port from host if present and using standard ports
             if ":" in host:
                 host_part, port_part = host.rsplit(":", 1)
-                if (scheme == "https" and port_part == "443") or (scheme == "http" and port_part == "80"):
+                if (scheme == "https" and port_part == "443") or (
+                    scheme == "http" and port_part == "80"
+                ):
                     host = host_part
-            
+
             return f"{scheme}://{host}"
     except RuntimeError:
         # Working outside of request context
@@ -296,7 +306,14 @@ def _get_base_url() -> str:
 
 def fetch_feed(url: str) -> feedparser.FeedParserDict:
     logger.info(f"Fetching feed from URL: {url}")
-    feed_data = feedparser.parse(url)
+    response = requests.get(
+        url,
+        headers={"User-Agent": feedparser.USER_AGENT},
+        timeout=(10, 30),
+    )
+    response.raise_for_status()
+    feed_data = feedparser.parse(response.content)
+    feed_data.href = response.url
     for entry in feed_data.entries:
         entry.id = get_guid(entry)
     return feed_data
@@ -339,10 +356,8 @@ def refresh_feed(feed: Feed) -> list[str]:
                 and p.release_date.date() < oldest_post.release_date.date()
             ):
                 p.whitelisted = False
-                logger.debug(
-                    f"skipping post from archive due to \
-number_of_episodes_to_whitelist_from_archive_of_new_feed setting: {entry.title}"
-                )
+                logger.debug(f"skipping post from archive due to \
+number_of_episodes_to_whitelist_from_archive_of_new_feed setting: {entry.title}")
             else:
                 if auto_download_enabled:
                     p.whitelisted = True
@@ -355,7 +370,9 @@ number_of_episodes_to_whitelist_from_archive_of_new_feed setting: {entry.title}"
             # Update existing post's description if it was empty or has changed
             existing_post = existing_posts[entry.id]
             new_description = _extract_description(entry)
-            if new_description and (not existing_post.description or existing_post.description.strip() == ""):
+            if new_description and (
+                not existing_post.description or existing_post.description.strip() == ""
+            ):
                 existing_post.description = new_description
                 db.session.add(existing_post)
                 logger.debug(f"Updated description for existing post: {entry.title}")
@@ -375,7 +392,7 @@ def add_or_refresh_feed(url: str) -> Feed:
     feed = Feed.query.filter_by(rss_url=url).first()
     if not feed and feed_data.href != url:
         feed = Feed.query.filter_by(rss_url=feed_data.href).first()
-    
+
     if feed:
         refresh_feed(feed)
     else:
@@ -398,13 +415,12 @@ def add_feed(feed_data: feedparser.FeedParserDict) -> Feed:
 
         num_posts_added = 0
         limit = config.number_of_episodes_to_whitelist_from_archive_of_new_feed
-        logger.info(f"Adding feed with {len(feed_data.entries)} entries, whitelist limit={limit}, auto_whitelist={config.automatically_whitelist_new_episodes}")
+        logger.info(
+            f"Adding feed with {len(feed_data.entries)} entries, whitelist limit={limit}, auto_whitelist={config.automatically_whitelist_new_episodes}"
+        )
         for entry in feed_data.entries:
             p = make_post(feed, entry)
-            if (
-                limit is not None
-                and num_posts_added >= limit
-            ):
+            if limit is not None and num_posts_added >= limit:
                 logger.debug(
                     f"Whitelist limit reached ({num_posts_added} >= {limit}), disabling: {entry.title}"
                 )
@@ -412,7 +428,9 @@ def add_feed(feed_data: feedparser.FeedParserDict) -> Feed:
             else:
                 num_posts_added += 1
                 p.whitelisted = config.automatically_whitelist_new_episodes
-                logger.debug(f"Whitelisting episode {num_posts_added}/{limit}: {entry.title}")
+                logger.debug(
+                    f"Whitelisting episode {num_posts_added}/{limit}: {entry.title}"
+                )
             # Don't auto-create jobs - processing is triggered on-demand via UI or RSS request
             db.session.add(p)
         db.session.commit()
@@ -432,7 +450,7 @@ def feed_item(
     """
     Given a post, return the corresponding RSS item. Reference:
     https://github.com/Podcast-Standards-Project/PSP-1-Podcast-RSS-Specification?tab=readme-ov-file#required-item-elements
-    
+
     Args:
         post: The post to create an RSS item for
         include_show_name: If True, include the original show name as itunes:author (for combined feeds)
@@ -440,10 +458,12 @@ def feed_item(
     """
 
     base_url = _get_base_url()
-    
+
     # Ensure base_url uses https for public URLs (avoid leaking http://localhost)
     # This is critical for RSS feeds consumed by external podcast apps
-    if base_url.startswith("http://localhost") or base_url.startswith("http://127.0.0.1"):
+    if base_url.startswith("http://localhost") or base_url.startswith(
+        "http://127.0.0.1"
+    ):
         # Fallback: use the configured public domain or keep as-is for local dev
         pass  # Local dev is fine with http://localhost
     elif base_url.startswith("http://"):
@@ -457,18 +477,20 @@ def feed_item(
         # Trigger URL uses feed-scoped token - this is the explicit user action to start processing
         trigger_url = f"{base_url}/trigger?guid={post.guid}&feed_token={token_id}&feed_secret={secret}"
     else:
-        audio_url = _append_feed_token_params(f"{base_url}/api/posts/{post.guid}/download")
+        audio_url = _append_feed_token_params(
+            f"{base_url}/api/posts/{post.guid}/download"
+        )
         # Build trigger URL with current request's feed token
         trigger_url = _append_feed_token_params(f"{base_url}/trigger?guid={post.guid}")
 
     # Build description with trigger link for podcast apps
     # Uses idempotent injection - exactly one CTA block, detectable by markers
     original_description = post.description or ""
-    
+
     # description and content:encoded: HTML CTA (single canonical block)
     description = inject_trigger_cta(original_description, trigger_url, html=True)
     content_encoded = description
-    
+
     # itunes:summary: plain text CTA (many apps prefer this field, no HTML)
     itunes_summary = inject_trigger_cta(original_description, trigger_url, html=False)
 
@@ -522,26 +544,27 @@ def generate_feed_xml(feed: Feed) -> Any:
 
 def generate_combined_feed_xml(user_id: int, username: str) -> Any:
     """Generate a combined RSS feed with all episodes from a user's subscribed podcasts.
-    
+
     IMPORTANT: Enclosure URLs use feed-scoped tokens (not the combined token).
     This allows podcast apps to trigger on-demand processing when downloading,
     while the combined token only authorizes listing episodes (read-only).
     """
     from typing import Dict, List
+
     from app.auth.feed_tokens import create_feed_access_token
-    
+
     logger.info(f"Generating combined feed for user {user_id}")
-    
+
     # Get the user for token creation
     user = User.query.get(user_id)
     if not user:
         logger.error(f"User {user_id} not found for combined feed generation")
         return None
-    
+
     # Get all feeds the user is subscribed to
     subscriptions = UserFeedSubscription.query.filter_by(user_id=user_id).all()
     feed_ids = [sub.feed_id for sub in subscriptions]
-    
+
     if not feed_ids:
         # Return empty feed if no subscriptions
         base_url = _get_base_url()
@@ -554,39 +577,46 @@ def generate_combined_feed_xml(user_id: int, username: str) -> Any:
             image=PyRSS2Gen.Image(
                 url=f"{base_url}/images/logos/original-logo.png",
                 title="Podly",
-                link=link
+                link=link,
             ),
             items=[],
         )
         return rss_feed.to_xml("utf-8")
-    
+
     # Pre-fetch all feeds and create feed-scoped tokens for each
     # This ensures enclosure URLs use feed-scoped tokens that can trigger processing
-    feeds_by_id: Dict[int, Feed] = {f.id: f for f in Feed.query.filter(Feed.id.in_(feed_ids)).all()}
+    feeds_by_id: Dict[int, Feed] = {
+        f.id: f for f in Feed.query.filter(Feed.id.in_(feed_ids)).all()
+    }
     feed_tokens: Dict[int, tuple[str, str]] = {}
     for feed_id in feed_ids:
         feed = feeds_by_id.get(feed_id)
         if feed:
             token_id, secret = create_feed_access_token(user, feed)
             feed_tokens[feed_id] = (token_id, secret)
-    
+
     # Get all posts from subscribed feeds, sorted by release date (newest first)
-    posts: List[Post] = Post.query.filter(
-        Post.feed_id.in_(feed_ids)
-    ).order_by(Post.release_date.desc()).limit(200).all()
-    
+    posts: List[Post] = (
+        Post.query.filter(Post.feed_id.in_(feed_ids))
+        .order_by(Post.release_date.desc())
+        .limit(200)
+        .all()
+    )
+
     # Generate feed items with feed-scoped tokens for enclosure URLs
     # This allows on-demand processing when podcast apps download episodes
     items = []
     for post in posts:
         token_override = feed_tokens.get(post.feed_id) if post.feed_id else None
-        items.append(feed_item(post, include_show_name=True, feed_token_override=token_override))
-    
+        items.append(
+            feed_item(post, include_show_name=True, feed_token_override=token_override)
+        )
+
     base_url = _get_base_url()
     link = _append_feed_token_params(f"{base_url}/feed/combined")
-    
+
     last_build_date = datetime.datetime.now(datetime.timezone.utc)
-    
+
     # Use Podly logo for the feed image
     rss_feed = ITunesRSS2(
         title="Podly",
@@ -594,13 +624,13 @@ def generate_combined_feed_xml(user_id: int, username: str) -> Any:
         description=f"All your ad-free podcasts in one feed. Currently subscribed to {len(feed_ids)} shows.",
         lastBuildDate=last_build_date,
         image=PyRSS2Gen.Image(
-            url=f"{base_url}/images/logos/original-logo.png",
-            title="Podly",
-            link=link
+            url=f"{base_url}/images/logos/original-logo.png", title="Podly", link=link
         ),
         items=items,
     )
-    logger.info(f"Combined feed generated for user {user_id} with {len(items)} episodes from {len(feed_ids)} feeds")
+    logger.info(
+        f"Combined feed generated for user {user_id} with {len(items)} episodes from {len(feed_ids)} feeds"
+    )
     return rss_feed.to_xml("utf-8")
 
 
@@ -618,7 +648,10 @@ def _append_feed_token_params(url: str) -> str:
     if token_result is not None:
         token_id = token_id or token_result.token.token_id
         if not secret:
-            from app.auth.feed_tokens import _lookup_existing_token_secret  # pylint: disable=import-outside-toplevel
+            from app.auth.feed_tokens import (
+                _lookup_existing_token_secret,  # pylint: disable=import-outside-toplevel
+            )
+
             secret = _lookup_existing_token_secret(token_result.token)
 
     if not token_id or not secret:
@@ -634,7 +667,7 @@ def _append_feed_token_params(url: str) -> str:
 
 def _extract_description(entry: feedparser.FeedParserDict) -> str:
     """Extract episode description from various RSS fields with fallback.
-    
+
     Priority order:
     1. content:encoded (richest HTML content, exposed as entry.content by feedparser)
     2. description (standard RSS)
@@ -647,22 +680,22 @@ def _extract_description(entry: feedparser.FeedParserDict) -> str:
         value = content[0].get("value", "")
         if value and value.strip():
             return value.strip()
-    
+
     # Try standard description
     description = entry.get("description", "")
     if description and description.strip():
         return description.strip()
-    
+
     # Try summary (feedparser normalized field)
     summary = entry.get("summary", "")
     if summary and summary.strip():
         return summary.strip()
-    
+
     # Try itunes_summary
     itunes_summary = getattr(entry, "itunes_summary", "")
     if itunes_summary and itunes_summary.strip():
         return itunes_summary.strip()
-    
+
     return ""
 
 
@@ -790,5 +823,3 @@ def get_duration(entry: feedparser.FeedParserDict) -> Optional[int]:
     except Exception:  # pylint: disable=broad-except
         logger.error("Failed to get duration")
         return None
-
-
