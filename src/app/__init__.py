@@ -290,8 +290,19 @@ def _configure_scheduler(app: Flask) -> None:
 
 
 def _configure_database(app: Flask) -> None:
-    project_root = Path(__file__).resolve().parents[2]
-    db_path = (project_root / "src" / "instance" / "sqlite3.db").resolve()
+    # Resolve the SQLite path through PODLY_INSTANCE_DIR when set — the same
+    # override the podcast-data paths honor (see shared/processing_paths.py) —
+    # so pointing that env var at a scratch directory redirects the database
+    # too (e.g. for sandboxed migration testing). When unset, fall back to the
+    # repo/container instance dir (<root>/src/instance), which is correct for
+    # both local dev and the Docker image (WORKDIR /app).
+    instance_override = os.environ.get("PODLY_INSTANCE_DIR")
+    if instance_override:
+        instance_dir = Path(instance_override)
+    else:
+        instance_dir = Path(__file__).resolve().parents[2] / "src" / "instance"
+    instance_dir.mkdir(parents=True, exist_ok=True)
+    db_path = (instance_dir / "sqlite3.db").resolve()
     app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}?timeout=90"
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "connect_args": {
