@@ -133,9 +133,7 @@ def mock_feed():
 
 @mock.patch("app.feeds.requests.get")
 @mock.patch("app.feeds.feedparser.parse")
-def test_fetch_feed_uses_bounded_http_request(
-    mock_parse, mock_get, mock_feed_data
-):
+def test_fetch_feed_uses_bounded_http_request(mock_parse, mock_get, mock_feed_data):
     response = mock.MagicMock()
     response.content = b"<rss><channel /></rss>"
     response.url = "https://cdn.example.com/final.xml"
