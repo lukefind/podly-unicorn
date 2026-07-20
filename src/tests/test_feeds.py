@@ -6,6 +6,7 @@ from unittest import mock
 import feedparser
 import PyRSS2Gen
 import pytest
+import requests
 
 from app.feeds import (
     _extract_description,
@@ -130,14 +131,41 @@ def mock_feed():
     return MockFeed()
 
 
+@mock.patch("app.feeds.requests.get")
 @mock.patch("app.feeds.feedparser.parse")
-def test_fetch_feed(mock_parse, mock_feed_data):
+def test_fetch_feed_uses_bounded_http_request(
+    mock_parse, mock_get, mock_feed_data
+):
+    response = mock.MagicMock()
+    response.content = b"<rss><channel /></rss>"
+    response.url = "https://cdn.example.com/final.xml"
+    mock_get.return_value = response
     mock_parse.return_value = mock_feed_data
 
     result = fetch_feed("https://example.com/feed.xml")
 
     assert result == mock_feed_data
-    mock_parse.assert_called_once_with("https://example.com/feed.xml")
+    mock_get.assert_called_once_with(
+        "https://example.com/feed.xml",
+        headers={"User-Agent": feedparser.USER_AGENT},
+        timeout=(10, 30),
+    )
+    response.raise_for_status.assert_called_once_with()
+    mock_parse.assert_called_once_with(response.content)
+    assert result.href == response.url
+
+
+@mock.patch("app.feeds.requests.get")
+@mock.patch("app.feeds.feedparser.parse")
+def test_fetch_feed_propagates_http_errors_without_parsing(mock_parse, mock_get):
+    response = mock.MagicMock()
+    response.raise_for_status.side_effect = requests.HTTPError("upstream failed")
+    mock_get.return_value = response
+
+    with pytest.raises(requests.HTTPError, match="upstream failed"):
+        fetch_feed("https://example.com/feed.xml")
+
+    mock_parse.assert_not_called()
 
 
 def test_refresh_feed(mock_db_session):

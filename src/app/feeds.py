@@ -9,6 +9,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import feedparser  # type: ignore[import-untyped]
 import PyRSS2Gen  # type: ignore[import-untyped]
+import requests
 from flask import current_app, g, request
 
 # Markers for idempotent CTA injection - never append blindly, always replace by marker
@@ -296,7 +297,14 @@ def _get_base_url() -> str:
 
 def fetch_feed(url: str) -> feedparser.FeedParserDict:
     logger.info(f"Fetching feed from URL: {url}")
-    feed_data = feedparser.parse(url)
+    response = requests.get(
+        url,
+        headers={"User-Agent": feedparser.USER_AGENT},
+        timeout=(10, 30),
+    )
+    response.raise_for_status()
+    feed_data = feedparser.parse(response.content)
+    feed_data.href = response.url
     for entry in feed_data.entries:
         entry.id = get_guid(entry)
     return feed_data
@@ -790,5 +798,4 @@ def get_duration(entry: feedparser.FeedParserDict) -> Optional[int]:
     except Exception:  # pylint: disable=broad-except
         logger.error("Failed to get duration")
         return None
-
 
