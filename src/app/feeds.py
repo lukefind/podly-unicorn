@@ -5,7 +5,7 @@ import uuid
 import xml.dom.minidom
 from email.utils import format_datetime, parsedate_to_datetime
 from typing import Any, Optional
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 
 import feedparser  # type: ignore[import-untyped]
 import PyRSS2Gen  # type: ignore[import-untyped]
@@ -319,6 +319,37 @@ def fetch_feed(url: str) -> feedparser.FeedParserDict:
     return feed_data
 
 
+def _match_existing_post_for_entry(
+    entry: feedparser.FeedParserDict,
+    existing_posts: dict[str, Post],
+    existing_posts_by_url: dict[str, Post],
+) -> tuple[Optional[Post], bool]:
+    """Return (stored post for `entry`, whether its guid was repaired).
+
+    When the guid doesn't match, try recovering by audio URL. This catches
+    posts whose stored guid was synthesized from the enclosure URL by the
+    legacy `get_guid` fallback. Without this lookup, the corrected upstream
+    guid would orphan the existing row and the episode would re-appear to
+    subscribers as new.
+    """
+    existing_post = existing_posts.get(entry.id)
+    if existing_post is not None:
+        return existing_post, False
+    audio_url = find_audio_link(entry)
+    if not audio_url:
+        return None, False
+    existing_post = existing_posts_by_url.get(audio_url)
+    if existing_post is None or existing_post.guid == entry.id:
+        return existing_post, False
+    logger.info(
+        f"Repairing legacy guid for post {existing_post.id}: "
+        f"{existing_post.guid} -> {entry.id}"
+    )
+    existing_post.guid = entry.id
+    db.session.add(existing_post)
+    return existing_post, True
+
+
 def refresh_feed(feed: Feed) -> list[str]:
     logger.info(f"Refreshing feed with ID: {feed.id}")
     feed_data = fetch_feed(feed.rss_url)
@@ -330,6 +361,7 @@ def refresh_feed(feed: Feed) -> list[str]:
         > 0
     )
     auto_process_post_guids: list[str] = []
+    changed = False
 
     image_info = feed_data.feed.get("image")
     if image_info and "href" in image_info:
@@ -337,15 +369,26 @@ def refresh_feed(feed: Feed) -> list[str]:
         if feed.image_url != new_image_url:
             feed.image_url = new_image_url
             db.session.add(feed)
+            changed = True
 
     existing_posts = {post.guid: post for post in feed.posts}  # type: ignore[attr-defined]
+    existing_posts_by_url = {
+        post.download_url: post
+        for post in feed.posts  # type: ignore[attr-defined]
+        if post.download_url
+    }
     oldest_post = min(
         (post for post in feed.posts if post.release_date),  # type: ignore[attr-defined]
         key=lambda p: p.release_date,
         default=None,
     )
     for entry in feed_data.entries:
-        if entry.id not in existing_posts:
+        existing_post, guid_repaired = _match_existing_post_for_entry(
+            entry, existing_posts, existing_posts_by_url
+        )
+        if guid_repaired:
+            changed = True
+        if existing_post is None:
             logger.debug(f"found new podcast: {entry.title}")
             p = make_post(feed, entry)
             # do not allow automatic download of any backcatalog added to the feed
@@ -366,16 +409,22 @@ number_of_episodes_to_whitelist_from_archive_of_new_feed setting: {entry.title}"
                     p.whitelisted = config.automatically_whitelist_new_episodes
             # Don't auto-create jobs by default; auto-processing is managed by callers.
             db.session.add(p)
+            changed = True
         else:
             # Update existing post's description if it was empty or has changed
-            existing_post = existing_posts[entry.id]
             new_description = _extract_description(entry)
             if new_description and (
                 not existing_post.description or existing_post.description.strip() == ""
             ):
                 existing_post.description = new_description
                 db.session.add(existing_post)
+                changed = True
                 logger.debug(f"Updated description for existing post: {entry.title}")
+    if changed:
+        # Advances the RSS ETag/Last-Modified validators so readers pick up
+        # the new content on their next conditional poll.
+        feed.last_changed_at = datetime.datetime.utcnow()
+        db.session.add(feed)
     db.session.commit()
     logger.info(f"Feed with ID: {feed.id} refreshed")
     return auto_process_post_guids
@@ -470,18 +519,23 @@ def feed_item(
         # Force https for any non-localhost URL
         base_url = "https://" + base_url[7:]
 
-    # Generate URLs that will be proxied by the frontend to the backend
+    # Generate URLs that will be proxied by the frontend to the backend.
+    # GUIDs may be URLs themselves (Supercast et al.), so they are always
+    # percent-encoded before being embedded in a path or query string.
+    encoded_guid = quote(post.guid, safe="")
     if feed_token_override:
         token_id, secret = feed_token_override
-        audio_url = f"{base_url}/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+        audio_url = f"{base_url}/api/posts/{encoded_guid}/download?feed_token={token_id}&feed_secret={secret}"
         # Trigger URL uses feed-scoped token - this is the explicit user action to start processing
-        trigger_url = f"{base_url}/trigger?guid={post.guid}&feed_token={token_id}&feed_secret={secret}"
+        trigger_url = f"{base_url}/trigger?guid={encoded_guid}&feed_token={token_id}&feed_secret={secret}"
     else:
         audio_url = _append_feed_token_params(
-            f"{base_url}/api/posts/{post.guid}/download"
+            f"{base_url}/api/posts/{encoded_guid}/download"
         )
         # Build trigger URL with current request's feed token
-        trigger_url = _append_feed_token_params(f"{base_url}/trigger?guid={post.guid}")
+        trigger_url = _append_feed_token_params(
+            f"{base_url}/trigger?guid={encoded_guid}"
+        )
 
     # Build description with trigger link for podcast apps
     # Uses idempotent injection - exactly one CTA block, detectable by markers
@@ -528,7 +582,12 @@ def generate_feed_xml(feed: Feed) -> Any:
     base_url = _get_base_url()
     link = _append_feed_token_params(f"{base_url}/feed/{feed.id}")
 
-    last_build_date = datetime.datetime.now(datetime.timezone.utc)
+    # Keep lastBuildDate stable while nothing changes so repeated renders of
+    # an unchanged feed stay byte-identical for caches.
+    if feed.last_changed_at is not None:
+        last_build_date = feed.last_changed_at.replace(tzinfo=datetime.timezone.utc)
+    else:
+        last_build_date = datetime.datetime.now(datetime.timezone.utc)
 
     rss_feed = ITunesRSS2(
         title="[podly] " + feed.title,
@@ -807,14 +866,21 @@ def _format_pub_date(release_date: Optional[datetime.datetime]) -> Optional[str]
     return format_datetime(normalized.astimezone(datetime.timezone.utc))
 
 
-# sometimes feed entry ids are the post url or something else
 def get_guid(entry: feedparser.FeedParserDict) -> str:
-    try:
-        uuid.UUID(entry.id)
-        return str(entry.id)
-    except ValueError:
-        dlurl = find_audio_link(entry)
-        return str(uuid.uuid5(uuid.NAMESPACE_URL, dlurl))
+    """Return the post GUID, preferring the upstream ``<guid>`` verbatim.
+
+    Real feeds rarely use UUIDs as their ``<guid>``; URLs and ``tag:`` URIs
+    are common. Hashing the enclosure URL as a substitute breaks subscribers
+    whenever the CDN path or tracking params change, so only fall back to
+    URL hashing when the upstream provides no usable id.
+    """
+    raw = getattr(entry, "id", None) or getattr(entry, "guid", None)
+    if isinstance(raw, str):
+        candidate = raw.strip()
+        if candidate:
+            return candidate
+    dlurl = find_audio_link(entry)
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, dlurl))
 
 
 def get_duration(entry: feedparser.FeedParserDict) -> Optional[int]:

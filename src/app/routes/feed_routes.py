@@ -1,9 +1,14 @@
+import datetime
+import hashlib
 import logging
 import re
+import time
 from pathlib import Path
-from threading import Thread
-from typing import Any, cast
+from threading import Lock, Thread
+from typing import Any, Optional, cast
 from urllib.parse import urlencode, urlparse, urlunparse
+
+from werkzeug.http import http_date
 
 import requests
 import validators
@@ -468,28 +473,138 @@ def get_combined_feed() -> Response:
     return response
 
 
+# Per-feed cooldown for read-triggered background refreshes, so bursty
+# pollers don't fan out into one upstream fetch per request.
+_AUTO_REFRESH_COOLDOWN_SECONDS = 60.0
+_BACKGROUND_REFRESH_LOCK = Lock()
+_BACKGROUND_REFRESH_LAST_KICKOFF: dict[int, float] = {}
+
+
+def _aware_utc(value: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+    """Return the naive-UTC timestamp as an aware UTC datetime."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc)
+
+
+def _compute_feed_etag(feed: Feed) -> str:
+    """Build a strong ETag value (bare hash, unquoted) for `feed`'s state.
+
+    Inputs are chosen so the tag changes whenever the rendered XML can
+    change: `last_changed_at` covers post/channel updates; the post-count
+    and max post-id together catch row creations and (rare) deletions even
+    if `last_changed_at` is briefly stale.
+    """
+    post_count, max_post_id = (
+        db.session.query(db.func.count(Post.id), db.func.max(Post.id))
+        .filter(Post.feed_id == feed.id)
+        .one()
+    )
+    last_changed = feed.last_changed_at or datetime.datetime.utcnow()
+    payload = (
+        f"{feed.id}:{last_changed.isoformat()}:{post_count or 0}:{max_post_id or 0}"
+    )
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+
+
+def _client_has_current_version(
+    etag: str, last_modified_aware: Optional[datetime.datetime]
+) -> bool:
+    """True if the request signals it already has this exact response.
+
+    Honors `If-None-Match` (preferred) and `If-Modified-Since` (legacy).
+    `etag` is the bare digest (without surrounding quotes).
+    """
+    if request.if_none_match and request.if_none_match.contains(etag):
+        return True
+    if last_modified_aware is not None and request.if_modified_since is not None:
+        # HTTP dates are second-resolution; drop microseconds before comparing.
+        last_modified = last_modified_aware.replace(microsecond=0)
+        if_modified_since = request.if_modified_since
+        if if_modified_since.tzinfo is None:
+            if_modified_since = if_modified_since.replace(
+                tzinfo=datetime.timezone.utc
+            )
+        if last_modified <= if_modified_since:
+            return True
+    return False
+
+
+def _apply_feed_response_headers(
+    response: Response, etag: str, last_modified_aware: datetime.datetime
+) -> None:
+    response.headers["ETag"] = f'"{etag}"'
+    response.headers["Last-Modified"] = http_date(last_modified_aware)
+    response.headers["Cache-Control"] = "public, max-age=60"
+
+
+def _make_feed_304(etag: str, last_modified_aware: datetime.datetime) -> Response:
+    response = make_response("", 304)
+    _apply_feed_response_headers(response, etag, last_modified_aware)
+    return response
+
+
+def _should_kickoff_async_refresh(feed_id: int) -> bool:
+    """True iff the per-feed cooldown has elapsed; reserves the next slot."""
+    now = time.monotonic()
+    with _BACKGROUND_REFRESH_LOCK:
+        last = _BACKGROUND_REFRESH_LAST_KICKOFF.get(feed_id)
+        if last is not None and now - last < _AUTO_REFRESH_COOLDOWN_SECONDS:
+            return False
+        _BACKGROUND_REFRESH_LAST_KICKOFF[feed_id] = now
+        return True
+
+
+def _spawn_async_refresh(app: Flask, feed_id: int) -> None:
+    # `_refresh_feed_background` (defined below) also starts processing for
+    # auto-download subscribers, matching the scheduled refresh behavior.
+    Thread(
+        target=_refresh_feed_background,
+        args=(app, feed_id),
+        daemon=True,
+        name=f"feed-auto-refresh-{feed_id}",
+    ).start()
+
+
 @feed_bp.route("/feed/<int:f_id>", methods=["GET"])
 def get_feed(f_id: int) -> Response:
     feed = Feed.query.get_or_404(f_id)
-    
+
     # Get current user for tracking (may be None for unauthenticated access)
     current = getattr(g, "current_user", None)
     user_id = current.id if current else None
-    
+
     # Record RSS_READ event
     _record_rss_read(feed_id=f_id, user_id=user_id, auth_type="feed_scoped" if current else "none")
 
-    # Try to refresh the feed, but don't fail if upstream is unavailable
-    try:
-        refresh_feed(feed)
-    except Exception as exc:  # pylint: disable=broad-except
-        logger.warning("Failed to refresh feed %s, serving cached data: %s", f_id, exc)
+    # Fast path: if the reader already has the current version, answer 304
+    # before any upstream fetch or XML build. The scheduled refresh job and
+    # the read-triggered background refresh below keep content fresh.
+    cached_etag = _compute_feed_etag(feed)
+    cached_last_modified = _aware_utc(feed.last_changed_at)
+    if cached_last_modified is not None and _client_has_current_version(
+        cached_etag, cached_last_modified
+    ):
+        return _make_feed_304(cached_etag, cached_last_modified)
+
+    # Don't block the response on an upstream RSS fetch; nudge a debounced
+    # background refresh instead so readers get the previous version at most
+    # one poll longer.
+    if _should_kickoff_async_refresh(f_id):
+        _spawn_async_refresh(cast(Any, current_app)._get_current_object(), f_id)
 
     # Generate the XML from cached data
     xml_content = generate_feed_xml(feed)
 
     response = make_response(xml_content)
     response.headers["Content-Type"] = "application/rss+xml"
+    _apply_feed_response_headers(
+        response,
+        cached_etag,
+        cached_last_modified or datetime.datetime.now(datetime.timezone.utc),
+    )
     return response
 
 

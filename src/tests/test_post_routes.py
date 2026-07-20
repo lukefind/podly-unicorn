@@ -5,6 +5,50 @@ from app.models import Feed, Post, User, UserFeedSubscription
 from app.routes.post_routes import post_bp
 
 
+def test_url_shaped_guid_routes_resolve(app):
+    """Routes taking a guid must accept GUIDs containing slashes (feeds like
+    Supercast publish URLs as GUIDs)."""
+    app.testing = True
+    app.config["SECRET_KEY"] = "test-secret"
+    app.config["AUTH_SETTINGS"] = AuthSettings(
+        require_auth=True,
+        admin_username="admin",
+        admin_password="password",
+    )
+    app.config["REQUIRE_AUTH"] = True
+    init_auth_middleware(app)
+    app.register_blueprint(post_bp)
+
+    guid = "https://pub.example.com/episodes/1"
+    with app.app_context():
+        feed = Feed(title="Test Feed", rss_url="https://example.com/feed.xml")
+        db.session.add(feed)
+        db.session.commit()
+
+        user = User(username="listener", role="user")
+        user.set_password("password123")
+        db.session.add(user)
+        db.session.commit()
+
+        post = Post(
+            feed_id=feed.id,
+            guid=guid,
+            download_url="https://cdn.example.com/ep1.mp3",
+            title="Test Episode",
+            whitelisted=True,
+        )
+        db.session.add(post)
+        db.session.commit()
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session[SESSION_USER_KEY] = user.id
+
+        response = client.get(f"/post/{guid}/json")
+        assert response.status_code == 200
+        assert response.get_json()["guid"] == guid
+
+
 def test_download_endpoints_increment_counter(app, tmp_path):
     """Ensure both processed and original downloads increment the counter."""
     app.testing = True

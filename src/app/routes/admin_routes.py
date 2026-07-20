@@ -33,7 +33,7 @@ def _require_admin() -> bool:
 # Transcript Export
 # =========================================================================
 
-@admin_bp.route("/api/posts/<string:p_guid>/transcript/export", methods=["GET"])
+@admin_bp.route("/api/posts/<path:p_guid>/transcript/export", methods=["GET"])
 def api_export_transcript(p_guid: str) -> ResponseReturnValue:
     """Export transcript for a single episode.
 

@@ -1,6 +1,7 @@
 import logging
 import os
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import quote
 
 from app.extensions import db as _db
 from app.models import Post, ProcessingJob
@@ -158,7 +159,7 @@ class JobManager:
                     "status": "skipped",
                     "message": "Post already processed",
                     "job_id": getattr(job, "id", None),
-                    "download_url": f"/api/posts/{self.post_guid}/download",
+                    "download_url": f"/api/posts/{quote(self.post_guid, safe='')}/download",
                 },
             )
 

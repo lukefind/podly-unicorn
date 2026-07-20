@@ -134,7 +134,7 @@ export const feedsApi = {
   },
 
   togglePostWhitelist: async (guid: string, whitelisted: boolean): Promise<void> => {
-    await api.post(`/api/posts/${guid}/whitelist`, { whitelisted });
+    await api.post(`/api/posts/${encodeURIComponent(guid)}/whitelist`, { whitelisted });
   },
 
   toggleAllPostsWhitelist: async (feedId: number): Promise<{ message: string; whitelisted_count: number; total_count: number; all_whitelisted: boolean }> => {
@@ -205,7 +205,7 @@ export const feedsApi = {
     feed_id: number;
     feed_title: string;
   }> => {
-    const response = await api.get(`/api/posts/${guid}/trigger_link`);
+    const response = await api.get(`/api/posts/${encodeURIComponent(guid)}/trigger_link`);
     return response.data;
   },
 
@@ -276,12 +276,12 @@ export const feedsApi = {
 
   // New post processing methods
   processPost: async (guid: string): Promise<{ status: string; job_id?: string; message: string; download_url?: string }> => {
-    const response = await api.post(`/api/posts/${guid}/process`);
+    const response = await api.post(`/api/posts/${encodeURIComponent(guid)}/process`);
     return response.data;
   },
 
   reprocessPost: async (guid: string): Promise<{ status: string; job_id?: string; message: string; download_url?: string }> => {
-    const response = await api.post(`/api/posts/${guid}/reprocess`);
+    const response = await api.post(`/api/posts/${encodeURIComponent(guid)}/reprocess`);
     return response.data;
   },
 
@@ -294,28 +294,28 @@ export const feedsApi = {
     download_url?: string;
     error?: string;
   }> => {
-    const response = await api.get(`/api/posts/${guid}/status`);
+    const response = await api.get(`/api/posts/${encodeURIComponent(guid)}/status`);
     return response.data;
   },
 
   // Get audio URL for post
   getPostAudioUrl: (guid: string): string => {
-    return buildAbsoluteUrl(`/api/posts/${guid}/audio`);
+    return buildAbsoluteUrl(`/api/posts/${encodeURIComponent(guid)}/audio`);
   },
 
   // Get download URL for processed post
   getPostDownloadUrl: (guid: string): string => {
-    return buildAbsoluteUrl(`/api/posts/${guid}/download`);
+    return buildAbsoluteUrl(`/api/posts/${encodeURIComponent(guid)}/download`);
   },
 
   // Get download URL for original post
   getPostOriginalDownloadUrl: (guid: string): string => {
-    return buildAbsoluteUrl(`/api/posts/${guid}/download/original`);
+    return buildAbsoluteUrl(`/api/posts/${encodeURIComponent(guid)}/download/original`);
   },
 
   // Download processed post
   downloadPost: async (guid: string): Promise<void> => {
-    const response = await api.get(`/api/posts/${guid}/download`, {
+    const response = await api.get(`/api/posts/${encodeURIComponent(guid)}/download`, {
       responseType: 'blob',
     });
 
@@ -332,7 +332,7 @@ export const feedsApi = {
 
   // Download original post
   downloadOriginalPost: async (guid: string): Promise<void> => {
-    const response = await api.get(`/api/posts/${guid}/download/original`, {
+    const response = await api.get(`/api/posts/${encodeURIComponent(guid)}/download/original`, {
       responseType: 'blob',
     });
 
@@ -443,7 +443,7 @@ export const feedsApi = {
       completed_at: string | null;
     } | null;
   }> => {
-    const response = await api.get(`/api/posts/${guid}/stats`);
+    const response = await api.get(`/api/posts/${encodeURIComponent(guid)}/stats`);
     return response.data;
   },
 
@@ -822,7 +822,7 @@ export const jobsApi = {
 
 export const adminApi = {
   exportTranscript: (postGuid: string, format: 'json' | 'txt' | 'srt' = 'json') =>
-    buildAbsoluteUrl(`/api/posts/${postGuid}/transcript/export?format=${format}`),
+    buildAbsoluteUrl(`/api/posts/${encodeURIComponent(postGuid)}/transcript/export?format=${format}`),
   exportTranscriptsBulk: async (params: { post_guids?: string[]; feed_id?: number; format?: string }) => {
     const response = await api.post('/api/transcripts/export-bulk', params, { responseType: 'blob' });
     return response;

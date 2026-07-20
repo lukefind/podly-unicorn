@@ -1,5 +1,6 @@
 import datetime
 import logging
+import urllib.parse
 import uuid
 from unittest import mock
 
@@ -7,6 +8,7 @@ import feedparser
 import PyRSS2Gen
 import pytest
 import requests
+from sqlalchemy.exc import IntegrityError
 
 from app.feeds import (
     _extract_description,
@@ -19,7 +21,9 @@ from app.feeds import (
     get_duration,
     get_guid,
     make_post,
+    refresh_feed,
 )
+from app.models import Feed, Post
 
 logger = logging.getLogger("global_logger")
 
@@ -63,6 +67,7 @@ class MockFeed:
         author="Test Author",
         rss_url="https://example.com/feed.xml",
         image_url="https://example.com/image.jpg",
+        last_changed_at=None,
     ):
         self.id = id
         self.title = title
@@ -70,6 +75,7 @@ class MockFeed:
         self.author = author
         self.rss_url = rss_url
         self.image_url = image_url
+        self.last_changed_at = last_changed_at
         self.posts = []
 
 
@@ -299,6 +305,38 @@ def test_feed_item(mock_post, app):
     assert result.enclosure.length == mock_post._audio_len_bytes
 
 
+def test_feed_item_percent_encodes_url_shaped_guid(app):
+    """GUIDs that are URLs (Supercast etc.) must be percent-encoded when they
+    are embedded in enclosure paths and trigger-link query strings, or the
+    generated URLs are unroutable."""
+    guid = "https://pub.example.com/episodes/1?x=1&y=2"
+    encoded_guid = urllib.parse.quote(guid, safe="")
+    mock_post_obj = MockPost(guid=guid)
+
+    headers_dict = {"Host": "podly.com:5001"}
+    mock_headers = mock.MagicMock()
+    mock_headers.get.side_effect = headers_dict.get
+    mock_environ = mock.MagicMock()
+    mock_environ.get.return_value = None
+    mock_request = mock.MagicMock()
+    mock_request.headers = mock_headers
+    mock_request.environ = mock_environ
+    mock_request.is_secure = False
+
+    with app.app_context():
+        with mock.patch("app.feeds.request", mock_request):
+            result = feed_item(mock_post_obj)
+
+    assert (
+        result.enclosure.url
+        == f"https://podly.com:5001/api/posts/{encoded_guid}/download"
+    )
+    # The RSS <guid> element itself carries the raw value.
+    assert result.guid == guid
+    # The trigger link passes the guid as a query value, encoded.
+    assert f"guid={encoded_guid}" in result.link
+
+
 def test_feed_item_with_reverse_proxy(mock_post, app):
     # Test with HTTP/2 pseudo-headers (modern reverse proxy)
     headers_dict = {
@@ -500,48 +538,145 @@ def test_make_post(mock_post_class, mock_feed):
         assert result == mock_post
 
 
-@mock.patch("app.feeds.uuid.UUID")
-@mock.patch("app.feeds.find_audio_link")
-@mock.patch("app.feeds.uuid.uuid5")
-def test_get_guid_uses_id_if_valid_uuid(mock_uuid5, mock_find_audio_link, mock_uuid):
-    """Test that get_guid returns the entry.id if it's a valid UUID."""
-    entry = mock.MagicMock()
-    entry.id = "550e8400-e29b-41d4-a716-446655440000"
-
-    # uuid.UUID doesn't raise an error, so entry.id is a valid UUID
-    result = get_guid(entry)
-
-    assert result == entry.id
-    mock_uuid.assert_called_once_with(entry.id)
-    mock_find_audio_link.assert_not_called()
-    mock_uuid5.assert_not_called()
+def _entry_with_enclosure(audio_url, **fields):
+    """Build a feedparser-style entry with an audio enclosure link."""
+    entry = feedparser.FeedParserDict()
+    link = feedparser.FeedParserDict()
+    link["type"] = "audio/mpeg"
+    link["href"] = audio_url
+    entry["links"] = [link]
+    for key, value in fields.items():
+        entry[key] = value
+    return entry
 
 
-@mock.patch("app.feeds.uuid.UUID")
-@mock.patch("app.feeds.find_audio_link")
-@mock.patch("app.feeds.uuid.uuid5")
-def test_get_guid_generates_uuid_if_invalid_id(
-    mock_uuid5, mock_find_audio_link, mock_uuid
-):
-    """Test that get_guid generates a UUID if entry.id is not a valid UUID."""
-    entry = mock.MagicMock()
-    entry.id = "not-a-uuid"
-
-    # uuid.UUID raises ValueError, so entry.id is not a valid UUID
-    mock_uuid.side_effect = ValueError
-    mock_find_audio_link.return_value = "https://example.com/audio.mp3"
-    mock_uuid5_instance = mock.MagicMock()
-    mock_uuid5_instance.__str__.return_value = "550e8400-e29b-41d4-a716-446655440000"
-    mock_uuid5.return_value = mock_uuid5_instance
-
-    result = get_guid(entry)
-
-    assert result == "550e8400-e29b-41d4-a716-446655440000"
-    mock_uuid.assert_called_once_with(entry.id)
-    mock_find_audio_link.assert_called_once_with(entry)
-    mock_uuid5.assert_called_once_with(
-        uuid.NAMESPACE_URL, "https://example.com/audio.mp3"
+def test_get_guid_uses_id_if_valid_uuid():
+    """UUID-style upstream GUIDs are kept as-is."""
+    entry = _entry_with_enclosure(
+        "https://cdn.example.com/ep1.mp3",
+        id="550e8400-e29b-41d4-a716-446655440000",
     )
+    assert get_guid(entry) == "550e8400-e29b-41d4-a716-446655440000"
+
+
+def test_get_guid_keeps_non_uuid_upstream_guid_verbatim():
+    """Non-UUID GUIDs (URLs, tag: URIs) must be kept exactly as published.
+
+    Hashing the enclosure URL instead makes episodes resurface as new
+    whenever the CDN path or tracking params change.
+    """
+    entry = _entry_with_enclosure(
+        "https://cdn.example.com/ep1.mp3",
+        id="https://supercast.example.com/episodes/12345",
+    )
+    assert get_guid(entry) == "https://supercast.example.com/episodes/12345"
+
+
+def test_get_guid_strips_whitespace_from_upstream_guid():
+    entry = _entry_with_enclosure(
+        "https://cdn.example.com/ep1.mp3", id="  tag:example.com,2026:ep-1\n"
+    )
+    assert get_guid(entry) == "tag:example.com,2026:ep-1"
+
+
+def test_get_guid_hashes_enclosure_url_when_guid_missing():
+    entry = _entry_with_enclosure("https://cdn.example.com/ep1.mp3")
+    expected = str(uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/ep1.mp3"))
+    assert get_guid(entry) == expected
+
+
+def test_get_guid_hashes_enclosure_url_when_guid_blank():
+    entry = _entry_with_enclosure("https://cdn.example.com/ep1.mp3", id="   ")
+    expected = str(uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/ep1.mp3"))
+    assert get_guid(entry) == expected
+
+
+def test_same_episode_can_exist_in_two_feeds(app):
+    """Uniqueness of guid/download_url is scoped per feed: the same episode
+    cross-posted in two feeds must not collide."""
+    feed_a = Feed(title="Feed A", rss_url="https://a.example.com/feed.xml")
+    feed_b = Feed(title="Feed B", rss_url="https://b.example.com/feed.xml")
+    db.session.add_all([feed_a, feed_b])
+    db.session.commit()
+
+    for feed in (feed_a, feed_b):
+        db.session.add(
+            Post(
+                feed_id=feed.id,
+                guid="https://pub.example.com/episodes/1",
+                download_url="https://cdn.example.com/ep1.mp3",
+                title="Ep 1",
+                whitelisted=False,
+            )
+        )
+    db.session.commit()
+
+    assert Post.query.filter_by(guid="https://pub.example.com/episodes/1").count() == 2
+
+
+def test_duplicate_guid_within_one_feed_rejected(app):
+    """Within a single feed, duplicate guids are still rejected."""
+    feed = Feed(title="Feed A", rss_url="https://a.example.com/feed.xml")
+    db.session.add(feed)
+    db.session.commit()
+
+    db.session.add(
+        Post(
+            feed_id=feed.id,
+            guid="dup-guid",
+            download_url="https://cdn.example.com/ep1.mp3",
+            title="Ep 1",
+            whitelisted=False,
+        )
+    )
+    db.session.commit()
+    db.session.add(
+        Post(
+            feed_id=feed.id,
+            guid="dup-guid",
+            download_url="https://cdn.example.com/ep2.mp3",
+            title="Ep 1 again",
+            whitelisted=False,
+        )
+    )
+    with pytest.raises(IntegrityError):
+        db.session.commit()
+    db.session.rollback()
+
+
+def test_refresh_feed_self_heals_previously_hashed_guid(app):
+    """A row whose guid was synthesized from the enclosure URL is repaired in
+    place when the upstream feed supplies a real GUID, instead of the episode
+    being duplicated or resurfacing as new."""
+    download_url = "https://cdn.example.com/ep1.mp3"
+    feed = Feed(title="Test Feed", rss_url="https://example.com/feed.xml")
+    db.session.add(feed)
+    db.session.commit()
+
+    legacy_guid = str(uuid.uuid5(uuid.NAMESPACE_URL, download_url))
+    post = Post(
+        feed_id=feed.id,
+        guid=legacy_guid,
+        download_url=download_url,
+        title="Ep 1",
+        whitelisted=False,
+    )
+    db.session.add(post)
+    db.session.commit()
+
+    entry = _entry_with_enclosure(
+        download_url, id="https://pub.example.com/episodes/1", title="Ep 1"
+    )
+    feed_data = feedparser.FeedParserDict()
+    feed_data["feed"] = feedparser.FeedParserDict()
+    feed_data["entries"] = [entry]
+
+    with mock.patch("app.feeds.fetch_feed", return_value=feed_data):
+        refresh_feed(feed)
+
+    posts = Post.query.filter_by(feed_id=feed.id).all()
+    assert len(posts) == 1
+    assert posts[0].guid == "https://pub.example.com/episodes/1"
 
 
 def test_get_duration_with_valid_duration():

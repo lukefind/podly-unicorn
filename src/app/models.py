@@ -34,6 +34,9 @@ class Feed(db.Model):  # type: ignore[name-defined, misc]
         db.Integer, db.ForeignKey("prompt_preset.id"), nullable=True
     )
     is_hidden = db.Column(db.Boolean, default=False, nullable=False)
+    # Naive-UTC timestamp of the last content change (new/updated posts,
+    # channel metadata). Drives the RSS ETag/Last-Modified validators.
+    last_changed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=True)
 
     posts = db.relationship(
         "Post", backref="feed", lazy=True, order_by="Post.release_date.desc()"
@@ -77,9 +80,11 @@ class FeedAccessToken(db.Model):  # type: ignore[name-defined, misc]
 class Post(db.Model):  # type: ignore[name-defined, misc]
     feed_id = db.Column(db.Integer, db.ForeignKey("feed.id"), nullable=False, index=True)
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    guid = db.Column(db.Text, unique=True, nullable=False)
+    # Uniqueness is scoped per feed (see __table_args__): the same episode may
+    # legitimately appear in more than one feed.
+    guid = db.Column(db.Text, nullable=False, index=True)
     download_url = db.Column(
-        db.Text, unique=True, nullable=False
+        db.Text, nullable=False
     )  # remote download URL, not podly url
     title = db.Column(db.Text, nullable=False)
     unprocessed_audio_path = db.Column(db.Text)
@@ -101,6 +106,12 @@ class Post(db.Model):  # type: ignore[name-defined, misc]
         backref="post",
         lazy="dynamic",
         order_by="TranscriptSegment.sequence_num",
+    )
+
+    # download_url is deliberately unconstrained: feeds re-use audio URLs for
+    # trailers/reruns within one feed (see migration k8l9m0n1o2p3).
+    __table_args__ = (
+        db.UniqueConstraint("feed_id", "guid", name="uq_post_feed_id_guid"),
     )
 
     def audio_len_bytes(self) -> int:

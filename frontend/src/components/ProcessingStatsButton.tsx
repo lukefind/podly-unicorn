@@ -496,7 +496,7 @@ export default function ProcessingStatsButton({
                             {(['json', 'txt', 'srt'] as const).map((fmt) => (
                               <a
                                 key={fmt}
-                                href={`/api/posts/${episodeGuid}/transcript/export?format=${fmt}`}
+                                href={`/api/posts/${encodeURIComponent(episodeGuid)}/transcript/export?format=${fmt}`}
                                 download
                                 className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5"
                                 style={{

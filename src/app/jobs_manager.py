@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timedelta
 from threading import Event, Lock, Thread
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 from sqlalchemy import case
 
@@ -169,7 +170,7 @@ class JobsManager:
                         "total_steps": 4,
                         "progress_percentage": 100.0,
                         "message": "Post already processed",
-                        "download_url": f"/api/posts/{post_guid}/download",
+                        "download_url": f"/api/posts/{quote(post_guid, safe='')}/download",
                     }
                 return {
                     "status": "not_started",
@@ -197,7 +198,9 @@ class JobsManager:
                 and post.processed_audio_path
                 and os.path.exists(post.processed_audio_path)
             ):
-                response["download_url"] = f"/api/posts/{post_guid}/download"
+                response["download_url"] = (
+                    f"/api/posts/{quote(post_guid, safe='')}/download"
+                )
             if job.status == "failed" and job.error_message:
                 response["error"] = job.error_message
             if job.status == "cancelled" and job.error_message:

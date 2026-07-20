@@ -128,7 +128,7 @@ def whitelist_all(f_id: int, val: str) -> flask.Response:
     return flask.make_response("", 200)
 
 
-@main_bp.route("/set_whitelist/<string:p_guid>/<val>", methods=["POST"])
+@main_bp.route("/set_whitelist/<path:p_guid>/<val>", methods=["POST"])
 def set_whitelist(p_guid: str, val: str) -> flask.Response:
     auth_error = _require_legacy_endpoint_auth()
     if auth_error is not None:

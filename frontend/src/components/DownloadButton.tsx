@@ -46,7 +46,7 @@ export default function DownloadButton({
         step_name: 'Completed',
         total_steps: 4,
         message: 'Episode ready for download',
-        download_url: `/api/posts/${episodeGuid}/download`
+        download_url: `/api/posts/${encodeURIComponent(episodeGuid)}/download`
       });
     }
   }, [hasProcessedAudio, episodeGuid]);
