@@ -252,6 +252,23 @@ def test_download_episode_exhausts_transient_failures_without_partial_file(
     assert not destination.with_name(destination.name + ".part").exists()
 
 
+@mock.patch("podcast_processor.podcast_downloader.time.sleep")
+@mock.patch("podcast_processor.podcast_downloader.requests.get")
+def test_download_episode_removes_zero_byte_destination_before_retrying(
+    mock_get, _mock_sleep, test_post, downloader, app
+):
+    mock_get.side_effect = requests.ConnectionError("temporary connection failure")
+
+    with app.app_context():
+        destination = downloader.get_and_make_download_path(test_post.title)
+        destination.write_bytes(b"")
+
+        with pytest.raises(DownloadError):
+            downloader.download_episode(test_post, str(destination))
+
+    assert not destination.exists()
+
+
 @pytest.mark.parametrize("status_code, expected_calls", [(503, 3), (404, 1)])
 @mock.patch("podcast_processor.podcast_downloader.time.sleep")
 @mock.patch("podcast_processor.podcast_downloader.requests.get")

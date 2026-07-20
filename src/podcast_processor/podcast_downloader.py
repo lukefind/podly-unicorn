@@ -58,10 +58,12 @@ class PodcastDownloader:
 
         # First, check if the file truly exists and has nonzero size.
         try:
-            if os.path.isfile(download_path) and os.path.getsize(download_path) > 0:
-                self.logger.info("Episode already downloaded.")
-                return download_path
-            self.logger.info("File is zero bytes, re-downloading.")  # else
+            if os.path.isfile(download_path):
+                if os.path.getsize(download_path) > 0:
+                    self.logger.info("Episode already downloaded.")
+                    return download_path
+                self.logger.info("File is zero bytes, re-downloading.")
+                os.remove(download_path)
 
         except FileNotFoundError:
             # Covers both "file actually missing" and "broken symlink"
