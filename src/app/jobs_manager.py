@@ -13,6 +13,7 @@ from app.job_manager import JobManager as SingleJobManager
 from app.jobs_manager_run_service import ensure_active_run, recalculate_run_counts
 from app.models import Feed, JobsManagerRun, Post, ProcessingJob
 from app.processor import get_processor
+from app.refresh_health import refresh_health
 from podcast_processor.podcast_processor import ProcessorException
 from podcast_processor.processing_status_manager import ProcessingStatusManager
 
@@ -77,7 +78,7 @@ class JobsManager:
     ) -> Dict[str, Any]:
         """
         Idempotently start processing for a post. If an active job exists, return it.
-        
+
         trigger_source values:
         - manual_ui: User clicked Process in web UI
         - manual_reprocess: User clicked Reprocess
@@ -276,7 +277,8 @@ class JobsManager:
                         "triggered_by_user_id": job.triggered_by_user_id,
                         "triggered_by_username": (
                             job.triggered_by_user.username
-                            if job.triggered_by_user else None
+                            if job.triggered_by_user
+                            else None
                         ),
                     }
                 )
@@ -331,7 +333,8 @@ class JobsManager:
                         "triggered_by_user_id": job.triggered_by_user_id,
                         "triggered_by_username": (
                             job.triggered_by_user.username
-                            if job.triggered_by_user else None
+                            if job.triggered_by_user
+                            else None
                         ),
                     }
                 )
@@ -433,7 +436,9 @@ class JobsManager:
 
         def _recover() -> Dict[str, Any]:
             preserved_count = ProcessingJob.query.filter(
-                ProcessingJob.status.in_(["completed", "failed", "cancelled", "skipped"])
+                ProcessingJob.status.in_(
+                    ["completed", "failed", "cancelled", "skipped"]
+                )
             ).count()
             interrupted_jobs = ProcessingJob.query.filter(
                 ProcessingJob.status.in_(["pending", "running"])
@@ -503,31 +508,44 @@ class JobsManager:
         """
         Refresh feeds and enqueue per-post processing into internal worker pool.
         """
-        with scheduler.app.app_context():
-            feeds = Feed.query.all()
-            auto_process_post_guids: List[str] = []
-            for feed in feeds:
-                try:
-                    auto_process_post_guids.extend(refresh_feed(feed))
-                except Exception as exc:  # pylint: disable=broad-except
-                    logger.error(
-                        "Failed to refresh feed %s during refresh-all: %s",
-                        getattr(feed, "id", None),
-                        exc,
-                    )
+        if not refresh_health.try_start():
+            return {
+                "status": "already_running",
+                "message": "A feed refresh cycle is already running.",
+            }
 
-            if auto_process_post_guids:
+        completed = False
+        try:
+            with scheduler.app.app_context():
+                feeds = Feed.query.all()
+                auto_process_post_guids: List[str] = []
+                for feed in feeds:
+                    feed_id = getattr(feed, "id", None)
+                    refresh_health.set_current_feed(feed_id)
+                    try:
+                        auto_process_post_guids.extend(refresh_feed(feed))
+                    except Exception as exc:  # pylint: disable=broad-except
+                        refresh_health.record_feed_error(feed_id, exc)
+                        logger.error(
+                            "Failed to refresh feed %s during refresh-all: %s",
+                            feed_id,
+                            exc,
+                        )
+
+                refresh_health.set_current_feed(None)
                 for post_guid in auto_process_post_guids:
                     self.start_post_processing(
-                        post_guid, priority="background",
-                        trigger_source="auto_feed_refresh"
+                        post_guid,
+                        priority="background",
+                        trigger_source="auto_feed_refresh",
                     )
 
-            # Clean up posts with missing audio files
-            self._cleanup_inconsistent_posts()
-
-            # Process new posts
-            return self.enqueue_pending_jobs(trigger=trigger, context=context)
+                self._cleanup_inconsistent_posts()
+                result = self.enqueue_pending_jobs(trigger=trigger, context=context)
+                completed = True
+                return result
+        finally:
+            refresh_health.finish(completed=completed)
 
     # ------------------------ Helpers ------------------------
     def _cleanup_inconsistent_posts(self) -> None:
