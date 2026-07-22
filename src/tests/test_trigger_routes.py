@@ -17,7 +17,11 @@ from flask import Flask
 from app.extensions import db
 from app.models import Feed, FeedAccessToken, Post, ProcessingJob, User
 from app.routes.main_routes import main_bp
-from app.routes.post_routes import post_bp
+from app.routes.post_routes import (
+    _render_trigger_error_page,
+    _render_trigger_page_fallback,
+    post_bp,
+)
 
 
 def _hash_token(secret: str) -> str:
@@ -232,7 +236,40 @@ class TestTriggerEndpoint:
         # Should be 401 or 403, never 500
         assert response.status_code in [401, 403]
         assert response.mimetype == "text/html"
-        assert b"Podly" in response.data  # Themed error page
+        assert b"<title>Invalid Token - Podly Unicorn</title>" in response.data
+        assert b"<h1>Podly Unicorn</h1>" in response.data
+        assert b'<a href="/">Podly Unicorn</a>' in response.data
+        assert b">Go to Podly</a>" in response.data
+
+    def test_error_page_uses_unicorn_product_identity(self, app_with_routes):
+        """Server-rendered errors should use the default Unicorn identity."""
+        with app_with_routes.app_context():
+            response = _render_trigger_error_page(
+                title="Authentication Error",
+                message="Unable to authenticate.",
+                status_code=401,
+            )
+
+        assert response.status_code == 401
+        assert b"<title>Authentication Error - Podly Unicorn</title>" in response.data
+        assert b"<h1>Podly Unicorn</h1>" in response.data
+        assert b'<a href="/">Podly Unicorn</a>' in response.data
+        assert b"<h1>Podly</h1>" not in response.data
+
+    def test_fallback_page_uses_unicorn_product_identity(self, app_with_routes):
+        """The no-React fallback should use the default Unicorn identity."""
+        with app_with_routes.app_context():
+            response = _render_trigger_page_fallback(
+                title="Processing Started",
+                message="Episode queued.",
+                state="processing",
+            )
+
+        assert response.status_code == 200
+        assert b"<title>Processing Started - Podly Unicorn</title>" in response.data
+        assert b"<h1>Podly Unicorn</h1>" in response.data
+        assert b'<a href="/">Podly Unicorn</a>' in response.data
+        assert b"<h1>Podly</h1>" not in response.data
 
 
 class TestTriggerStatusProcessingState:

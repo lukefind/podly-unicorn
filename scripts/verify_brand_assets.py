@@ -40,6 +40,16 @@ PNG_DIMENSIONS = {
     "images/screenshots/processed mobile.png": (1044, 1820),
 }
 
+PLAIN_PODLY_SOURCE_ALLOWLIST = {
+    "frontend/src/theme.ts": {
+        "return theme === 'original' ? 'Podly' : 'Podly Unicorn';",
+    },
+    "src/app/routes/post_routes.py": {
+        'message="This episode is not enabled for processing. Enable it in the Podly web interface first.",',
+        '<a href="/" class="btn btn-primary">Go to Podly</a>',
+    },
+}
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -176,6 +186,38 @@ def verify_readme() -> None:
         require(needle in readme, f"README is missing {label}")
 
 
+def verify_source_branding() -> None:
+    """Reject plain Podly product identity while preserving intentional feature copy."""
+    for relative, allowed_lines in PLAIN_PODLY_SOURCE_ALLOWLIST.items():
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        plain_podly_lines = {
+            line.strip()
+            for line in source.splitlines()
+            if "Podly" in line
+            and "Podly Unicorn" not in line
+            and "Podly RSS" not in line
+        }
+        unexpected = plain_podly_lines - allowed_lines
+        require(
+            not unexpected,
+            f"{relative} has unapproved plain Podly identity: {sorted(unexpected)}",
+        )
+
+    route_source = (ROOT / "src" / "app" / "routes" / "post_routes.py").read_text(
+        encoding="utf-8"
+    )
+    expected_identity = {
+        "trigger titles": ("<title>{title} - Podly Unicorn</title>", 2),
+        "trigger headers": ("<h1>Podly Unicorn</h1>", 2),
+        "trigger footers": ('<a href="/">Podly Unicorn</a>', 2),
+    }
+    for label, (needle, count) in expected_identity.items():
+        require(
+            route_source.count(needle) == count,
+            f"expected {count} Unicorn-branded {label}",
+        )
+
+
 def main() -> int:
     checks = (
         verify_document_metadata,
@@ -184,6 +226,7 @@ def main() -> int:
         verify_icon_generator,
         verify_asset_formats,
         verify_readme,
+        verify_source_branding,
     )
     failures: list[str] = []
     for check in checks:
