@@ -1,27 +1,28 @@
-"""
-Generate blue-backed PWA icons from the current Podly logo.
+"""Generate purple-backed PWA icons from the flat Podly Unicorn mark.
 
 Android adaptive icons look best when the mark sits inside a clear safe zone
-with a solid background. This keeps the Podly logo readable on busy home
+with a solid background. This keeps the Unicorn mark readable on busy home
 screens without depending on transparency.
 """
+
 import sys
 from pathlib import Path
+
 from PIL import Image
 
 REPO_ROOT = Path(__file__).parent.parent
 LOGOS_DIR = REPO_ROOT / "frontend" / "public" / "images" / "logos"
-SOURCE = LOGOS_DIR / "original-logo.png"
+SOURCE = LOGOS_DIR / "pwa-icon-source.png"
 OUTPUT_192 = LOGOS_DIR / "web-app-manifest-192x192.png"
 OUTPUT_512 = LOGOS_DIR / "web-app-manifest-512x512.png"
 MASKABLE_192 = LOGOS_DIR / "manifest-icon-192.maskable.png"
 MASKABLE_512 = LOGOS_DIR / "manifest-icon-512.maskable.png"
 
-BG_COLOR = (37, 95, 156)
+BG_COLOR = (30, 27, 75)  # #1e1b4b
 
 
 def make_icon(source_path: Path, size: int, safe_zone_ratio: float) -> Image.Image:
-    """Place the current logo on a solid square canvas."""
+    """Place the flat Unicorn mark on a solid square canvas."""
     src = Image.open(source_path).convert("RGBA")
     safe = int(size * safe_zone_ratio)
     src_resized = src.resize((safe, safe), Image.LANCZOS)

@@ -1,10 +1,10 @@
-# Podly Architecture
+# Podly Unicorn Architecture
 
-This document describes the key architectural components and data flows in Podly.
+This document describes the key architectural components and data flows in Podly Unicorn.
 
 ## Overview
 
-Podly is a podcast ad-removal system that:
+Podly Unicorn is a podcast ad-removal system that:
 1. Subscribes to podcast RSS feeds
 2. Transcribes episodes using Whisper (local, remote, or Groq)
 3. Detects ads using an LLM with configurable prompt presets
@@ -298,13 +298,13 @@ LLM_MODEL=xai/grok-3
 
 ## Frontend Themes
 
-Podly supports three switchable themes. **Blue** is the default for new users.
+Podly Unicorn supports three switchable themes. New users follow their operating-system preference and start with the Unicorn **Light** or **Dark** theme; a saved preference, including optional **Blue**, remains authoritative.
 
 | Theme | Internal Name | Description |
 |-------|---------------|-------------|
-| **Blue** | `original` | Deep blue gradient, professional look (default) |
-| **Light** | `light` | Pastel unicorn theme with rainbow accents |
-| **Dark** | `dark` | Dark purple unicorn theme |
+| **Blue** | `original` | Optional deep blue gradient |
+| **Light** | `light` | Default for systems that prefer light; pastel Unicorn theme with rainbow accents |
+| **Dark** | `dark` | Default for systems that prefer dark; dark purple Unicorn theme |
 
 Theme configuration:
 - `frontend/src/theme.ts` - Theme labels, logos, brand names

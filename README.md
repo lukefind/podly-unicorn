@@ -1,35 +1,38 @@
 <div align="center">
-  <img src="frontend/public/images/social-card1200x630.png" alt="Podly social card" width="900" />
+  <img src="frontend/public/images/logos/unicorn-logo.png" alt="Podly Unicorn" width="200" />
+  <h1>Podly Unicorn</h1>
   
   <p>
-    <a href="https://github.com/podly-pure-podcasts/podly_pure_podcasts"><img src="https://img.shields.io/badge/GitHub-podly-blue?logo=github" alt="GitHub"></a>
-    <a href="https://github.com/podly-pure-podcasts/podly_pure_podcasts/blob/main/LICENCE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
-    <a href="https://discord.gg/FRB98GtF6N"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+    <a href="https://github.com/lukefind/podly-unicorn"><img src="https://img.shields.io/badge/GitHub-podly--unicorn-purple?logo=github" alt="GitHub"></a>
+    <a href="https://github.com/jdrbc/podly_pure_podcasts/blob/main/LICENCE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+    <a href="https://t.me/+AV5-w_GSd2VjNjBk"><img src="https://img.shields.io/badge/Telegram-Join%20Community-229ED9?logo=telegram" alt="Telegram"></a>
   </p>
 </div>
 
 ---
 
-## What is Podly?
+## What is Podly Unicorn?
 
-Podly is a self-hosted podcast ad-removal server with a web app. It transcribes episodes, uses LLMs to detect ad segments, and publishes cleaned RSS feeds you can use in your normal podcast player.
+Podly Unicorn is a self-hosted podcast ad-removal server with a web app. It transcribes episodes, uses LLMs to detect ad segments, and publishes cleaned RSS feeds you can use in your normal podcast player.
 
-You manage feeds, presets, processing, and users in the browser. Listening still happens in your podcast app, through direct downloads, or in Podly's built-in audio player.
+You manage feeds, presets, processing, and users in the browser. Listening still happens in your podcast app, through direct downloads, or in Podly Unicorn's built-in audio player.
+
+This is a fork of [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podcasts) with significant UI/UX improvements and new features.
 
 <div align="center">
-  <img src="frontend/public/images/screenshots/dashboard-desktop.png" alt="Podly Dashboard" width="700" />
+  <img src="frontend/public/images/screenshots/dashboard-desktop.png" alt="Podly Unicorn Dashboard" width="700" />
   <p><em>Dashboard showing podcast statistics and ad removal progress</em></p>
 </div>
 
 <div align="center">
   <table>
     <tr>
-      <td><img src="frontend/public/images/screenshots/podcasts-mobile.jpeg" alt="Mobile View" width="300" /></td>
-      <td><img src="frontend/public/images/screenshots/presets-mobile.jpeg" alt="Presets Page" width="300" /></td>
+      <td><img src="frontend/public/images/screenshots/podcasts-mobile.png" alt="Mobile View" width="300" /></td>
+      <td><img src="frontend/public/images/screenshots/processed mobile.png" alt="Processed Episode" width="300" /></td>
     </tr>
     <tr>
       <td align="center"><em>Mobile podcasts view</em></td>
-      <td align="center"><em>Presets page</em></td>
+      <td align="center"><em>Processed episode details</em></td>
     </tr>
   </table>
 </div>
@@ -113,8 +116,8 @@ If logs show `reason=not_whitelisted`, that episode is disabled for processing. 
 ### 1. Clone and Configure
 
 ```bash
-git clone https://github.com/podly-pure-podcasts/podly_pure_podcasts.git
-cd podly_pure_podcasts
+git clone https://github.com/lukefind/podly-unicorn.git
+cd podly-unicorn
 cp .env.local.example .env.local
 ```
 
@@ -207,7 +210,7 @@ LLM_MODEL=xai/grok-3
 ## Updating
 
 ```bash
-cd podly_pure_podcasts
+cd podly-unicorn
 git pull
 docker compose up -d --build
 ```
@@ -302,8 +305,8 @@ See [contributing guide](docs/contributors.md) for local setup & contribution in
 
 <div align="center">
   <p>
-    <a href="https://github.com/podly-pure-podcasts/podly_pure_podcasts">GitHub</a> •
-    <a href="https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues">Issues</a> •
-    <a href="https://discord.gg/FRB98GtF6N">Discord</a>
+    <a href="https://github.com/lukefind/podly-unicorn">GitHub</a> •
+    <a href="https://github.com/lukefind/podly-unicorn/issues">Issues</a> •
+    <a href="https://t.me/+AV5-w_GSd2VjNjBk">Telegram</a>
   </p>
 </div>

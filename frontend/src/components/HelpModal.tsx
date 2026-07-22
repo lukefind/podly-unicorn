@@ -374,7 +374,7 @@ export default function HelpModal({ isOpen, onClose, onReplayTutorial }: HelpMod
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Need more help?{' '}
               <a 
-                href="https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues" 
+                href="https://github.com/lukefind/podly-unicorn/issues"
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-purple-600 dark:text-purple-400 hover:underline"
