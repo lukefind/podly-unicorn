@@ -72,6 +72,12 @@ def test_classifier_with_mocks(
 def test_call_model(test_config: Config, app: Flask) -> None:
     """Test the _call_model method with mocked litellm"""
     with app.app_context():
+        test_config.llm_model = "groq/openai/gpt-oss-120b"
+        test_config.llm_api_key = "resolved-test-key"
+        test_config.openai_base_url = "https://llm.example/v1"
+        test_config.openai_timeout = 123
+        test_config.openai_max_tokens = 456
+
         # Create mocks
         mock_db_session = MagicMock()
 
@@ -99,7 +105,7 @@ def test_call_model(test_config: Config, app: Flask) -> None:
         mock_response.choices = [mock_choice]
 
         # Patch the litellm.completion function for this test
-        with patch("litellm.completion", return_value=mock_response):
+        with patch("litellm.completion", return_value=mock_response) as completion:
             # Call the method
             response = classifier._call_model(
                 model_call_obj=dummy_model_call,
@@ -112,6 +118,17 @@ def test_call_model(test_config: Config, app: Flask) -> None:
             assert dummy_model_call.response == "test response"
             assert mock_db_session.add.called
             assert mock_db_session.commit.called
+            completion.assert_called_once_with(
+                model="groq/openai/gpt-oss-120b",
+                messages=[
+                    {"role": "system", "content": "test system prompt"},
+                    {"role": "user", "content": "test prompt"},
+                ],
+                api_key="resolved-test-key",
+                api_base="https://llm.example/v1",
+                timeout=123,
+                max_tokens=456,
+            )
 
 
 def test_call_model_retry_on_internal_error(test_config: Config, app: Flask) -> None:

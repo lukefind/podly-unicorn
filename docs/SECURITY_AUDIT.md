@@ -449,3 +449,40 @@ Tokens are hashed with SHA-256, expire after 1 hour, and are marked as used afte
 - **SESSION_COOKIE_SECURE change (M2/M3):** If you run with `REQUIRE_AUTH=true` over plain HTTP (no HTTPS), you must now set `SESSION_COOKIE_SECURE=false` explicitly. Production HTTPS deployments are unaffected.
 - **Password validation (H1):** Existing users with short passwords are NOT affected — validation only runs on password creation/change. They will be prompted to use 8+ characters on their next password change.
 - **Token secret (C2):** Existing feed tokens with stored `token_secret` continue to work. New tokens no longer store the plaintext secret. The `token_secret` column remains in the DB but will be `NULL` for new tokens.
+
+---
+
+## 2026-07-22 PyTorch Dependency Review
+
+The full CPU environment was verified with `torch==2.10.0+cpu`. Its raw
+`pip-audit` result remains nonzero and reports the following two advisories; no
+audit suppression or ignore rule has been added:
+
+| Advisory | Aliases | Published range and severity | Fix status |
+|----------|---------|------------------------------|------------|
+| `PYSEC-2026-139` | `CVE-2026-4538`, `BIT-pytorch-2026-4538` | PyPI range introduced at `0`, last affected `2.10.0`; CVSS 3.1 `AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H`. The report describes local deserialization through the pt2 loading handler. | The advisory references an upstream fix pull request but publishes no fixed release. |
+| `PYSEC-2025-194` | `CVE-2025-3000`, `GHSA-rrmf-rvhw-rf47`, `BIT-pytorch-2025-3000` | CVSS 4.0 `AV:L/AC:L/AT:N/PR:L/UI:N/VC:L/VI:L/VA:L/SC:N/SI:N/SA:N`; the report describes local memory corruption in `torch.jit.script`. | `pip-audit` flags 2.10.0 and reports 2.13.0 as the fix. The PyPA/OSV record instead says last affected `2.6.0-NA`, so the published range and scanner result are inconsistent. |
+
+There is currently no released fixed wheel common to all three supported
+official wheel channels. In particular, the supported ROCm 7.0 index stops at
+2.10.0, while the scanner points one finding at 2.13.0 and the other advisory
+does not identify a fixed release.
+
+The current Podly code path materially limits reachability:
+
+- A repository search finds no calls to `torch.jit.script`, `torch.load`,
+  `torch.compile`, `torch.export`, or a pt2 loading API.
+- Podly's only model-loading call is the administrator-configured
+  `whisper.load_model(name=...)` in `src/podcast_processor/transcribe.py`.
+- There is no HTTP endpoint for uploading a Whisper/PyTorch model or checkpoint.
+  Exploitation therefore requires local privilege or control of local model
+  artifacts/configuration.
+- The container entrypoint drops from root to the unprivileged `appuser` before
+  starting Podly.
+- The lite image omits both Torch and Whisper and its audit reports no known
+  vulnerabilities, so it is the zero-finding option for remote transcription
+  deployments.
+
+These controls reduce current exposure but do not resolve the dependency
+findings. Track both advisories and upgrade the common CPU, CUDA, and ROCm pin as
+soon as fixed wheels are released across all supported indices.

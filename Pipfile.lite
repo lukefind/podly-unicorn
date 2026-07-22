@@ -26,7 +26,7 @@ flask-sqlalchemy = "*"
 flask-migrate = "*"
 Flask-APScheduler = "*"
 ffmpeg-python = "*"
-litellm = ">=1.59.8,<1.75.0"  # Pin to avoid fastuuid dependency
+litellm = "*"
 bleach = "*"
 types-bleach = "*"
 groq = "*"
@@ -34,7 +34,9 @@ async_timeout = "*"
 pytest-cov = "*"
 flask-cors = "*"
 bcrypt = "*"
+httpx-aiohttp = "*"
 cryptography = "*"
+pillow = "*"
 
 [dev-packages]
 black = "*"

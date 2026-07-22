@@ -23,13 +23,17 @@ FROM ${BASE_IMAGE} AS backend
 # Environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ARG CUDA_VERSION=12.4.1
-ARG ROCM_VERSION=6.4
+ARG CUDA_VERSION=12.6
+ARG ROCM_VERSION=7.0
 ARG USE_GPU=false
 ARG USE_GPU_NVIDIA=${USE_GPU}
 ARG USE_GPU_AMD=false
 ARG LITE_BUILD=false
 ARG PINNED_PIPENV_VERSION=2026.0.3
+ARG TORCH_VERSION=2.10.0
+ARG TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu
+ARG TORCH_NVIDIA_INDEX_URL=https://download.pytorch.org/whl/cu126
+ARG TORCH_ROCM_INDEX_URL=https://download.pytorch.org/whl/rocm7.0
 
 WORKDIR /app
 
@@ -92,33 +96,22 @@ RUN set -e && \
     PIPENV_PIPFILE=Pipfile pipenv install --deploy --system; \
     fi
 
-# Install PyTorch with CUDA support if using NVIDIA image (skip if LITE_BUILD)
-RUN if [ "${LITE_BUILD}" = "true" ]; then \
+# Force the lock-pinned PyTorch wheel from the selected official backend index.
+RUN set -e && \
+    if [ "${LITE_BUILD}" = "true" ]; then \
     echo "Skipping PyTorch installation in lite mode"; \
     elif [ "${USE_GPU}" = "true" ] || [ "${USE_GPU_NVIDIA}" = "true" ]; then \
-    if command -v pip >/dev/null 2>&1; then \
-    pip install --no-cache-dir nvidia-cudnn-cu12 torch; \
-    elif command -v pip3 >/dev/null 2>&1; then \
-    pip3 install --no-cache-dir nvidia-cudnn-cu12 torch; \
-    else \
-    python3 -m pip install --no-cache-dir nvidia-cudnn-cu12 torch; \
-    fi; \
+    python3 -m pip install --no-cache-dir --force-reinstall --no-deps \
+    "torch==${TORCH_VERSION}" --index-url "${TORCH_NVIDIA_INDEX_URL}" && \
+    TORCH_EXPECTED_VERSION="${TORCH_VERSION}" python3 -c 'import os, torch; assert torch.__version__.split("+", 1)[0] == os.environ["TORCH_EXPECTED_VERSION"]; assert "+cu" in torch.__version__; assert torch.version.cuda is not None; assert torch.version.hip is None'; \
     elif [ "${USE_GPU_AMD}" = "true" ]; then \
-    if command -v pip >/dev/null 2>&1; then \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/rocm${ROCM_VERSION}; \
-    elif command -v pip3 >/dev/null 2>&1; then \
-    pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/rocm${ROCM_VERSION}; \
+    python3 -m pip install --no-cache-dir --force-reinstall --no-deps \
+    "torch==${TORCH_VERSION}" --index-url "${TORCH_ROCM_INDEX_URL}" && \
+    TORCH_EXPECTED_VERSION="${TORCH_VERSION}" python3 -c 'import os, torch; assert torch.__version__.split("+", 1)[0] == os.environ["TORCH_EXPECTED_VERSION"]; assert "+rocm" in torch.__version__; assert torch.version.hip is not None; assert torch.version.cuda is None'; \
     else \
-    python3 -m pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/rocm${ROCM_VERSION}; \
-    fi; \
-    else \
-    if command -v pip >/dev/null 2>&1; then \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu; \
-    elif command -v pip3 >/dev/null 2>&1; then \
-    pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu; \
-    else \
-    python3 -m pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu; \
-    fi; \
+    python3 -m pip install --no-cache-dir --force-reinstall --no-deps \
+    "torch==${TORCH_VERSION}" --index-url "${TORCH_CPU_INDEX_URL}" && \
+    TORCH_EXPECTED_VERSION="${TORCH_VERSION}" python3 -c 'import os, torch; assert torch.__version__.split("+", 1)[0] == os.environ["TORCH_EXPECTED_VERSION"]; assert "+cpu" in torch.__version__; assert torch.version.cuda is None; assert torch.version.hip is None'; \
     fi
 
 # Copy application code
