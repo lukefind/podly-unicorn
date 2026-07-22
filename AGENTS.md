@@ -186,15 +186,15 @@ Admins can set a custom default preset for individual shows/feeds. This override
 ## Frontend
 
 ### Theme
-Three switchable themes: **Blue** (default), Light, Dark. Key files:
+Three switchable themes: **Light**, **Dark**, and **Blue** (internally `original`). A valid saved preference wins. When the preference is missing or invalid, the app follows the operating-system color scheme and starts in Unicorn Light or Unicorn Dark; Blue is optional and is never the implicit default. Key files:
 - `frontend/src/theme.ts` - Theme labels, logos, brand names
 - `frontend/src/contexts/ThemeContext.tsx` - Theme state (localStorage)
 - `frontend/tailwind.config.js` - Custom colors
 - `frontend/src/index.css` - Global overrides, blue theme `[data-theme="original"]` selectors
 
 ### Logo
-Blue-theme logo at `frontend/public/images/logos/original-logo.png` (primary).
-Unicorn logo at `frontend/public/images/logos/unicorn-logo.png` (light/dark themes).
+Light and Dark use the Podly Unicorn identity and `frontend/public/images/logos/unicorn-logo.png`.
+The optional Blue (`original`) theme uses the Podly identity and `frontend/public/images/logos/original-logo.png`.
 Used in sidebar header (`Sidebar.tsx`) and login page (`LoginPage.tsx`).
 
 ### Modals
