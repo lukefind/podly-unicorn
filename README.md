@@ -129,10 +129,11 @@ PODLY_ADMIN_PASSWORD=replace-with-at-least-8-characters
 PODLY_SECRET_KEY=${podly_secret}
 SESSION_COOKIE_SECURE=false
 EOF
+chmod 600 podly.env
 unset podly_secret
 ```
 
-The `umask 077` step creates `podly.env` with owner-only permissions (`0600`). Keep the file private and backed up. `PODLY_SECRET_KEY` must remain unchanged across container upgrades or encrypted saved keys, sessions, and derived feed secrets will stop working. The admin password must be at least eight characters.
+The `umask 077` and `chmod 600` steps keep `podly.env` owner-only, including when rerunning these commands over an existing file. Keep the file private and backed up. `PODLY_SECRET_KEY` must remain unchanged across container upgrades or encrypted saved keys, sessions, and derived feed secrets will stop working. The admin password must be at least eight characters.
 
 `SESSION_COOKIE_SECURE=false` is only for this documented localhost HTTP setup. For an Internet-accessible deployment, terminate HTTPS with a reverse proxy and set `SESSION_COOKIE_SECURE=true`.
 
