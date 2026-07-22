@@ -29,6 +29,7 @@ ARG USE_GPU=false
 ARG USE_GPU_NVIDIA=${USE_GPU}
 ARG USE_GPU_AMD=false
 ARG LITE_BUILD=false
+ARG PINNED_PIP_VERSION=26.1.2
 ARG PINNED_PIPENV_VERSION=2026.0.3
 ARG TORCH_VERSION=2.10.0
 ARG TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu
@@ -65,14 +66,12 @@ RUN if [ -f /etc/debian_version ]; then \
 # Copy all Pipfiles/lock files
 COPY Pipfile Pipfile.lock Pipfile.lite Pipfile.lite.lock ./
 
-# Pin pipenv so lockfile verification stays deterministic across builds.
-RUN if command -v pip >/dev/null 2>&1; then \
-    pip install --no-cache-dir "pipenv==${PINNED_PIPENV_VERSION}"; \
-    elif command -v pip3 >/dev/null 2>&1; then \
-    pip3 install --no-cache-dir "pipenv==${PINNED_PIPENV_VERSION}"; \
-    else \
-    python3 -m pip install --no-cache-dir "pipenv==${PINNED_PIPENV_VERSION}"; \
-    fi
+# Upgrade pip before it installs any application dependencies, then pin Pipenv
+# so lockfile verification stays deterministic across builds.
+RUN set -e && \
+    python3 -m pip install --no-cache-dir --upgrade "pip==${PINNED_PIP_VERSION}" && \
+    PINNED_PIP_VERSION="${PINNED_PIP_VERSION}" python3 -c 'import os, pip; assert pip.__version__ == os.environ["PINNED_PIP_VERSION"]' && \
+    python3 -m pip install --no-cache-dir "pipenv==${PINNED_PIPENV_VERSION}"
 
 # Set pip timeout and retries for better reliability
 ENV PIP_DEFAULT_TIMEOUT=1000

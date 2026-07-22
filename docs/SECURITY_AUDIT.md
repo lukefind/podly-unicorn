@@ -454,9 +454,9 @@ Tokens are hashed with SHA-256, expire after 1 hour, and are marked as used afte
 
 ## 2026-07-22 PyTorch Dependency Review
 
-The full CPU environment was verified with `torch==2.10.0+cpu`. Its raw
-`pip-audit` result remains nonzero and reports the following two advisories; no
-audit suppression or ignore rule has been added:
+A clean lock-validation environment installed the PyPI release
+`torch==2.10.0`. Its raw `pip-audit` result remains nonzero and reports the
+following two advisories; no audit suppression or ignore rule has been added:
 
 | Advisory | Aliases | Published range and severity | Fix status |
 |----------|---------|------------------------------|------------|
@@ -467,6 +467,16 @@ There is currently no released fixed wheel common to all three supported
 official wheel channels. In particular, the supported ROCm 7.0 index stops at
 2.10.0, while the scanner points one finding at 2.13.0 and the other advisory
 does not identify a fixed release.
+
+The built CPU image replaces the PyPI release with the official
+`torch==2.10.0+cpu` wheel. An image-level `pip-audit` does not evaluate that
+wheel: it reports `Dependency not found on PyPI and could not be audited` for
+Torch, then reports no known vulnerabilities among the packages it could
+audit. That result is a scanner coverage gap, not evidence that the CPU wheel
+is unaffected, so the lock-environment findings and mitigations below still
+apply. Both image variants pin `pip==26.1.2` before Pipenv and application
+dependency installation; this removes the six pip findings present in the
+previous `pip==25.0.1` images.
 
 The current Podly code path materially limits reachability:
 
@@ -479,9 +489,9 @@ The current Podly code path materially limits reachability:
   artifacts/configuration.
 - The container entrypoint drops from root to the unprivileged `appuser` before
   starting Podly.
-- The lite image omits both Torch and Whisper and its audit reports no known
-  vulnerabilities, so it is the zero-finding option for remote transcription
-  deployments.
+- The lite image omits both Torch and Whisper. Its image-level audit evaluates
+  all installed packages and reports no known vulnerabilities, so it is the
+  zero-finding option for remote transcription deployments.
 
 These controls reduce current exposure but do not resolve the dependency
 findings. Track both advisories and upgrade the common CPU, CUDA, and ROCm pin as
