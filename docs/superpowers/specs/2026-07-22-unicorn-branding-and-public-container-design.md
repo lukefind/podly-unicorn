@@ -1,0 +1,97 @@
+# Unicorn Branding and Public Container Design
+
+## Goal
+
+Make Podly Unicorn the default presentation again without removing the optional Blue theme, and publish a public container that users can run without cloning or building the repository.
+
+## Branding and theme behavior
+
+- New browsers, cleared browsers, and browsers without a valid saved preference start in the Unicorn family: `light` when the operating system prefers light and `dark` when it prefers dark.
+- A valid saved theme remains authoritative. In particular, an existing browser that explicitly stored Blue is not forcibly migrated.
+- Blue stays in the theme rotation and its implementation remains intact; it is simply no longer the fallback.
+- Product-facing metadata returns to `Podly Unicorn`, including the document title, installable PWA name, Apple web-app title, social metadata, and theme-aware brand label.
+
+The compatibility mapping remains:
+
+| Stored value | Display label | Logo | Product name |
+| --- | --- | --- | --- |
+| `light` | Light | `unicorn-logo.png` | Podly Unicorn |
+| `dark` | Dark | `unicorn-logo.png` | Podly Unicorn |
+| `original` | Blue | `original-logo.png` | Podly |
+
+The storage key remains `podly-theme`; renaming `original` would break saved preferences and is out of scope.
+
+## Asset restoration
+
+Use commit `41ec583004309d774b2746e4b5f548554fcbcb8a` (the parent of the Blue/upstream rebrand) as the visual and naming baseline while retaining the later service-worker and manifest correctness fixes:
+
+- favicon SVG/PNG/ICO and Apple touch icon;
+- ordinary and maskable PWA icons;
+- PWA background and theme colors;
+- README hero, social card, and screenshots where the Blue-theme replacements displaced Unicorn artwork;
+- visible logo choices and product naming in the sidebar, login, onboarding/help, trigger, and combined-feed surfaces.
+
+The favicon files already match that baseline and are retained after verification. Restore the baseline's flat Unicorn mark for ordinary PWA icons and use the same mark inside the Android maskable safe zone. The PWA/document colors return to `#1e1b4b` (background) and `#7c3aed` (theme). Update `scripts/generate_pwa_icons.py` so future regeneration uses the Unicorn source and these colors. Bump the service-worker cache version and the manifest/icon query-string versions in `frontend/index.html` so cache-first clients receive the restored assets.
+
+README restoration covers the Podly Unicorn heading, hero, screenshots, alt text, fork badge, `lukefind/podly-unicorn` repository/issues/contributor links, and upstream credit. Intentional feature terms such as “Podly RSS” remain unchanged.
+
+This is a selective restoration. It must not revert newer application behavior, accessibility fixes, PWA caching logic, or unrelated upstream-integration work.
+
+## Public container distribution
+
+Publish the canonical image at:
+
+`ghcr.io/lukefind/podly-unicorn:latest`
+
+The canonical image is the full CPU build using `BASE_IMAGE=python:3.12-slim`, `LITE_BUILD=false`, and all GPU build flags disabled. It supports `linux/amd64` and `linux/arm64`. The repository's GitHub Actions workflow publishes on pushes to `main` and on manual dispatch only when the selected ref is `main`; it has `contents: read` and `packages: write`, logs in to GHCR with the repository token, builds through Buildx, and publishes standard OCI source/revision/description labels. Pull requests retain build validation but never receive registry write permission and never publish.
+
+Publication is atomic:
+
+1. Refuse the release if the candidate tag `sha-<full-commit-SHA>` already exists, then push the candidate manifest under that exact tag.
+2. Record its immutable registry digest and verify both advertised architectures.
+3. Pull and health-smoke-test the AMD64 and ARM64 candidate images under their respective runtime/QEMU platforms.
+4. Promote that verified manifest to the mutable `latest` tag with `docker buildx imagetools create`.
+
+The workflow treats `sha-<full-commit-SHA>` as write-once and records the registry digest as the immutable content reference. A failed candidate never replaces the previous `latest`.
+
+The default end-user Compose configuration references the published image and does not contain a local build section. It retains the existing `./src/instance:/app/src/instance` bind mount so upgrades do not make existing databases appear to disappear. Contributor/local builds use `docker compose -f compose.yml -f compose.build.yml up -d --build`, where the explicit override supplies the current Dockerfile and build arguments.
+
+## Installation experience
+
+The README leads with a no-clone container path:
+
+1. Create a local deployment directory and a `podly.env` file without cloning the repository.
+2. Create the complete environment file with `REQUIRE_AUTH=true`, `PODLY_ADMIN_USERNAME=admin`, a `PODLY_ADMIN_PASSWORD` of at least eight characters, a saved `PODLY_SECRET_KEY` generated by `openssl rand -hex 32`, and `SESSION_COOKIE_SECURE=false` for the documented localhost HTTP path.
+3. Create a persistent named volume and run the public image with `--env-file podly.env`, the volume mounted at `/app/src/instance`, and port `5001` published.
+4. Open the web UI and complete provider setup there.
+
+A pull-based Compose example is also documented for users who prefer declarative deployment. It preserves the bind-mounted `src/instance` layout. Update instructions use `docker pull`/container recreation for the no-clone path or `docker compose pull` followed by `docker compose up -d` for Compose, not `git pull` and a rebuild. HTTPS deployments omit the localhost-only cookie override and should terminate TLS at a reverse proxy.
+
+Secrets in documentation use placeholders or generated values; no real credentials are committed or baked into the image.
+
+## Verification and release
+
+Before publication:
+
+- add Vitest to the frontend and test all valid stored values (`light`, `dark`, `original`) plus missing/invalid values under both operating-system color preferences;
+- verify branding strings, manifest metadata, service-worker cache versioning, and restored asset dimensions/types;
+- run `npm test -- --run`, `npm run lint`, and `npm run build` in `frontend/`;
+- run the existing Python test suite with `pipenv run pytest`;
+- validate both Compose files with `docker compose config` and verify the default config resolves to the GHCR image, the bind mount, and no build section;
+- build the production container locally and smoke-test its health endpoint with a fresh temporary data volume.
+
+For release:
+
+- push the implementation to the public repository so the main/manual-only publishing workflow runs;
+- confirm the workflow succeeds and the GHCR package is public;
+- inspect the remote multi-architecture manifest;
+- anonymously pull the published image into a clean local tag and repeat the health smoke test from the registry artifact;
+- run the AMD64 and ARM64 images (using QEMU where the host architecture differs) and require both `/health` checks to succeed.
+
+Publication is not considered complete until an unauthenticated registry pull is possible and both advertised architectures appear in the manifest.
+
+## Failure handling
+
+- If a build or smoke test fails, do not publish a replacement `latest` tag until fixed and reverified.
+- If GHCR creates the package as private, explicitly change package visibility to public before documenting it as available.
+- If one architecture fails, retain the prior working `latest` image and report the incomplete release rather than advertising a partial multi-architecture image.
