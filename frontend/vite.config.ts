@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 // For development, the frontend development server will proxy to the backend
 // The backend port should match the configured application port
@@ -8,7 +9,7 @@ const BACKEND_TARGET = 'http://localhost:5001'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
     host: true,

@@ -51,7 +51,7 @@ export async function copyTextToClipboard(text: string): Promise<void> {
     // Ignore if not supported
   }
 
-  let successful = false;
+  let successful: boolean;
   try {
     successful = document.execCommand('copy');
   } catch {
