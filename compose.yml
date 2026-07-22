@@ -1,23 +1,13 @@
 services:
   podly:
     container_name: podly-pure-podcasts
-    image: podly-pure-podcasts
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - BASE_IMAGE=${BASE_IMAGE:-python:3.12-slim}
-        - CUDA_VERSION=${CUDA_VERSION:-12.4.1}
-        - USE_GPU=${USE_GPU:-false}
-        - USE_GPU_NVIDIA=${USE_GPU_NVIDIA:-false}
-        - USE_GPU_AMD=${USE_GPU_AMD:-false}
-        - LITE_BUILD=${LITE_BUILD:-false}
+    image: ghcr.io/lukefind/podly-unicorn:latest
     ports:
       - "5001:5001"
     volumes:
       - ./src/instance:/app/src/instance
     env_file:
-      - ./.env.local
+      - ${PODLY_ENV_FILE:-./.env.local}
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}

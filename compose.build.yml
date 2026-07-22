@@ -1,0 +1,14 @@
+services:
+  podly:
+    image: podly-unicorn:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - BASE_IMAGE=${BASE_IMAGE:-python:3.12-slim}
+        - CUDA_VERSION=${CUDA_VERSION:-12.6}
+        - ROCM_VERSION=${ROCM_VERSION:-7.0}
+        - USE_GPU=${USE_GPU:-false}
+        - USE_GPU_NVIDIA=${USE_GPU_NVIDIA:-false}
+        - USE_GPU_AMD=${USE_GPU_AMD:-false}
+        - LITE_BUILD=${LITE_BUILD:-false}

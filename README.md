@@ -110,44 +110,62 @@ If logs show `reason=not_whitelisted`, that episode is disabled for processing. 
 ## Quick Start (Docker)
 
 ### Prerequisites
-- Docker and Docker Compose
-- LLM API key from [Groq](https://console.groq.com/keys) (free) or OpenAI/xAI
+- Docker
+- OpenSSL (for generating the stable application secret)
 
-### 1. Clone and Configure
+No repository clone or local image build is required.
+
+### 1. Create the deployment settings
 
 ```bash
-git clone https://github.com/lukefind/podly-unicorn.git
+mkdir -p podly-unicorn
 cd podly-unicorn
-cp .env.local.example .env.local
-```
-
-Edit `.env.local`:
-
-```bash
-# Recommended: enable authentication for podcast-app trigger/download links
+podly_secret=$(openssl rand -hex 32)
+cat > podly.env <<EOF
 REQUIRE_AUTH=true
 PODLY_ADMIN_USERNAME=admin
-PODLY_ADMIN_PASSWORD=your-secure-password
-PODLY_SECRET_KEY=replace-with-a-long-random-secret
-
-# Local HTTP only (no HTTPS): required so login cookies work on localhost
-# SESSION_COOKIE_SECURE=false
+PODLY_ADMIN_PASSWORD=replace-with-at-least-8-characters
+PODLY_SECRET_KEY=${podly_secret}
+SESSION_COOKIE_SECURE=false
+EOF
+unset podly_secret
 ```
 
-That's it for `.env.local`. After starting, open **Settings** in the web UI and enter your Groq API key in **Quick Setup** — it configures both transcription and ad detection in one step.
+Keep `podly.env` private and backed up. `PODLY_SECRET_KEY` must remain unchanged across container upgrades or encrypted saved keys, sessions, and derived feed secrets will stop working. The admin password must be at least eight characters.
 
-If you run with `REQUIRE_AUTH=true` on plain `http://` (no TLS), you must set `SESSION_COOKIE_SECURE=false`.  
-If you are behind HTTPS (recommended), leave it unset.
+`SESSION_COOKIE_SECURE=false` is only for this documented localhost HTTP setup. For an Internet-accessible deployment, terminate HTTPS with a reverse proxy and set `SESSION_COOKIE_SECURE=true`.
 
-### 2. Start
+### 2. Create persistent storage and run the public image
 
 ```bash
-docker compose up -d --build
+docker volume create podly-data
+docker pull ghcr.io/lukefind/podly-unicorn:latest
+docker run -d \
+  --name podly-unicorn \
+  --restart unless-stopped \
+  --env-file podly.env \
+  -p 127.0.0.1:5001:5001 \
+  -v podly-data:/app/src/instance \
+  ghcr.io/lukefind/podly-unicorn:latest
 ```
 
-### 3. Access
+Open http://localhost:5001, sign in, then use **Settings → Quick Setup** to add a Groq key or **Settings → LLM Configuration** to select another provider. API keys and provider settings are configured in the web UI; they are not baked into the image.
 
-Open http://localhost:5001
+### Pull-based Compose alternative
+
+Compose users can download only the runtime definition—still without cloning or building the repository:
+
+```bash
+mkdir -p podly-unicorn/src/instance
+cd podly-unicorn
+curl -fsSLo compose.yml https://raw.githubusercontent.com/lukefind/podly-unicorn/main/compose.yml
+
+# Create podly.env with the same five settings shown above, then start:
+PODLY_ENV_FILE=./podly.env docker compose pull
+PODLY_ENV_FILE=./podly.env docker compose up -d
+```
+
+This Compose path keeps application data in `./src/instance`. Do not delete that directory during upgrades.
 
 ---
 
@@ -209,10 +227,26 @@ LLM_MODEL=xai/grok-3
 
 ## Updating
 
+For the no-clone `docker run` installation, pull the candidate first, then recreate only the named container. The `podly-data` volume is retained:
+
 ```bash
-cd podly-unicorn
-git pull
-docker compose up -d --build
+docker pull ghcr.io/lukefind/podly-unicorn:latest
+docker stop podly-unicorn
+docker rm podly-unicorn
+docker run -d \
+  --name podly-unicorn \
+  --restart unless-stopped \
+  --env-file podly.env \
+  -p 127.0.0.1:5001:5001 \
+  -v podly-data:/app/src/instance \
+  ghcr.io/lukefind/podly-unicorn:latest
+```
+
+For the pull-based Compose installation:
+
+```bash
+PODLY_ENV_FILE=./podly.env docker compose pull
+PODLY_ENV_FILE=./podly.env docker compose up -d
 ```
 
 Database migrations run automatically on startup — no manual steps needed.
@@ -269,19 +303,23 @@ Then open **Settings → LLM Configuration** to select your provider, model, and
 
 ## Common Commands
 
+For the no-clone `docker run` installation:
+
 ```bash
 # View logs
-docker logs -f podly-pure-podcasts
+docker logs -f podly-unicorn
 
 # Restart
-docker compose restart
+docker restart podly-unicorn
 
 # Stop
-docker compose down
+docker stop podly-unicorn
 
 # Backup database
-docker cp podly-pure-podcasts:/app/src/instance/sqlite3.db ./backup.db
+docker cp podly-unicorn:/app/src/instance/sqlite3.db ./backup.db
 ```
+
+Compose users can use `docker compose logs -f`, `docker compose restart`, and `docker compose down` from their deployment directory.
 
 ---
 
@@ -291,8 +329,8 @@ docker cp podly-pure-podcasts:/app/src/instance/sqlite3.db ./backup.db
 # Frontend (hot reload)
 cd frontend && npm install && npm run dev
 
-# Backend
-docker compose up --build
+# Full local contributor build
+PODLY_ENV_FILE=.env.local docker compose -f compose.yml -f compose.build.yml up -d --build
 ```
 
 ---

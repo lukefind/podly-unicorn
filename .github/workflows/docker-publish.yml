@@ -1,247 +1,234 @@
-name: Docker Build Validation
+name: Build and Publish Container
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  changes:
+  validate-pr:
+    name: Validate pull request image
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
-    outputs:
-      skip: ${{ steps.check_files.outputs.skip }}
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Check for documentation-only changes
-        id: check_files
-        run: |
-          # For PRs, compare against the base branch. For pushes, compare against the previous commit.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_REF="${{ github.event.pull_request.base.ref }}"
-            echo "Fetching base branch origin/$BASE_REF"
-            git fetch --no-tags origin "$BASE_REF"
-            BASE_SHA=$(git rev-parse "origin/$BASE_REF")
-            HEAD_SHA=$(git rev-parse "${{ github.sha }}")
-            echo "Comparing PR commits: $BASE_SHA...$HEAD_SHA"
-            files_changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
-          else
-            echo "Comparing push commits: HEAD~1...HEAD"
-            if git rev-parse HEAD~1 >/dev/null 2>&1; then
-              files_changed=$(git diff --name-only HEAD~1 HEAD)
-            else
-              echo "Single commit push detected; using initial commit diff"
-              files_changed=$(git diff-tree --no-commit-id --name-only -r HEAD)
-            fi
-          fi
-
-          echo "Files changed:"
-          echo "$files_changed"
-
-          # grep exits 1 when every changed file matches the docs-only filter.
-          # Treat that as "no non-doc files" rather than a failed workflow step.
-          non_doc_files=$(printf '%s\n' "$files_changed" | grep -v -E '(^$|\.md$|^docs/|^LICENSE$|^LICENCE$)' || true)
-
-          if [ -z "$non_doc_files" ]; then
-            echo "Only documentation files were changed. Skipping Docker validation."
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "Code files were changed. Proceeding with Docker validation."
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-        shell: bash
-
-  ## test if build is successful, but don't run every permutation on PRs
-  build-amd64-pr-lite:
-    needs: changes
-    if: ${{ needs.changes.outputs.skip == 'false' && github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        variant:
-          - name: "lite"
-            base: "python:3.12-slim"
-            gpu: "false"
-            gpu_nvidia: "false"
-            gpu_amd: "false"
-            lite_build: "true"
-    env:
-      ARCH: amd64
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Free up disk space
-        if: ${{ matrix.variant.gpu == 'true' || matrix.variant.gpu_nvidia == 'true' || matrix.variant.gpu_amd == 'true' }}
-        run: |
-          echo "Available disk space before cleanup:"
-          df -h
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
-          sudo rm -rf /opt/microsoft/msedge /opt/microsoft/powershell /opt/pipx /usr/lib/mono
-          sudo rm -rf /usr/local/.ghcup /usr/share/swift
-          docker system prune -af
-          echo "Available disk space after cleanup:"
-          df -h
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:v0.12.0
+        uses: docker/setup-buildx-action@v4.2.0
 
-      - name: Build image
-        uses: docker/build-push-action@v5
+      - name: Build lite validation image
+        uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: ./Dockerfile
           push: false
-          platforms: linux/${{ env.ARCH }}
+          platforms: linux/amd64
           build-args: |
-            BASE_IMAGE=${{ matrix.variant.base }}
-            USE_GPU=${{ matrix.variant.gpu }}
-            USE_GPU_NVIDIA=${{ matrix.variant.gpu_nvidia }}
-            USE_GPU_AMD=${{ matrix.variant.gpu_amd }}
-            LITE_BUILD=${{ matrix.variant.lite_build }}
-          # Temporarily disabled due to GitHub Actions Cache service outage
-          # cache-from: type=gha
-          # cache-to: type=gha,mode=max
+            BASE_IMAGE=python:3.12-slim
+            LITE_BUILD=true
+            USE_GPU=false
+            USE_GPU_NVIDIA=false
+            USE_GPU_AMD=false
 
-  build-amd64:
-    needs: changes
-    if: ${{ needs.changes.outputs.skip == 'false' && github.event_name != 'pull_request' }}
+  publish:
+    name: Publish verified multi-architecture image
+    if: >-
+      ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        variant:
-          - name: "latest"
-            base: "python:3.12-slim"
-            gpu: "false"
-            gpu_nvidia: "false"
-            gpu_amd: "false"
-            lite_build: "false"
-          - name: "lite"
-            base: "python:3.12-slim"
-            gpu: "false"
-            gpu_nvidia: "false"
-            gpu_amd: "false"
-            lite_build: "true"
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: publish-podly-container
+      cancel-in-progress: false
     env:
-      ARCH: amd64
+      IMAGE: ghcr.io/lukefind/podly-unicorn
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-
-      - name: Free up disk space
-        if: ${{ matrix.variant.gpu == 'true' || matrix.variant.gpu_nvidia == 'true' || matrix.variant.gpu_amd == 'true' }}
-        run: |
-          echo "Available disk space before cleanup:"
-          df -h
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
-          sudo rm -rf /opt/microsoft/msedge /opt/microsoft/powershell /opt/pipx /usr/lib/mono
-          sudo rm -rf /usr/local/.ghcup /usr/share/swift
-          docker system prune -af
-          echo "Available disk space after cleanup:"
-          df -h
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:v0.12.0
-
-      - name: Build image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          platforms: linux/${{ env.ARCH }}
-          build-args: |
-            BASE_IMAGE=${{ matrix.variant.base }}
-            USE_GPU=${{ matrix.variant.gpu }}
-            USE_GPU_NVIDIA=${{ matrix.variant.gpu_nvidia }}
-            USE_GPU_AMD=${{ matrix.variant.gpu_amd }}
-            LITE_BUILD=${{ matrix.variant.lite_build }}
-          # Temporarily disabled due to GitHub Actions Cache service outage
-          # cache-from: type=gha
-          # cache-to: type=gha,mode=max
-
-  build-arm64:
-    needs: changes
-    if: ${{ needs.changes.outputs.skip == 'false' && github.event_name != 'pull_request' }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        variant:
-          - {
-              name: "latest",
-              base: "python:3.12-slim",
-              gpu: "false",
-              gpu_nvidia: "false",
-              gpu_amd: "false",
-              lite_build: "false",
-            }
-          - {
-              name: "lite",
-              base: "python:3.12-slim",
-              gpu: "false",
-              gpu_nvidia: "false",
-              gpu_amd: "false",
-              lite_build: "true",
-            }
-    env:
-      ARCH: arm64
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Free up disk space
-        if: ${{ matrix.variant.gpu == 'true' || matrix.variant.gpu_nvidia == 'true' || matrix.variant.gpu_amd == 'true' }}
-        run: |
-          echo "Available disk space before cleanup:"
-          df -h
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
-          sudo rm -rf /opt/microsoft/msedge /opt/microsoft/powershell /opt/pipx /usr/lib/mono
-          sudo rm -rf /usr/local/.ghcup /usr/share/swift
-          docker system prune -af
-          echo "Available disk space after cleanup:"
-          df -h
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4.2.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:v0.12.0
+        uses: docker/setup-buildx-action@v4.2.0
 
-      - name: Build image
-        uses: docker/build-push-action@v5
+      - name: Log in to GHCR
+        uses: docker/login-action@v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Refuse an existing write-once candidate tag
+        shell: bash
+        run: |
+          set -u
+          candidate="${IMAGE}:sha-${GITHUB_SHA}"
+          inspect_stderr=$(mktemp)
+          trap 'rm -f "$inspect_stderr"' EXIT
+
+          set +e
+          inspect_output=$(docker buildx imagetools inspect "$candidate" 2>"$inspect_stderr")
+          inspect_status=$?
+          set -e
+          inspect_error=$(cat "$inspect_stderr")
+
+          if [ "$inspect_status" -eq 0 ]; then
+            printf '%s\n' "$inspect_output"
+            echo "Candidate tag already exists and is write-once: $candidate" >&2
+            exit 1
+          fi
+
+          if printf '%s\n' "$inspect_error" | grep -Eiq 'manifest unknown|(^|[^0-9])404([^0-9]|$)'; then
+            echo "Candidate tag is unused; publication may proceed: $candidate"
+            exit 0
+          fi
+
+          printf '%s\n' "$inspect_error" >&2
+          echo "Registry inspection failed for a reason other than a missing manifest; refusing publication." >&2
+          exit 1
+
+      - name: Build and push write-once candidate
+        id: build
+        uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: ./Dockerfile
-          push: false
-          platforms: linux/${{ env.ARCH }}
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.IMAGE }}:sha-${{ github.sha }}
           build-args: |
-            BASE_IMAGE=${{ matrix.variant.base }}
-            USE_GPU=${{ matrix.variant.gpu }}
-            USE_GPU_NVIDIA=${{ matrix.variant.gpu_nvidia }}
-            USE_GPU_AMD=${{ matrix.variant.gpu_amd }}
-            LITE_BUILD=${{ matrix.variant.lite_build }}
-          # Temporarily disabled due to GitHub Actions Cache service outage
-          # cache-from: type=gha
-          # cache-to: type=gha,mode=max
+            BASE_IMAGE=python:3.12-slim
+            LITE_BUILD=false
+            USE_GPU=false
+            USE_GPU_NVIDIA=false
+            USE_GPU_AMD=false
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.title=Podly Unicorn
+            org.opencontainers.image.description=Self-hosted AI-powered podcast ad removal
+
+      - name: Verify candidate digest and platforms
+        shell: bash
+        env:
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$BUILD_DIGEST"
+          test "${BUILD_DIGEST#sha256:}" != "$BUILD_DIGEST"
+          echo "DIGEST=$BUILD_DIGEST" >> "$GITHUB_ENV"
+
+          docker buildx imagetools inspect "${IMAGE}@${BUILD_DIGEST}" --raw > candidate-manifest.json
+          jq -e '
+            def attestation:
+              ((.annotations // {})["vnd.docker.reference.type"] == "attestation-manifest")
+              and .platform.os == "unknown"
+              and .platform.architecture == "unknown";
+            def runtime:
+              .platform.os == "linux"
+              and (.platform.architecture == "amd64" or .platform.architecture == "arm64");
+            ([.manifests[] | select(runtime and (attestation | not)) |
+                "\(.platform.os)/\(.platform.architecture)"] | sort)
+              == ["linux/amd64", "linux/arm64"]
+            and all(.manifests[]; (runtime and (attestation | not)) or attestation)
+          ' candidate-manifest.json
+
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@v0.3.1
+        with:
+          version: v0.72.0
+          cache: true
+
+      - name: Scan AMD64 candidate
+        shell: bash
+        run: >-
+          trivy image --platform linux/amd64 --scanners vuln --exit-code 1
+          --severity HIGH,CRITICAL "${IMAGE}@${DIGEST}"
+
+      - name: Scan ARM64 candidate
+        shell: bash
+        run: >-
+          trivy image --platform linux/arm64 --scanners vuln --exit-code 1
+          --severity HIGH,CRITICAL "${IMAGE}@${DIGEST}"
+
+      - name: Health-smoke candidate on both platforms
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for platform in linux/amd64 linux/arm64; do
+            architecture=${platform#linux/}
+            runtime_container="podly-${architecture}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            runtime_volume="podly-${architecture}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            cleanup_runtime() {
+              docker rm -f "$runtime_container" >/dev/null 2>&1 || true
+              docker volume rm "$runtime_volume" >/dev/null 2>&1 || true
+            }
+            trap cleanup_runtime EXIT
+
+            docker run -d \
+              --platform "$platform" \
+              --name "$runtime_container" \
+              -p 127.0.0.1::5001 \
+              -e REQUIRE_AUTH=false \
+              -v "${runtime_volume}:/app/src/instance" \
+              "${IMAGE}@${DIGEST}" >/dev/null
+            runtime_port=$(docker port "$runtime_container" 5001/tcp | sed 's/.*://')
+
+            healthy=false
+            for attempt in $(seq 1 60); do
+              if curl -fsS "http://127.0.0.1:${runtime_port}/health" >/dev/null 2>&1; then
+                healthy=true
+                break
+              fi
+              echo "Waiting for $platform health ($attempt/60)"
+              sleep 2
+            done
+
+            if [ "$healthy" != true ]; then
+              docker logs "$runtime_container"
+              echo "Health check failed for $platform" >&2
+              exit 1
+            fi
+
+            cleanup_runtime
+            trap - EXIT
+          done
+
+      - name: Confirm run still targets current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          test -n "$remote_main"
+          if [ "$remote_main" != "$GITHUB_SHA" ]; then
+            echo "main advanced to $remote_main; refusing to promote stale candidate $GITHUB_SHA" >&2
+            exit 1
+          fi
+
+      - name: Promote verified digest to latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}@${DIGEST}"
+          latest_digest=$(docker buildx imagetools inspect "${IMAGE}:latest" --format '{{json .Manifest}}' | jq -r '.digest')
+          if [ "$latest_digest" != "$DIGEST" ]; then
+            echo "latest resolved to $latest_digest instead of $DIGEST" >&2
+            exit 1
+          fi
+          echo "Published ${IMAGE}:latest at ${DIGEST}"
