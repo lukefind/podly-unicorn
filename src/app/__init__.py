@@ -361,15 +361,12 @@ def _init_prompt_presets() -> None:
 
 
 def _run_app_startup(auth_settings: AuthSettings) -> None:
-    # Try Flask-Migrate upgrade first, fall back to db.create_all() if it fails
     try:
         upgrade()
     except Exception as exc:
-        logger.warning(f"Flask-Migrate upgrade failed, falling back to db.create_all(): {exc}")
-        from app.extensions import db  # pylint: disable=import-outside-toplevel
-        db.create_all()
-        logger.info("Database tables created via db.create_all()")
-    
+        logger.critical("Database migration failed; refusing partial startup: %s", exc)
+        raise
+
     # Initialize default prompt presets
     _init_prompt_presets()
     
