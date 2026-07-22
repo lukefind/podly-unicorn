@@ -1,6 +1,24 @@
 @config "../tailwind.config.js";
 @import "tailwindcss";
 
+/* Preserve the Tailwind v3 meanings used throughout the existing UI. */
+@theme {
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --blur-sm: 4px;
+  --radius-sm: 0.125rem;
+}
+
+/* Tailwind v3 used gray-200 as the default color for bare borders. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
+
 /* Custom input class for forms */
 .input {
   @apply w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900;
