@@ -7,6 +7,7 @@
  * - TriggerPage.tsx uses this with polling via /api/trigger/status
  */
 import { useTheme } from '../contexts/ThemeContext';
+import { STEP_NAMES } from '../constants/processingSteps';
 
 interface ProcessingProgressUIProps {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'error' | 'skipped';
@@ -17,19 +18,15 @@ interface ProcessingProgressUIProps {
   error?: string;
 }
 
-const STEP_NAMES = ['Download', 'Transcribe', 'Detect Ads', 'Process Audio'];
-
 export default function ProcessingProgressUI({
   status,
   step,
   stepName,
   totalSteps,
-  jobId: _jobId,
   error,
 }: ProcessingProgressUIProps) {
   const { theme } = useTheme();
   const isOriginal = theme === 'original';
-  void _jobId; // Unused but kept for API compatibility
   const isActive = status === 'running' || status === 'pending';
   const isFailed = status === 'failed' || status === 'error';
   const progressPercent = totalSteps > 0 ? (step / totalSteps) * 100 : 0;
@@ -147,5 +144,4 @@ export default function ProcessingProgressUI({
   );
 }
 
-export { STEP_NAMES };
 export type { ProcessingProgressUIProps };

@@ -25,4 +25,11 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Providers and their consumer hooks are intentionally co-located.
+    files: ['src/contexts/*.tsx', 'src/layouts/PodcastsLayout.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 )

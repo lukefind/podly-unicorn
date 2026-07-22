@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 import { feedsApi, presetsApi } from '../services/api';
 import { toast } from 'react-hot-toast';
-import type { Feed } from '../types';
+import type { Feed, PromptPreset } from '../types';
 import AddFeedForm from '../components/AddFeedForm';
 import SubscriptionModal from '../components/SubscriptionModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -47,7 +47,7 @@ interface PodcastsContextType {
   setSelectedFeedId: (id: number | null) => void;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
-  presets: any[] | undefined;
+  presets: PromptPreset[] | undefined;
   queryClient: ReturnType<typeof useQueryClient>;
 }
 
@@ -279,9 +279,9 @@ export default function PodcastsLayout() {
                   presetName={feed.effective_prompt_preset?.name}
                   showAutoTag={feed.auto_download_enabled || feed.auto_download_enabled_by_user}
                   showPrivacyToggle={requireAuth}
-                  isPrivate={(feed as any).is_private}
+                  isPrivate={feed.is_private}
                   onPrivacyToggle={() => {
-                    togglePrivacyMutation.mutate({ feedId: feed.id, isPrivate: !(feed as any).is_private });
+                    togglePrivacyMutation.mutate({ feedId: feed.id, isPrivate: !feed.is_private });
                   }}
                   privacyToggleDisabled={togglePrivacyMutation.isPending}
                 />

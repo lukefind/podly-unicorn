@@ -23,7 +23,6 @@ interface EpisodeProcessingStatusProps {
 
 export default function EpisodeProcessingStatus({
   episodeGuid,
-  isWhitelisted: _isWhitelisted,
   hasProcessedAudio,
   onProcessingComplete,
   pollTrigger,

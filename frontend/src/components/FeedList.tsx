@@ -23,17 +23,8 @@ export default function FeedList({ feeds, onFeedDeleted, onFeedSelected, selecte
     }
   };
 
-  // Ensure feeds is an array
-  const feedsArray = Array.isArray(feeds) ? feeds : [];
-
-  if (feedsArray.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-500 text-lg">No podcast feeds added yet.</p>
-        <p className="text-gray-400 mt-2">Click "Add Feed" to get started.</p>
-      </div>
-    );
-  }
+  // Ensure feeds is an array while keeping a stable value for memo dependencies.
+  const feedsArray = useMemo(() => (Array.isArray(feeds) ? feeds : []), [feeds]);
 
   const filteredFeeds = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -46,6 +37,15 @@ export default function FeedList({ feeds, onFeedDeleted, onFeedSelected, selecte
       return title.includes(term) || author.includes(term);
     });
   }, [feedsArray, searchTerm]);
+
+  if (feedsArray.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500 text-lg">No podcast feeds added yet.</p>
+        <p className="text-gray-400 mt-2">Click "Add Feed" to get started.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">

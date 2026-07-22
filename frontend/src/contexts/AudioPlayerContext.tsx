@@ -70,6 +70,11 @@ const AudioPlayerContext = createContext<AudioPlayerContextType | undefined>(und
 export function AudioPlayerProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(audioPlayerReducer, initialState);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const currentEpisodeRef = useRef<Episode | null>(null);
+
+  useEffect(() => {
+    currentEpisodeRef.current = state.currentEpisode;
+  }, [state.currentEpisode]);
 
   const playEpisode = (episode: Episode) => {
     console.log('playEpisode called with:', episode);
@@ -86,6 +91,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     }
 
     console.log('Setting episode and loading state');
+    currentEpisodeRef.current = episode;
     dispatch({ type: 'SET_EPISODE', payload: episode });
     dispatch({ type: 'SET_LOADING', payload: true });
     
@@ -118,6 +124,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       }
       audio.currentTime = 0;
     }
+    currentEpisodeRef.current = null;
     dispatch({ type: 'CLEAR_EPISODE' });
   }, []);
 
@@ -205,10 +212,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       if (audio.error?.code === MediaError.MEDIA_ERR_NETWORK || 
           audio.error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
         // For network errors, provide more helpful messages
-        if (state.currentEpisode) {
-          if (!state.currentEpisode.has_processed_audio) {
+        const currentEpisode = currentEpisodeRef.current;
+        if (currentEpisode) {
+          if (!currentEpisode.has_processed_audio) {
             errorMessage = 'Post needs to be processed first';
-          } else if (!state.currentEpisode.whitelisted) {
+          } else if (!currentEpisode.whitelisted) {
             errorMessage = 'Post is not whitelisted';
           } else {
             errorMessage = 'Audio file not available - try processing the post again';
@@ -305,4 +313,4 @@ export function useAudioPlayer() {
     throw new Error('useAudioPlayer must be used within an AudioPlayerProvider');
   }
   return context;
-} 
+}

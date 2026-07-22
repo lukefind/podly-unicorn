@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           requireAuth: true,
           user: me.user,
         });
-      } catch (error) {
+      } catch {
         setState({
           status: 'ready',
           requireAuth: true,

@@ -730,7 +730,7 @@ export default function ConfigPage() {
     if (currentType === 'local') {
       setField(['whisper', 'whisper_type'], 'remote');
     }
-  }, [localWhisperAvailable, pending]);
+  }, [localWhisperAvailable, pending, setField]);
 
   if (isLoading || !pending) {
     return (
@@ -1812,7 +1812,7 @@ export default function ConfigPage() {
                       `Repaired ${result.repaired} of ${result.checked} posts checked${result.total_errors > 0 ? ` (${result.total_errors} errors)` : ''}`,
                       { id: 'repair-paths', duration: 5000 }
                     );
-                  } catch (err) {
+                  } catch {
                     toast.error('Failed to repair paths', { id: 'repair-paths' });
                   }
                 }}

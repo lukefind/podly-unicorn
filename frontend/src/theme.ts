@@ -29,8 +29,8 @@ export function getThemeLogoPath(theme: Theme): string {
     : '/images/logos/unicorn-logo.png';
 }
 
-export function getThemeBrandName(_theme: Theme): string {
-  return 'Podly';
+export function getThemeBrandName(theme: Theme): string {
+  return theme === 'original' ? 'Podly' : 'Podly Unicorn';
 }
 
 export function getThemeBrandClass(theme: Theme): string {
