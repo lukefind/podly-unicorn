@@ -5,11 +5,12 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from flask import Flask, Response, g, jsonify
 
+import app.routes.auth_routes as auth_routes
 from app.auth import AuthSettings
 from app.auth.middleware import init_auth_middleware
 from app.auth.state import failure_rate_limiter
 from app.extensions import db
-from app.models import Feed, Post, User
+from app.models import AppSettings, EmailSettings, Feed, Post, User
 from app.routes.auth_routes import auth_bp
 from app.routes.feed_routes import feed_bp
 
@@ -206,3 +207,96 @@ def test_share_link_returns_same_token_for_user_and_feed(auth_app: Flask) -> Non
     assert first["url"] == second["url"]
     assert first["feed_token"] == second["feed_token"]
     assert first["feed_secret"] == second["feed_secret"]
+
+
+def test_signup_emails_use_unicorn_subjects(
+    auth_app: Flask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent_messages: list[dict[str, str]] = []
+    monkeypatch.setattr(
+        auth_routes, "send_email", lambda **message: sent_messages.append(message)
+    )
+    with auth_app.app_context():
+        db.session.add(AppSettings(id=1, allow_signup=True))
+        db.session.add(
+            EmailSettings(
+                id=1,
+                admin_notify_email="owner@example.com",
+                app_base_url="https://podly.example",
+            )
+        )
+        db.session.commit()
+
+    response = auth_app.test_client().post(
+        "/api/auth/signup",
+        json={"email": "listener@example.com", "password": "password123"},
+    )
+
+    assert response.status_code == 201
+    assert [message["subject"] for message in sent_messages] == [
+        "Podly Unicorn: Signup received",
+        "Podly Unicorn: New signup pending approval",
+    ]
+
+
+def test_password_reset_email_uses_unicorn_subject(
+    auth_app: Flask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent_messages: list[dict[str, str]] = []
+    monkeypatch.setattr(
+        auth_routes, "send_email", lambda **message: sent_messages.append(message)
+    )
+    with auth_app.app_context():
+        user = User(
+            username="listener",
+            email="listener@example.com",
+            role="user",
+            account_status="active",
+        )
+        user.set_password("password123")
+        db.session.add(user)
+        db.session.commit()
+
+    response = auth_app.test_client().post(
+        "/api/auth/password-reset/request",
+        json={"email": "listener@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert [message["subject"] for message in sent_messages] == [
+        "Podly Unicorn: Password reset"
+    ]
+
+
+def test_account_approval_email_uses_unicorn_subject(
+    auth_app: Flask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent_messages: list[dict[str, str]] = []
+    monkeypatch.setattr(
+        auth_routes, "send_email", lambda **message: sent_messages.append(message)
+    )
+    with auth_app.app_context():
+        pending = User(
+            username="pending",
+            email="pending@example.com",
+            role="user",
+            account_status="pending",
+        )
+        pending.set_password("password123")
+        db.session.add(pending)
+        db.session.commit()
+        pending_id = pending.id
+
+    client = auth_app.test_client()
+    login = client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "password"},
+    )
+    assert login.status_code == 200
+
+    response = client.post(f"/api/admin/users/{pending_id}/approve")
+
+    assert response.status_code == 200
+    assert [message["subject"] for message in sent_messages] == [
+        "Podly Unicorn: Account approved"
+    ]

@@ -217,6 +217,25 @@ def verify_source_branding() -> None:
             f"expected {count} Unicorn-branded {label}",
         )
 
+    auth_source = (ROOT / "src" / "app" / "routes" / "auth_routes.py").read_text(
+        encoding="utf-8"
+    )
+    expected_email_subjects = (
+        'subject="Podly Unicorn: Signup received"',
+        'subject="Podly Unicorn: New signup pending approval"',
+        'subject="Podly Unicorn: Password reset"',
+        'subject="Podly Unicorn: Account approved"',
+    )
+    for subject in expected_email_subjects:
+        require(
+            auth_source.count(subject) == 1,
+            f"auth email subject is missing or duplicated: {subject}",
+        )
+    require(
+        'subject="Podly:' not in auth_source,
+        "auth email subjects contain the plain Podly product identity",
+    )
+
 
 def main() -> int:
     checks = (
