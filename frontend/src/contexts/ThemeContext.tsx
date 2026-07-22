@@ -4,9 +4,9 @@ import {
   THEME_STORAGE_KEY,
   getNextTheme,
   isDarkSurfaceTheme,
-  isValidTheme,
   type Theme,
 } from '../theme';
+import { resolveInitialTheme } from '../themePreference';
 
 interface ThemeContextType {
   theme: Theme;
@@ -18,10 +18,9 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
-    // Check localStorage first, then default to blue theme
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (isValidTheme(stored)) return stored;
-    return 'original';
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return resolveInitialTheme(stored, prefersDark);
   });
 
   useEffect(() => {

@@ -17,15 +17,48 @@ from app.feeds import (
     db,
     feed_item,
     fetch_feed,
+    generate_combined_feed_xml,
     generate_feed_xml,
     get_duration,
     get_guid,
     make_post,
     refresh_feed,
 )
-from app.models import Feed, Post
+from app.models import Feed, Post, User, UserFeedSubscription
 
 logger = logging.getLogger("global_logger")
+
+
+def test_empty_combined_feed_uses_unicorn_product_identity(app, monkeypatch):
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://podly.example")
+
+    with app.app_context():
+        user = User(username="unicorn", password_hash="not-used")
+        db.session.add(user)
+        db.session.commit()
+
+        xml = generate_combined_feed_xml(user.id, user.username)
+
+    assert "<title>Podly Unicorn</title>" in xml
+    assert "https://podly.example/images/logos/unicorn-logo.png" in xml
+
+
+def test_subscribed_combined_feed_uses_unicorn_product_identity(app, monkeypatch):
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://podly.example")
+    app.config["SECRET_KEY"] = "test-only-secret"
+
+    with app.app_context():
+        user = User(username="subscriber", password_hash="not-used")
+        feed = Feed(title="Example", rss_url="https://example.com/feed.xml")
+        db.session.add_all([user, feed])
+        db.session.commit()
+        db.session.add(UserFeedSubscription(user_id=user.id, feed_id=feed.id))
+        db.session.commit()
+
+        xml = generate_combined_feed_xml(user.id, user.username)
+
+    assert "<title>Podly Unicorn</title>" in xml
+    assert "https://podly.example/images/logos/unicorn-logo.png" in xml
 
 
 class MockPost:
