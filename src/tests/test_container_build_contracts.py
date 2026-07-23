@@ -104,6 +104,35 @@ def test_release_commit_explicitly_dispatches_main_container_publication():
     assert "Confirm run still targets current main" in docker_workflow
 
 
+def test_validation_ignores_deleted_paths_and_uses_current_official_actions():
+    validation = (
+        REPOSITORY_ROOT / ".github/workflows/lint-and-format.yml"
+    ).read_text()
+    release = (REPOSITORY_ROOT / ".github/workflows/release.yml").read_text()
+    publication = (
+        REPOSITORY_ROOT / ".github/workflows/docker-publish.yml"
+    ).read_text()
+    conventional = (
+        REPOSITORY_ROOT / ".github/workflows/conventional-commit-check.yml"
+    ).read_text()
+
+    assert validation.count("git diff --diff-filter=ACMR --name-only") == 2
+    assert "git diff --name-only" not in validation
+
+    all_workflows = "\n".join((validation, release, publication, conventional))
+    assert "actions/checkout@v7.0.1" in all_workflows
+    assert "actions/setup-node@v7.0.0" in all_workflows
+    assert "actions/setup-python@v7.0.0" in all_workflows
+    assert "actions/cache@v6.1.0" in all_workflows
+    for stale_action in (
+        "actions/checkout@v4",
+        "actions/setup-node@v4",
+        "actions/setup-python@v5",
+        "actions/cache@v4",
+    ):
+        assert stale_action not in all_workflows
+
+
 def test_production_defaults_to_fixed_cpu_latest_on_gpu_host(tmp_path):
     result, commands = _run_launcher(tmp_path, nvidia_available=True)
 

@@ -21,11 +21,11 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Python
         id: python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.12"
           cache: "pip"
@@ -38,7 +38,7 @@ jobs:
         run: pip install "pipenv==${PINNED_PIPENV_VERSION}"
 
       - name: Cache pipenv virtualenv
-        uses: actions/cache@v4
+        uses: actions/cache@v6.1.0
         with:
           path: .venv
           key: ${{ runner.os }}-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('Pipfile.lock') }}
@@ -60,10 +60,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: "24"
           cache: "npm"
@@ -87,7 +87,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -107,7 +107,7 @@ jobs:
             diff_range="${first_commit}...HEAD"
           fi
 
-          files_changed=$(git diff --name-only "$diff_range" || true)
+          files_changed=$(git diff --diff-filter=ACMR --name-only "$diff_range" || true)
           python_files=$(printf '%s\n' "$files_changed" | grep -E '\.py$' || true)
 
           {
@@ -119,7 +119,7 @@ jobs:
       - name: Set up Python
         if: ${{ steps.changed.outputs.python_files != '' }}
         id: python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.12"
           cache: "pip"
@@ -131,7 +131,7 @@ jobs:
 
       - name: Cache pipenv virtualenv
         if: ${{ steps.changed.outputs.python_files != '' }}
-        uses: actions/cache@v4
+        uses: actions/cache@v6.1.0
         with:
           path: .venv
           key: ${{ runner.os }}-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('Pipfile.lock') }}
@@ -162,7 +162,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -182,7 +182,7 @@ jobs:
             diff_range="${first_commit}...HEAD"
           fi
 
-          files_changed=$(git diff --name-only "$diff_range" || true)
+          files_changed=$(git diff --diff-filter=ACMR --name-only "$diff_range" || true)
           frontend_files=$(printf '%s\n' "$files_changed" | grep -E '^frontend/.*\.(js|jsx|ts|tsx)$' || true)
 
           {
@@ -193,7 +193,7 @@ jobs:
 
       - name: Set up Node.js
         if: ${{ steps.changed.outputs.frontend_files != '' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: "24"
           cache: "npm"
