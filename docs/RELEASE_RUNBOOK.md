@@ -299,7 +299,8 @@ ENV_FILE_CHECKSUM="$(sha256sum "$ENV_FILE" | awk '{print $1}')"
 
 {
   printf 'timestamp=%s\n' "$DEPLOY_TIMESTAMP"
-  printf 'configured_ref=%s\n' "$(docker compose config --images)"
+  printf 'configured_ref=%s\n' \
+    "$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')"
   printf 'local_image_id=%s\n' \
     "$(docker inspect "$CONTAINER" --format '{{.Image}}')"
   printf 'repo_digests:\n'
@@ -309,12 +310,14 @@ ENV_FILE_CHECKSUM="$(sha256sum "$ENV_FILE" | awk '{print $1}')"
   printf 'backup_archive=%s\n' "$BACKUP_ARCHIVE"
   printf 'env_file_sha256=%s\n' "$ENV_FILE_CHECKSUM"
 } | tee "$RELEASE_RECORD"
+chmod 600 "$RELEASE_RECORD"
 
 docker compose stop "$SERVICE"
 tar --create --gzip --file "$BACKUP_ARCHIVE" \
   --directory "$COMPOSE_DIR" src/instance
 test -s "$BACKUP_ARCHIVE"
 tar --list --file "$BACKUP_ARCHIVE" >/dev/null
+chmod 600 "$BACKUP_ARCHIVE"
 ```
 
 This is how to **record the currently deployed** configured reference and local
