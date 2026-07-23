@@ -255,6 +255,12 @@ jobs:
 
           for platform in linux/amd64 linux/arm64; do
             architecture=${platform#linux/}
+            platform_digest=$(jq -er \
+              --arg architecture "$architecture" \
+              '.manifests[] |
+                select(.platform.os == "linux" and .platform.architecture == $architecture) |
+                .digest' \
+              candidate-manifest.json)
             runtime_container="podly-${architecture}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
             runtime_volume="podly-${architecture}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
             cleanup_runtime() {
@@ -269,7 +275,7 @@ jobs:
               -p 127.0.0.1::5001 \
               -e REQUIRE_AUTH=false \
               -v "${runtime_volume}:/app/src/instance" \
-              "${IMAGE}@${DIGEST}" >/dev/null
+              "${IMAGE}@${platform_digest}" >/dev/null
             runtime_port=$(docker port "$runtime_container" 5001/tcp | sed 's/.*://')
 
             healthy=false

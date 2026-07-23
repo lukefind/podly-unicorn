@@ -77,6 +77,9 @@ def test_publication_requires_full_release_acceptance():
     assert "(^|[^0-9])404([^0-9]|$)" in publication_commands
     assert ": not found$" in publication_commands
     assert "Registry inspection failed" in publication_commands
+    assert "platform_digest=$(jq -er" in publication_commands
+    assert '"${IMAGE}@${platform_digest}"' in publication_commands
+    assert '"${IMAGE}@${DIGEST}" >/dev/null' not in publication_commands
 
     pr_validation = workflow["jobs"]["validate-pr"]
     assert pr_validation["permissions"] == {"contents": "read"}
