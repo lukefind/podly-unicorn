@@ -39,7 +39,8 @@ Create `docs/RELEASE_RUNBOOK.md` as the one complete maintainer and operator ref
    - immutable `sha-<full-commit>` candidate;
    - release acceptance, manifest validation, strict vulnerability scans, dual-platform health smoke, stale-main guard, and atomic `latest` promotion.
 4. Failure handling:
-   - `latest` remains unchanged when a gate fails;
+   - failures before the promotion step leave `latest` unchanged;
+   - a failure inside the promotion step requires explicit registry inspection because the tag operation may have completed before post-promotion verification failed;
    - inspect the failed job before retrying;
    - if a candidate was already pushed, fix with a new commit rather than overwriting or rerunning the write-once tag;
    - manual dispatch is valid only for current `main`.
