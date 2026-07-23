@@ -77,9 +77,7 @@ RUN set -e && \
     exit 1; \
     fi && \
     python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version' && \
-    python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version' && \
-    python3 -m pip --version | grep -F "pip ${PINNED_PIP_VERSION}" && \
-    pip --version | grep -F "pip ${PINNED_PIP_VERSION}"
+    python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
 
 # Install python3-tomli if Python version is less than 3.11 (separate step for ARM compatibility)
 RUN if [ -f /etc/debian_version ]; then \
@@ -100,6 +98,8 @@ COPY Pipfile Pipfile.lock Pipfile.lite Pipfile.lite.lock ./
 RUN set -e && \
     python3 -m pip install --no-cache-dir --upgrade "pip==${PINNED_PIP_VERSION}" && \
     PINNED_PIP_VERSION="${PINNED_PIP_VERSION}" python3 -c 'import os, pip; assert pip.__version__ == os.environ["PINNED_PIP_VERSION"]' && \
+    python3 -m pip --version | grep -F "pip ${PINNED_PIP_VERSION}" && \
+    pip --version | grep -F "pip ${PINNED_PIP_VERSION}" && \
     python3 -m pip install --no-cache-dir "pipenv==${PINNED_PIPENV_VERSION}"
 
 # Set pip timeout and retries for better reliability

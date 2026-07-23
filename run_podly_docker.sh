@@ -7,9 +7,9 @@ GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
 # Central configuration defaults
-CUDA_VERSION="12.4.1"
-ROCM_VERSION="6.4"
-CPU_BASE_IMAGE="python:3.11-slim"
+CUDA_VERSION="12.6.3"
+ROCM_VERSION="7.0"
+CPU_BASE_IMAGE="cgr.dev/chainguard/python:latest-dev@sha256:967409cf4148210d7c1bb872ffdda42a8b73cfc738f95eae7413045d0d6c30ee"
 GPU_NVIDIA_BASE_IMAGE="nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu22.04"
 GPU_ROCM_BASE_IMAGE="rocm/dev-ubuntu-22.04:${ROCM_VERSION}-complete"
 

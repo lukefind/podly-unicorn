@@ -10,8 +10,9 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        - BASE_IMAGE=${BASE_IMAGE:-python:3.11-slim}
-        - CUDA_VERSION=${CUDA_VERSION:-12.4.1}
+        - BASE_IMAGE=${BASE_IMAGE:-cgr.dev/chainguard/python:latest-dev@sha256:967409cf4148210d7c1bb872ffdda42a8b73cfc738f95eae7413045d0d6c30ee}
+        - CUDA_VERSION=${CUDA_VERSION:-12.6}
+        - ROCM_VERSION=${ROCM_VERSION:-7.0}
         - USE_GPU=${USE_GPU:-false}
         - USE_GPU_NVIDIA=${USE_GPU_NVIDIA:-false}
         - USE_GPU_AMD=${USE_GPU_AMD:-false}
