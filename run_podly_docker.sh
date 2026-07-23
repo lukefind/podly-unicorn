@@ -47,8 +47,10 @@ FORCE_GPU=false
 DETACHED=false
 PRODUCTION_MODE=true
 REBUILD=false
-BRANCH_SUFFIX="main"
 LITE_BUILD=false
+CUDA_VERSION_REQUESTED=false
+ROCM_VERSION_REQUESTED=false
+BRANCH_REQUESTED=false
 
 # Detect NVIDIA GPU
 NVIDIA_GPU_AVAILABLE=false
@@ -81,10 +83,12 @@ while [[ $# -gt 0 ]]; do
         --cuda=*)
             CUDA_VERSION="${1#*=}"
             GPU_NVIDIA_BASE_IMAGE="nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu24.04"
+            CUDA_VERSION_REQUESTED=true
             ;;
         --rocm=*)
             ROCM_VERSION="${1#*=}"
             GPU_ROCM_BASE_IMAGE="rocm/dev-ubuntu-24.04:${ROCM_VERSION}-complete"
+            ROCM_VERSION_REQUESTED=true
             ;;
         -d|--detach|-b|--background)
             DETACHED=true
@@ -100,8 +104,7 @@ while [[ $# -gt 0 ]]; do
             PRODUCTION_MODE=true
             ;;
         --branch=*)
-            BRANCH_NAME="${1#*=}"
-            BRANCH_SUFFIX="${BRANCH_NAME}"
+            BRANCH_REQUESTED=true
             ;;
         --lite)
             LITE_BUILD=true
@@ -135,11 +138,31 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
+if [ "$PRODUCTION_MODE" = true ]; then
+    UNSUPPORTED_PRODUCTION_OPTIONS=()
+    [ "$BUILD_ONLY" = true ] && UNSUPPORTED_PRODUCTION_OPTIONS+=("--build")
+    [ "$TEST_BUILD" = true ] && UNSUPPORTED_PRODUCTION_OPTIONS+=("--test-build")
+    [ "$REBUILD" = true ] && UNSUPPORTED_PRODUCTION_OPTIONS+=("--rebuild")
+    [ "$FORCE_GPU" = true ] && UNSUPPORTED_PRODUCTION_OPTIONS+=("--gpu")
+    [ "$LITE_BUILD" = true ] && UNSUPPORTED_PRODUCTION_OPTIONS+=("--lite")
+    [ "$BRANCH_REQUESTED" = true ] && UNSUPPORTED_PRODUCTION_OPTIONS+=("--branch")
+    [ "$CUDA_VERSION_REQUESTED" = true ] && UNSUPPORTED_PRODUCTION_OPTIONS+=("--cuda")
+    [ "$ROCM_VERSION_REQUESTED" = true ] && UNSUPPORTED_PRODUCTION_OPTIONS+=("--rocm")
+
+    if [ "${#UNSUPPORTED_PRODUCTION_OPTIONS[@]}" -gt 0 ]; then
+        echo -e "${RED}Error: production mode uses the fixed pull-only CPU image ghcr.io/lukefind/podly-unicorn:latest.${NC}"
+        echo -e "${RED}Unsupported production option(s): ${UNSUPPORTED_PRODUCTION_OPTIONS[*]}. Re-run with --dev to build a custom variant.${NC}"
+        exit 1
+    fi
+fi
+
 # Determine if GPU should be used based on availability and flags
 USE_GPU=false
 USE_GPU_NVIDIA=false
 USE_GPU_AMD=false
-if [ "$FORCE_CPU" = true ]; then
+if [ "$PRODUCTION_MODE" = true ]; then
+    echo -e "${YELLOW}Production mode uses the published CPU latest image.${NC}"
+elif [ "$FORCE_CPU" = true ]; then
     USE_GPU=false
     echo -e "${YELLOW}Forcing CPU mode${NC}"
 elif [ "$FORCE_GPU" = true ]; then
@@ -203,29 +226,7 @@ fi
 # Setup Docker Compose configuration
 if [ "$PRODUCTION_MODE" = true ]; then
     COMPOSE_FILES="-f compose.yml"
-    # Set branch tag based on GPU detection and branch
-    if [ "$LITE_BUILD" = true ] && [ "$USE_GPU" = true ]; then
-        echo -e "${RED}Error: --lite cannot be combined with GPU builds. Use --cpu or drop --lite.${NC}"
-        exit 1
-    fi
-
-    if [ "$LITE_BUILD" = true ]; then
-        BRANCH="${BRANCH_SUFFIX}-lite"
-    elif [ "$USE_GPU_NVIDIA" = true ]; then
-        BRANCH="${BRANCH_SUFFIX}-gpu-nvidia"
-    elif [ "$USE_GPU_AMD" = true ]; then
-        BRANCH="${BRANCH_SUFFIX}-gpu-amd"
-    else
-        BRANCH="${BRANCH_SUFFIX}-latest"
-    fi
-
-    export BRANCH
-
-    echo -e "${YELLOW}Production mode - using published images${NC}"
-    echo -e "${YELLOW}  Branch tag: ${BRANCH}${NC}"
-    if [ "$BRANCH_SUFFIX" != "main" ]; then
-        echo -e "${GREEN}Using custom branch: ${BRANCH_SUFFIX}${NC}"
-    fi
+    echo -e "${YELLOW}Production mode - using published CPU image${NC}"
 else
     COMPOSE_FILES="-f compose.dev.cpu.yml"
     if [ "$USE_GPU_NVIDIA" = true ]; then
