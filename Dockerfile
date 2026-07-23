@@ -32,6 +32,7 @@ ARG LITE_BUILD=false
 ARG PINNED_PIP_VERSION=26.1.2
 ARG PINNED_PIPENV_VERSION=2026.0.3
 ARG TORCH_VERSION=2.10.0
+ARG TRITON_VERSION=3.6.0
 ARG TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu
 ARG TORCH_NVIDIA_INDEX_URL=https://download.pytorch.org/whl/cu126
 ARG TORCH_ROCM_INDEX_URL=https://download.pytorch.org/whl/rocm7.0
@@ -95,23 +96,35 @@ RUN set -e && \
     PIPENV_PIPFILE=Pipfile pipenv install --deploy --system; \
     fi
 
-# Force the lock-pinned PyTorch wheel from the selected official backend index.
+# Replace the lock-installed generic PyTorch wheel with the selected official
+# backend wheel. Resolve its backend-specific runtime dependencies normally;
+# pip keeps already-compatible lock-installed common dependencies in place.
+# Whisper requires the `triton` distribution on Linux x86_64 independently of
+# Torch. Install it first; ROCm Torch then overlays its `triton-rocm` backend.
 RUN set -e && \
+    if [ "${LITE_BUILD}" != "true" ] && [ "$(uname -m)" = "x86_64" ]; then \
+    python3 -m pip install --no-cache-dir \
+    "triton==${TRITON_VERSION}" --index-url "${TORCH_CPU_INDEX_URL}"; \
+    fi && \
     if [ "${LITE_BUILD}" = "true" ]; then \
     echo "Skipping PyTorch installation in lite mode"; \
     elif [ "${USE_GPU}" = "true" ] || [ "${USE_GPU_NVIDIA}" = "true" ]; then \
-    python3 -m pip install --no-cache-dir --force-reinstall --no-deps \
+    python3 -m pip uninstall --yes torch && \
+    python3 -m pip install --no-cache-dir \
     "torch==${TORCH_VERSION}" --index-url "${TORCH_NVIDIA_INDEX_URL}" && \
     TORCH_EXPECTED_VERSION="${TORCH_VERSION}" python3 -c 'import os, torch; assert torch.__version__.split("+", 1)[0] == os.environ["TORCH_EXPECTED_VERSION"]; assert "+cu" in torch.__version__; assert torch.version.cuda is not None; assert torch.version.hip is None'; \
     elif [ "${USE_GPU_AMD}" = "true" ]; then \
-    python3 -m pip install --no-cache-dir --force-reinstall --no-deps \
+    python3 -m pip uninstall --yes torch && \
+    python3 -m pip install --no-cache-dir \
     "torch==${TORCH_VERSION}" --index-url "${TORCH_ROCM_INDEX_URL}" && \
     TORCH_EXPECTED_VERSION="${TORCH_VERSION}" python3 -c 'import os, torch; assert torch.__version__.split("+", 1)[0] == os.environ["TORCH_EXPECTED_VERSION"]; assert "+rocm" in torch.__version__; assert torch.version.hip is not None; assert torch.version.cuda is None'; \
     else \
-    python3 -m pip install --no-cache-dir --force-reinstall --no-deps \
+    python3 -m pip uninstall --yes torch && \
+    python3 -m pip install --no-cache-dir \
     "torch==${TORCH_VERSION}" --index-url "${TORCH_CPU_INDEX_URL}" && \
     TORCH_EXPECTED_VERSION="${TORCH_VERSION}" python3 -c 'import os, torch; assert torch.__version__.split("+", 1)[0] == os.environ["TORCH_EXPECTED_VERSION"]; assert "+cpu" in torch.__version__; assert torch.version.cuda is None; assert torch.version.hip is None'; \
-    fi
+    fi && \
+    python3 -m pip check
 
 # Copy application code
 COPY src/ ./src/
