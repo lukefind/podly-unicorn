@@ -496,3 +496,32 @@ The current Podly code path materially limits reachability:
 These controls reduce current exposure but do not resolve the dependency
 findings. Track both advisories and upgrade the common CPU, CUDA, and ROCm pin as
 soon as fixed wheels are released across all supported indices.
+
+---
+
+## 2026-07-23 Container Base Hardening
+
+The canonical container now uses the public multi-architecture Chainguard
+Python development image pinned to index digest
+`sha256:967409cf4148210d7c1bb872ffdda42a8b73cfc738f95eae7413045d0d6c30ee`.
+The digest provides Linux AMD64 and ARM64 manifests and can be pulled
+anonymously. Pinning the index makes the default build reproducible across both
+published base filesystems and architectures. APK packages come from
+Chainguard's rolling public repository, so their versions are enforced by the
+image build assertions, runtime tests, and release vulnerability scan rather
+than by the base digest. Compose and Docker builds still accept an explicit
+`BASE_IMAGE` override for Debian compatibility.
+
+This change was required by the release vulnerability gate. The previous
+`python:3.12-slim` base and its Debian variants contained unfixed HIGH or
+CRITICAL operating-system findings under Trivy 0.72.0. The pinned Chainguard
+base had zero HIGH/CRITICAL vulnerability findings at selection time. No Trivy
+ignore or severity exception was added.
+
+The Chainguard development tag currently defaults to Python 3.14. Podly removes
+those packages, installs the repository's Python 3.12 runtime and pip 26.1.2,
+and asserts the interpreter and pip versions during the build. Build-only APK
+packages are removed after the Python dependency and PyTorch layers complete.
+The container continues to start as root only for bind-mount ownership repair
+and optional PUID/PGID remapping; the entrypoint then executes the application
+as the unprivileged `appuser`.

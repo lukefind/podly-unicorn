@@ -1,5 +1,5 @@
 # Multi-stage build for combined frontend and backend
-ARG BASE_IMAGE=python:3.12-slim
+ARG BASE_IMAGE=cgr.dev/chainguard/python:latest-dev@sha256:967409cf4148210d7c1bb872ffdda42a8b73cfc738f95eae7413045d0d6c30ee
 FROM node:24-alpine AS frontend-build
 
 WORKDIR /app
@@ -20,6 +20,10 @@ RUN set -e && \
 # Backend stage
 FROM ${BASE_IMAGE} AS backend
 
+# The Chainguard image defaults to a non-root user. Podly's entrypoint starts as
+# root to repair bind-mount ownership, then drops to appuser before Flask starts.
+USER root
+
 # Environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -39,8 +43,25 @@ ARG TORCH_ROCM_INDEX_URL=https://download.pytorch.org/whl/rocm7.0
 
 WORKDIR /app
 
-# Install dependencies based on base image
-RUN if [ -f /etc/debian_version ]; then \
+# Install runtime and build dependencies based on the selected base image.
+# The Chainguard dev image currently ships Python 3.14, so replace its generic
+# Python packages with the repository's supported Python 3.12 packages first.
+RUN set -e && \
+    if command -v apk >/dev/null 2>&1; then \
+    apk del \
+    python-3.14-dev python-3.14-base-dev \
+    py3.14-pip py3.14-pip-base py3.14-setuptools \
+    python-3.14 python-3.14-base && \
+    apk add --no-cache \
+    ca-certificates \
+    ffmpeg \
+    gosu \
+    shadow \
+    python-3.12 \
+    py3.12-pip \
+    python-3.12-dev \
+    build-base; \
+    elif [ -f /etc/debian_version ]; then \
     apt-get update && \
     apt-get install -y ca-certificates && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -51,7 +72,14 @@ RUN if [ -f /etc/debian_version ]; then \
     python3-pip \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* ; \
-    fi
+    else \
+    echo "Unsupported base image: expected Alpine/Wolfi or Debian" >&2; \
+    exit 1; \
+    fi && \
+    python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version' && \
+    python -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version' && \
+    python3 -m pip --version | grep -F "pip ${PINNED_PIP_VERSION}" && \
+    pip --version | grep -F "pip ${PINNED_PIP_VERSION}"
 
 # Install python3-tomli if Python version is less than 3.11 (separate step for ARM compatibility)
 RUN if [ -f /etc/debian_version ]; then \
@@ -125,6 +153,30 @@ RUN set -e && \
     TORCH_EXPECTED_VERSION="${TORCH_VERSION}" python3 -c 'import os, torch; assert torch.__version__.split("+", 1)[0] == os.environ["TORCH_EXPECTED_VERSION"]; assert "+cpu" in torch.__version__; assert torch.version.cuda is None; assert torch.version.hip is None'; \
     fi && \
     python3 -m pip check
+
+# The canonical Chainguard base is a development image so dependencies can be
+# compiled. Remove its build-only toolchain after all Python wheels are ready.
+RUN if command -v apk >/dev/null 2>&1; then \
+    apk del \
+    build-base \
+    binutils \
+    gcc \
+    glibc-dev \
+    git \
+    libstdc++-dev \
+    libxcrypt-dev \
+    linux-headers \
+    make \
+    openssf-compiler-options \
+    pkgconf \
+    posix-cc-wrappers \
+    python-3.12-dev \
+    uv \
+    wget && \
+    ! command -v gcc && \
+    ! command -v make && \
+    ! apk info -e python-3.12-dev; \
+    fi
 
 # Copy application code
 COPY src/ ./src/
