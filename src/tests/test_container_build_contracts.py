@@ -72,6 +72,12 @@ def test_publication_requires_full_release_acceptance():
     assert "npm run build" in commands
     assert "npm audit --audit-level=high" in commands
 
+    publication_commands = _workflow_commands(publish)
+    assert "manifest unknown" in publication_commands
+    assert "(^|[^0-9])404([^0-9]|$)" in publication_commands
+    assert ": not found$" in publication_commands
+    assert "Registry inspection failed" in publication_commands
+
     pr_validation = workflow["jobs"]["validate-pr"]
     assert pr_validation["permissions"] == {"contents": "read"}
 

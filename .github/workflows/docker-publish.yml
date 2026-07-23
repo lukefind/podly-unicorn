@@ -174,7 +174,7 @@ jobs:
             exit 1
           fi
 
-          if printf '%s\n' "$inspect_error" | grep -Eiq 'manifest unknown|(^|[^0-9])404([^0-9]|$)'; then
+          if printf '%s\n' "$inspect_error" | grep -Eiq 'manifest unknown|(^|[^0-9])404([^0-9]|$)|: not found$'; then
             echo "Candidate tag is unused; publication may proceed: $candidate"
             exit 0
           fi
