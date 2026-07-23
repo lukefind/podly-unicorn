@@ -56,3 +56,6 @@ src/instance/data/*
 
 # Frontend build logs
 frontend-build.log
+
+# Local isolated development worktrees
+.worktrees/
