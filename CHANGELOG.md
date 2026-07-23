@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/lukefind/podly-unicorn/compare/v1.2.0...v1.2.1) (2026-07-23)
+
+
+### Bug Fixes
+
+* validate only existing changed files ([33ac271](https://github.com/lukefind/podly-unicorn/commit/33ac271bf88ef7772bf72da8495ea5c87d22290b))
+
 # [1.2.0](https://github.com/lukefind/podly-unicorn/compare/v1.1.0...v1.2.0) (2026-07-23)
 
 
