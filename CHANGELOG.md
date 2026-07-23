@@ -1,3 +1,32 @@
+# [1.2.0](https://github.com/lukefind/podly-unicorn/compare/v1.1.0...v1.2.0) (2026-07-23)
+
+
+### Bug Fixes
+
+* align container build defaults ([585350f](https://github.com/lukefind/podly-unicorn/commit/585350f7383db455b7882ee4ee2641f7a43bfc9c))
+* bound background feed retrieval ([989e47b](https://github.com/lukefind/podly-unicorn/commit/989e47b2b75646e7929b363f14e07e41248aab03))
+* clean frontend lint baseline ([1f76853](https://github.com/lukefind/podly-unicorn/commit/1f768534070adf99027fc89d9db1ccb883fbb8f4))
+* dispatch container release after semantic release ([22ea000](https://github.com/lukefind/podly-unicorn/commit/22ea000c07c14e079476bf2c0b51f618612b283a))
+* harden canonical container base ([22a3d4e](https://github.com/lukefind/podly-unicorn/commit/22a3d4e4d21a65792c765846bf2b5fa66a9509ba))
+* harden container release paths ([97a139a](https://github.com/lukefind/podly-unicorn/commit/97a139a3b7fe1f074858aa39e8e3efc9e902185b))
+* install PyTorch backend dependencies ([e8656d5](https://github.com/lukefind/podly-unicorn/commit/e8656d5a379a3e5250b2276cebfcd5cc647100f9))
+* make fresh database bootstrap reliable ([d77893a](https://github.com/lukefind/podly-unicorn/commit/d77893aa7cd8d633cb0cfb08460a5f3e5b9e982e))
+* make user download post optional ([62a0eb7](https://github.com/lukefind/podly-unicorn/commit/62a0eb77caf791c8e4fb28cb8d42e1208fdc34cb))
+* pin safe pip in container images ([549ed62](https://github.com/lukefind/podly-unicorn/commit/549ed62525b63003757cba6893979fbc16036cd2))
+* preserve frontend upgrade compatibility ([f7cd37e](https://github.com/lukefind/podly-unicorn/commit/f7cd37ece8be2548892499825a1aef591b6ad9c9))
+* remove incomplete download destinations ([b802185](https://github.com/lukefind/podly-unicorn/commit/b802185391082dadf19f1116d43f3be869d7fef1))
+* restore Unicorn authentication emails ([516ede4](https://github.com/lukefind/podly-unicorn/commit/516ede4482cbf511186056e5ab94595b34ff74eb))
+* restore Unicorn trigger page branding ([8891eee](https://github.com/lukefind/podly-unicorn/commit/8891eeef7871afb9b80e1f70312dc0bfcac1f419))
+* retry transient podcast downloads ([b4a3066](https://github.com/lukefind/podly-unicorn/commit/b4a3066f2479aa2d4a6566c037e65913d90d7d9a))
+* support Python 3.12 GPU dev bases ([325104d](https://github.com/lukefind/podly-unicorn/commit/325104d591fc6858c375cf7fac926ae591e7fdcd))
+
+
+### Features
+
+* expose background refresh health ([2fdc7e4](https://github.com/lukefind/podly-unicorn/commit/2fdc7e4fb089bba21f5f1478995bc509b505a69e))
+* restore Unicorn as the default theme ([e9ca68c](https://github.com/lukefind/podly-unicorn/commit/e9ca68c4a0fe67e87dc145dfe0030d608c7e861e))
+* restore Unicorn PWA and project branding ([2085910](https://github.com/lukefind/podly-unicorn/commit/208591099e6e8f9872f95fd42ec503313fc1bf3b))
+
 # [1.1.0](https://github.com/lukefind/podly-unicorn/compare/v1.0.4...v1.1.0) (2026-03-23)
 
 
