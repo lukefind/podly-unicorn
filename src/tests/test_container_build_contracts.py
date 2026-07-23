@@ -75,6 +75,8 @@ def test_release_documentation_matches_publication_and_deployment_contracts():
         "write-once",
         "workflow_dispatch",
         "record the currently deployed",
+        "local_rollback_tag",
+        "docker image prune",
         "repo digest",
         "backup archive",
         "automatic migrations",

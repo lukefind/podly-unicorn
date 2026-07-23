@@ -287,6 +287,7 @@ BACKUP_DIR="/replace/with/secure-podly-backup-directory"
 ENV_FILE="/replace/with/the-compose-env-file"
 SERVICE="podly"
 CONTAINER="podly-pure-podcasts"
+IMAGE="ghcr.io/lukefind/podly-unicorn"
 
 test -f "$COMPOSE_DIR/compose.yml"
 test -f "$ENV_FILE"
@@ -298,17 +299,22 @@ cd "$COMPOSE_DIR"
 DEPLOY_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RELEASE_RECORD="$BACKUP_DIR/predeploy-$DEPLOY_TIMESTAMP.txt"
 BACKUP_ARCHIVE="$BACKUP_DIR/podly-instance-$DEPLOY_TIMESTAMP.tar.gz"
+LOCAL_ROLLBACK_TAG="$IMAGE:rollback-$DEPLOY_TIMESTAMP"
 ENV_FILE_CHECKSUM="$(sha256sum "$ENV_FILE" | awk '{print $1}')"
+RUNNING_IMAGE_ID="$(
+  docker inspect "$CONTAINER" --format '{{.Image}}'
+)"
+
+docker tag "$RUNNING_IMAGE_ID" "$LOCAL_ROLLBACK_TAG"
 
 {
   printf 'timestamp=%s\n' "$DEPLOY_TIMESTAMP"
   printf 'configured_ref=%s\n' \
     "$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')"
-  printf 'local_image_id=%s\n' \
-    "$(docker inspect "$CONTAINER" --format '{{.Image}}')"
+  printf 'local_image_id=%s\n' "$RUNNING_IMAGE_ID"
+  printf 'local_rollback_tag=%s\n' "$LOCAL_ROLLBACK_TAG"
   printf 'repo_digests:\n'
-  docker image inspect \
-    "$(docker inspect "$CONTAINER" --format '{{.Image}}')" \
+  docker image inspect "$RUNNING_IMAGE_ID" \
     --format '{{range .RepoDigests}}{{println .}}{{end}}'
   printf 'backup_archive=%s\n' "$BACKUP_ARCHIVE"
   printf 'env_file_sha256=%s\n' "$ENV_FILE_CHECKSUM"
@@ -324,8 +330,11 @@ chmod 600 "$BACKUP_ARCHIVE"
 ```
 
 This is how to **record the currently deployed** configured reference and local
-image ID, list **every repo digest**, and record the exact backup archive path.
-Keep the service stopped between this consistent backup and deployment.
+image ID, list **every repo digest**, retain a durable host-local rollback tag,
+and record the exact backup archive path. The local tag is essential when the
+old image was built locally and has no repo digest; `docker image prune` will
+not remove the tagged image. Keep the service stopped between this consistent
+backup and deployment.
 
 `PODLY_SECRET_KEY` protects sessions, derived feed-token secrets, and encrypted
 saved LLM keys. Never print, rotate, replace, or remove it as part of a release:
@@ -370,8 +379,9 @@ ad-processed result.
 ## Rollback
 
 Prefer the immutable `sha-<full-commit>` tag recorded for the prior release, or
-the exact recorded digest. Do not delete or replace the `src/instance` bind
-mount and never use `docker compose down -v`.
+the exact recorded digest. For the first transition from a locally built image,
+use the recorded `LOCAL_ROLLBACK_TAG`. Do not delete or replace the
+`src/instance` bind mount and never use `docker compose down -v`.
 
 An application rollback and a schema rollback are separate decisions:
 
@@ -385,7 +395,8 @@ An application rollback and a schema rollback are separate decisions:
 
 For an application-only rollback, replace the placeholder with either
 `ghcr.io/lukefind/podly-unicorn:sha-<full-commit>` or
-`ghcr.io/lukefind/podly-unicorn@sha256:<recorded-digest>`:
+`ghcr.io/lukefind/podly-unicorn@sha256:<recorded-digest>`, or use the recorded
+host-local rollback tag:
 
 ```sh
 IMAGE="ghcr.io/lukefind/podly-unicorn"
@@ -393,7 +404,10 @@ ROLLBACK_REF="replace-with-immutable-sha-tag-or-recorded-digest"
 
 test "${PODLY_ENV_FILE:?run the pre-deploy setup in this shell first}" = "$ENV_FILE"
 cd "$COMPOSE_DIR"
-docker pull "$ROLLBACK_REF"
+case "$ROLLBACK_REF" in
+  "$IMAGE":rollback-*) docker image inspect "$ROLLBACK_REF" >/dev/null ;;
+  *) docker pull "$ROLLBACK_REF" ;;
+esac
 # This changes only the host-local tag; it does not mutate GHCR.
 docker tag "$ROLLBACK_REF" "$IMAGE:latest"
 docker compose up -d --pull never --force-recreate "$SERVICE"
@@ -406,6 +420,8 @@ When schema restoration is required, keep the service stopped and use the exact
 `BACKUP_ARCHIVE` recorded before deployment:
 
 ```sh
+IMAGE="ghcr.io/lukefind/podly-unicorn"
+ROLLBACK_REF="replace-with-immutable-sha-tag-recorded-digest-or-local-rollback-tag"
 ROLLBACK_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 POST_FAILURE_COPY="$BACKUP_DIR/podly-instance-post-failure-$ROLLBACK_TIMESTAMP.tar.gz"
 
@@ -418,7 +434,10 @@ mv "$COMPOSE_DIR/src/instance" \
   "$COMPOSE_DIR/src/instance.post-failure-$ROLLBACK_TIMESTAMP"
 tar --extract --gzip --file "$BACKUP_ARCHIVE" --directory "$COMPOSE_DIR"
 
-docker pull "$ROLLBACK_REF"
+case "$ROLLBACK_REF" in
+  "$IMAGE":rollback-*) docker image inspect "$ROLLBACK_REF" >/dev/null ;;
+  *) docker pull "$ROLLBACK_REF" ;;
+esac
 docker tag "$ROLLBACK_REF" "$IMAGE:latest"
 docker compose up -d --pull never --force-recreate "$SERVICE"
 docker compose logs --tail=200 "$SERVICE"
