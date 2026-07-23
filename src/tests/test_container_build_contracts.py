@@ -58,6 +58,12 @@ def test_publication_requires_full_release_acceptance():
     assert release_tests["permissions"] == {"contents": "read"}
     assert 'python-version: "3.12"' in workflow_path.read_text()
     assert "pipenv install --dev --deploy" in commands
+    torch_backend = commands.index("triton==${TRITON_VERSION}")
+    torch_replacement = commands.index("torch==${TORCH_VERSION}")
+    dependency_check = commands.index("pipenv run python -m pip check")
+    assert torch_backend < torch_replacement < dependency_check
+    assert "${TORCH_CPU_INDEX_URL}" in commands
+    assert 'assert "+cpu" in torch.__version__' in commands
     assert "pipenv run pytest --disable-warnings" in commands
     assert "pipenv run python -m pip check" in commands
     assert "pipenv run python scripts/verify_brand_assets.py" in commands
@@ -69,6 +75,15 @@ def test_publication_requires_full_release_acceptance():
 
     pr_validation = workflow["jobs"]["validate-pr"]
     assert pr_validation["permissions"] == {"contents": "read"}
+
+    validation_workflow = yaml.safe_load(
+        (REPOSITORY_ROOT / ".github/workflows/lint-and-format.yml").read_text()
+    )
+    backend_commands = _workflow_commands(validation_workflow["jobs"]["backend-tests"])
+    assert "triton==${TRITON_VERSION}" in backend_commands
+    assert "torch==${TORCH_VERSION}" in backend_commands
+    assert "${TORCH_CPU_INDEX_URL}" in backend_commands
+    assert 'assert "+cpu" in torch.__version__' in backend_commands
 
 
 def test_release_commit_explicitly_dispatches_main_container_publication():
