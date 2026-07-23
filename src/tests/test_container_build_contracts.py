@@ -45,6 +45,74 @@ def _workflow_commands(job):
     )
 
 
+def test_release_documentation_matches_publication_and_deployment_contracts():
+    runbook = (REPOSITORY_ROOT / "docs/RELEASE_RUNBOOK.md").read_text()
+    readme = (REPOSITORY_ROOT / "README.md").read_text()
+    contributors = (REPOSITORY_ROOT / "docs/contributors.md").read_text()
+    agents = (REPOSITORY_ROOT / "AGENTS.md").read_text()
+    pull_request_template = (
+        REPOSITORY_ROOT / ".github/PULL_REQUEST_TEMPLATE.md"
+    ).read_text()
+
+    for active_document in (readme, contributors, agents, pull_request_template):
+        assert "docs/RELEASE_RUNBOOK.md" in active_document
+
+    for required in (
+        "ghcr.io/lukefind/podly-unicorn",
+        "sha-<full-commit>",
+        "latest",
+        "linux/amd64",
+        "linux/arm64",
+        "Conventional Commit",
+        "PODLY_SECRET_KEY",
+        "docker compose pull",
+        "rollback",
+        "promotion step",
+        "semantic-version Docker tags are not currently published",
+        "failures before the promotion step",
+        "failure inside the promotion step",
+        "new commit",
+        "write-once",
+        "workflow_dispatch",
+        "record the currently deployed",
+        "repo digest",
+        "backup archive",
+        "automatic migrations",
+        "restore the pre-deploy backup",
+        "anonymous pull",
+        "org.opencontainers.image.revision",
+        "PODLY_SECRET_KEY remains unchanged during deploy and rollback",
+    ):
+        assert required.lower() in runbook.lower()
+
+    workflow = yaml.safe_load(
+        (REPOSITORY_ROOT / ".github/workflows/docker-publish.yml").read_text()
+    )
+    publish = workflow["jobs"]["publish"]
+    workflow_image = publish["env"]["IMAGE"]
+    build = next(step for step in publish["steps"] if step.get("id") == "build")
+    promotion = next(
+        step
+        for step in publish["steps"]
+        if step.get("name") == "Promote verified digest to latest"
+    )
+
+    assert workflow_image == "ghcr.io/lukefind/podly-unicorn"
+    assert workflow_image in runbook
+    assert build["with"]["tags"] == "${{ env.IMAGE }}:sha-${{ github.sha }}"
+    assert '--tag "${IMAGE}:latest"' in promotion["run"]
+    assert "r4s5t6u7v8w9" in agents
+
+    active_docs = "\n".join((readme, contributors, agents))
+    for stale in (
+        "the image is not published",
+        "do not run `sudo docker compose pull`",
+        "sudo docker compose up -d --build",
+        "docker exec -it podly-pure-podcasts bash",
+    ):
+        assert stale.lower() not in active_docs.lower()
+
+
 def test_publication_requires_full_release_acceptance():
     workflow_path = REPOSITORY_ROOT / ".github/workflows/docker-publish.yml"
     workflow = yaml.safe_load(workflow_path.read_text())
