@@ -1,3 +1,10 @@
+## [1.2.2](https://github.com/lukefind/podly-unicorn/compare/v1.2.1...v1.2.2) (2026-07-23)
+
+
+### Bug Fixes
+
+* install pinned CPU torch in validation ([97f2ec0](https://github.com/lukefind/podly-unicorn/commit/97f2ec069931f9ddf3e434c9054cbf8c0d761124))
+
 ## [1.2.1](https://github.com/lukefind/podly-unicorn/compare/v1.2.0...v1.2.1) (2026-07-23)
 
 
