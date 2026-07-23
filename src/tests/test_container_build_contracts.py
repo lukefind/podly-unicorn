@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -103,9 +102,7 @@ def test_release_commit_explicitly_dispatches_main_container_publication():
     original_sha = release_commands.index("git rev-parse HEAD")
     semantic_release = release_commands.index("semantic-release")
     remote_main = release_commands.index("git ls-remote origin refs/heads/main")
-    dispatch = release_commands.index(
-        "actions/workflows/docker-publish.yml/dispatches"
-    )
+    dispatch = release_commands.index("actions/workflows/docker-publish.yml/dispatches")
     confirmation = release_commands.index("Dispatched container publication")
     assert original_sha < semantic_release < remote_main < dispatch < confirmation
     assert 'if [ "$remote_main" = "$ORIGINAL_SHA" ]' in release_commands
@@ -120,13 +117,9 @@ def test_release_commit_explicitly_dispatches_main_container_publication():
 
 
 def test_validation_ignores_deleted_paths_and_uses_current_official_actions():
-    validation = (
-        REPOSITORY_ROOT / ".github/workflows/lint-and-format.yml"
-    ).read_text()
+    validation = (REPOSITORY_ROOT / ".github/workflows/lint-and-format.yml").read_text()
     release = (REPOSITORY_ROOT / ".github/workflows/release.yml").read_text()
-    publication = (
-        REPOSITORY_ROOT / ".github/workflows/docker-publish.yml"
-    ).read_text()
+    publication = (REPOSITORY_ROOT / ".github/workflows/docker-publish.yml").read_text()
     conventional = (
         REPOSITORY_ROOT / ".github/workflows/conventional-commit-check.yml"
     ).read_text()
@@ -196,12 +189,8 @@ def test_development_gpu_and_lite_build_paths_remain_available(tmp_path):
 def test_dev_gpu_base_images_use_python_312_distribution():
     runner = (REPOSITORY_ROOT / "run_podly_docker.sh").read_text()
 
-    assert runner.count(
-        'nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu24.04'
-    ) == 2
-    assert runner.count(
-        'rocm/dev-ubuntu-24.04:${ROCM_VERSION}-complete'
-    ) == 2
+    assert runner.count("nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu24.04") == 2
+    assert runner.count("rocm/dev-ubuntu-24.04:${ROCM_VERSION}-complete") == 2
     assert "ubuntu22.04" not in runner
     assert "ubuntu-22.04" not in runner
 
