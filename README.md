@@ -341,6 +341,14 @@ PODLY_ENV_FILE=.env.local docker compose -f compose.yml -f compose.build.yml up 
 
 See [contributing guide](docs/contributors.md) for local setup & contribution instructions.
 
+### Maintainer releases
+
+Container releases are automated from `main`: a verified commit becomes the
+immutable `sha-<full-commit>` candidate before its exact digest is promoted to
+`latest`. Maintainers should follow the [container release
+runbook](docs/RELEASE_RUNBOOK.md) and wait for the **Build and Publish
+Container** workflow to succeed before treating `latest` as deployable.
+
 ---
 
 <div align="center">

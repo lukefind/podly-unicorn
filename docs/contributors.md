@@ -1,18 +1,33 @@
 # Contributor Guide
 
-### Quick Start (Docker - recommended for local setup)
+### Quick Start (Docker)
 
-1. Make the script executable and run:
+Make the script executable, then choose production or development explicitly:
 
 ```bash
 chmod +x run_podly_docker.sh
-./run_podly_docker.sh --build
-./run_podly_docker.sh # foreground with logs
-# or detached
-./run_podly_docker.sh -d
+./run_podly_docker.sh
 ```
 
-This automatically detects NVIDIA GPUs and uses them if available.
+The no-argument command is the production path. It starts the published CPU
+image configured by `compose.yml`; Compose downloads it automatically when it
+is not already local. Pull explicitly before an update as described in
+`docs/RELEASE_RUNBOOK.md`. Local builds are development-only. These commands
+build and exit without starting Podly:
+
+```bash
+./run_podly_docker.sh --dev --build
+./run_podly_docker.sh --dev --lite --build
+./run_podly_docker.sh --dev --gpu --build
+```
+
+To build and then start a development variant, omit `--build`:
+
+```bash
+./run_podly_docker.sh --dev
+./run_podly_docker.sh --dev --lite
+./run_podly_docker.sh --dev --gpu
+```
 
 After the server starts:
 
@@ -132,16 +147,36 @@ On next launch, the database updates automatically.
 
 ## Releases and Commit Messages
 
-This repo uses `semantic-release` to automate versioning and GitHub releases. It relies on
-Conventional Commits to determine the next version.
+Every commit accepted into `main` is deployable. The **Build and Publish
+Container** workflow runs release acceptance, creates the immutable
+`sha-<full-commit>` candidate, verifies it, and then promotes that exact digest
+to `latest`.
 
-For pull requests, include **at least one** commit that follows the Conventional Commit format:
+Conventional Commits determine semantic versioning:
 
-- `feat: add new episode filter`
-- `fix(api): handle empty feed`
-- `chore: update dependencies`
+- `fix:` requests a patch release.
+- `feat:` requests a minor release.
+- `feat!:` or a `BREAKING CHANGE:` footer requests a major release.
 
-If no Conventional Commit is present, the release pipeline will have nothing to publish.
+`docs:`, `test:`, `ci:`, and `chore:` normally do not create a semantic
+version, but they still publish a container for the accepted `main` commit.
+
+Two workflows coordinate publication:
+
+- `.github/workflows/docker-publish.yml` performs acceptance, candidate
+  publication, verification, and promotion.
+- `.github/workflows/release.yml` runs semantic-release. If it creates a new
+  `[skip ci]` release commit, it dispatches container publication for that new
+  current `main` commit with `workflow_dispatch`.
+
+Candidate tags are write-once. If a `sha-<full-commit>` tag already exists,
+rerunning the same commit must fail; make a new commit to publish a new
+candidate. Failures before the promotion step leave `latest` unchanged; a
+failure inside the promotion step requires inspecting both registry tags
+because `latest` may already have moved. For the full verification, deployment,
+and rollback procedure, use the [container release
+runbook](RELEASE_RUNBOOK.md), whose canonical repository path is
+`docs/RELEASE_RUNBOOK.md`.
 
 ## Docker Support
 
@@ -150,22 +185,22 @@ Podly can be run in Docker with support for both NVIDIA GPU and non-NVIDIA envir
 ### Docker Options
 
 ```bash
-./run_podly_docker.sh --dev          # rebuild containers for local changes
-./run_podly_docker.sh --production   # use published images
-./run_podly_docker.sh --lite         # smaller image without local Whisper
-./run_podly_docker.sh --cpu          # force CPU mode
-./run_podly_docker.sh --gpu          # force GPU mode
-./run_podly_docker.sh --build        # build only
-./run_podly_docker.sh --test-build   # test build
-./run_podly_docker.sh -d             # detached
+./run_podly_docker.sh                       # production: start published CPU image
+./run_podly_docker.sh --dev                 # build and start development CPU
+./run_podly_docker.sh --dev --lite          # build and start development lite
+./run_podly_docker.sh --dev --gpu           # build and start development NVIDIA GPU
+./run_podly_docker.sh --dev --build         # build development CPU, then exit
+./run_podly_docker.sh --dev --lite --build  # build development lite, then exit
+./run_podly_docker.sh --dev --gpu --build   # build development NVIDIA GPU, then exit
 ```
 
 ### Development vs Production Modes
 
-**Development Mode** (default):
+**Development Mode**:
 
 - Uses local Docker builds
-- Requires rebuilding after code changes: `./run_podly_docker.sh --dev`
+- Requires `--dev`; rebuild after code changes with
+  `./run_podly_docker.sh --dev`
 - Mounts essential directories (config, input/output, database) and live code for development
 - Good for: development, testing, customization
 
@@ -177,14 +212,11 @@ Podly can be run in Docker with support for both NVIDIA GPU and non-NVIDIA envir
 - Good for: deployment, quick setup, consistent environments
 
 ```bash
-# Start with existing local container
+# Start the configured published production image
 ./run_podly_docker.sh
 
 # Rebuild and start after making code changes
 ./run_podly_docker.sh --dev
-
-# Use published images (no local building required)
-./run_podly_docker.sh --production
 ```
 
 ### Docker Environment Configuration
@@ -207,8 +239,8 @@ A: There are two ways to enable GPU acceleration:
 
 1. **Using Docker**:
 
-   - Use the provided Docker setup with `run_podly_docker.sh` which automatically detects and uses NVIDIA GPUs if available
-   - You can force GPU mode with `./run_podly_docker.sh --gpu` or force CPU mode with `./run_podly_docker.sh --cpu`
+   - GPU builds are development-only: use
+     `./run_podly_docker.sh --dev --gpu`
 
 2. **In a local environment**:
    - Install the CUDA version of PyTorch to your virtual environment:
@@ -241,24 +273,20 @@ Both local and Docker deployments provide a consistent experience:
   - Frontend is built as static assets and served by the backend
 - **Development**: `run_podly_docker.sh` serves everything on port 5001
   - Local script builds frontend to static assets (like Docker)
-  - Restart `./run_podly_docker.sh` after frontend changes to rebuild assets
+  - Rebuild and restart with `./run_podly_docker.sh --dev` after frontend changes
 
 #### Development Modes
 
 Both scripts provide equivalent core functionality with some unique features:
 
-**Common Options (work in both scripts)**:
-
-- `-b/--background` or `-d/--detach`: Run in background mode
-- `-h/--help`: Show help information
-
-**Local Development**
-
 **Docker Development** (`./run_podly_docker.sh`):
 
-- **Development mode**: `./run_podly_docker.sh --dev` - rebuilds containers with code changes
-- **Production mode**: `./run_podly_docker.sh --production` - uses pre-built images
-- **Docker-specific options**: `--build`, `--test-build`, `--gpu`, `--cpu`, `--cuda=VERSION`, `--rocm=VERSION`, `--branch=BRANCH`
+- **Production mode**: `./run_podly_docker.sh` starts the configured published
+  CPU image; follow the release runbook to pull an update first.
+- **Development CPU**: `./run_podly_docker.sh --dev`.
+- **Development lite**: `./run_podly_docker.sh --dev --lite`.
+- **Development GPU**: `./run_podly_docker.sh --dev --gpu`.
+- Add `--build` to any development command to build only and exit.
 
 **Functional Equivalence**:
 Both scripts provide the same core user experience:

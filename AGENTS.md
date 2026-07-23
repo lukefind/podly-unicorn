@@ -116,7 +116,7 @@ When modifying `src/prompt_presets.py`, the database must also be updated:
 
 ```bash
 # In Docker container
-docker exec podly-pure-podcasts bash -c "cd /app && python -c \"
+docker exec podly-pure-podcasts sh -c "cd /app && python -c \"
 import sys
 sys.path.insert(0, 'src')
 from app.extensions import db
@@ -360,13 +360,27 @@ Processed files are automatically deleted after 14 days (configurable in Setting
 ```bash
 docker logs -f podly-pure-podcasts          # View logs
 docker restart podly-pure-podcasts          # Restart
-docker exec -it podly-pure-podcasts bash    # Shell access
+docker exec -it podly-pure-podcasts sh      # Shell access
 ```
 
 ### Database Access in Docker
 The running app locks the database. To run scripts:
 1. Stop the app, OR
 2. Use a minimal Flask app that doesn't start the scheduler (see preset update script above)
+
+### Releases and Public Container
+
+- The public image is `ghcr.io/lukefind/podly-unicorn`.
+- Production uses `./run_podly_docker.sh` with no build flags; local CPU, lite,
+  and GPU builds require `--dev`.
+- Every accepted `main` commit runs release acceptance, publishes the
+  write-once `sha-<full-commit>` candidate, verifies it, and promotes its digest
+  to `latest`.
+- `.github/workflows/docker-publish.yml` owns container acceptance and
+  publication. `.github/workflows/release.yml` owns semantic-release and
+  dispatches publication when it creates a new `[skip ci]` release commit.
+- Follow the [container release runbook](docs/RELEASE_RUNBOOK.md) for release
+  verification, deployment, rollback, and failure handling.
 
 ---
 
@@ -480,7 +494,7 @@ Per-feed toggle to automatically process new episodes when they are released. (R
 **Recommended approach:** Apply migrations directly via Python script:
 
 ```bash
-docker exec <container-name> bash -lc 'python - <<"PY"
+docker exec <container-name> sh -lc 'python - <<"PY"
 import sqlite3
 
 conn = sqlite3.connect("/app/src/instance/sqlite3.db")
@@ -505,12 +519,17 @@ docker restart <container-name>
 
 ### Current Migration Head
 
-**Revision:** `m0n1o2p3q4r5` (Add llm_key_profile table)
+**Revision:** `r4s5t6u7v8w9` (Add `feed.last_changed_at`)
 
 ### Migration History (recent)
 
 | Revision | Description |
 |----------|-------------|
+| `r4s5t6u7v8w9` | Add `feed.last_changed_at` for RSS ETag and Last-Modified validators |
+| `q3r4s5t6u7v8` | Scope `post.guid` uniqueness per feed |
+| `r3s4t5u6v7w8` | Make `user_download.post_id` nullable for feed-level audit events |
+| `p2q3r4s5t6u7` | Add processing-job history metrics |
+| `n1o2p3q4r5s6` | Add refined ad-boundary fields to `post` |
 | `m0n1o2p3q4r5` | Add `llm_key_profile` table for encrypted saved API keys |
 | `l9m0n1o2p3q4` | Make `feed_access_token.feed_id` nullable (combined feed tokens) |
 | `k8l9m0n1o2p3` | Remove unique constraint from `post.download_url` (allows duplicate audio URLs) |
