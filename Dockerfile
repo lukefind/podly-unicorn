@@ -70,6 +70,7 @@ RUN set -e && \
     gosu \
     python3 \
     python3-pip \
+    python-is-python3 \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* ; \
     else \
@@ -95,8 +96,11 @@ COPY Pipfile Pipfile.lock Pipfile.lite Pipfile.lite.lock ./
 
 # Upgrade pip before it installs any application dependencies, then pin Pipenv
 # so lockfile verification stays deterministic across builds.
+# Ubuntu GPU bases mark their distro Python as externally managed. Podly builds
+# an isolated container filesystem, so allow the intentional system install.
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 RUN set -e && \
-    python3 -m pip install --no-cache-dir --upgrade "pip==${PINNED_PIP_VERSION}" && \
+    python3 -m pip install --no-cache-dir --upgrade --ignore-installed "pip==${PINNED_PIP_VERSION}" && \
     PINNED_PIP_VERSION="${PINNED_PIP_VERSION}" python3 -c 'import os, pip; assert pip.__version__ == os.environ["PINNED_PIP_VERSION"]' && \
     python3 -m pip --version | grep -F "pip ${PINNED_PIP_VERSION}" && \
     pip --version | grep -F "pip ${PINNED_PIP_VERSION}" && \
