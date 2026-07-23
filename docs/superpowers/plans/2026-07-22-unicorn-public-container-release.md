@@ -1,5 +1,9 @@
 # Unicorn Public Container Release Implementation Plan
 
+> This is a preserved historical record. Its operational release instructions
+> are superseded; `docs/RELEASE_RUNBOOK.md` is the authoritative current
+> procedure.
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Restore Podly Unicorn as the default brand, modernize and clean the supported dependency stack, and publish a verified public AMD64/ARM64 image at `ghcr.io/lukefind/podly-unicorn:latest`.

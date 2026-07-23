@@ -1,5 +1,9 @@
 # Unicorn Branding and Public Container Design
 
+> This is a preserved historical record. Its operational release instructions
+> are superseded; `docs/RELEASE_RUNBOOK.md` is the authoritative current
+> procedure.
+
 ## Goal
 
 Make Podly Unicorn the default presentation again without removing the optional Blue theme, and publish a public container that users can run without cloning or building the repository.

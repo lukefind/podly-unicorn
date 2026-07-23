@@ -113,6 +113,28 @@ def test_release_documentation_matches_publication_and_deployment_contracts():
         assert stale.lower() not in active_docs.lower()
 
 
+@pytest.mark.parametrize(
+    "relative_path",
+    (
+        "docs/superpowers/specs/"
+        "2026-07-22-unicorn-branding-and-public-container-design.md",
+        "docs/superpowers/plans/" "2026-07-22-unicorn-public-container-release.md",
+    ),
+)
+def test_historical_container_documents_point_to_current_runbook(relative_path):
+    historical_document = (REPOSITORY_ROOT / relative_path).read_text()
+
+    for required in (
+        "preserved historical record",
+        "superseded",
+        "docs/RELEASE_RUNBOOK.md",
+    ):
+        assert required in historical_document, (
+            f"{relative_path} must identify its historical status and point to "
+            f"the current release runbook; missing {required!r}"
+        )
+
+
 def test_publication_requires_full_release_acceptance():
     workflow_path = REPOSITORY_ROOT / ".github/workflows/docker-publish.yml"
     workflow = yaml.safe_load(workflow_path.read_text())
