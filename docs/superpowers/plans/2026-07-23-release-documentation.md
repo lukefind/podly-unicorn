@@ -53,7 +53,31 @@ Read `.github/workflows/docker-publish.yml` through `yaml.safe_load()` and asser
 
 Require the current migration head `r4s5t6u7v8w9` in `AGENTS.md`.
 
-- [ ] **Step 2: Add stale-guidance rejection**
+- [ ] **Step 2: Require every safety-critical runbook topic**
+
+Require explicit guidance for:
+
+```python
+for required in (
+    "failures before the promotion step",
+    "failure inside the promotion step",
+    "new commit",
+    "write-once",
+    "workflow_dispatch",
+    "record the currently deployed",
+    "repo digest",
+    "backup archive",
+    "automatic migrations",
+    "restore the pre-deploy backup",
+    "anonymous pull",
+    "org.opencontainers.image.revision",
+):
+    assert required.lower() in runbook.lower()
+```
+
+Also require the runbook to explain that `PODLY_SECRET_KEY` remains unchanged during deploy and rollback.
+
+- [ ] **Step 3: Add stale-guidance rejection**
 
 Check active docs (`README.md`, `docs/contributors.md`, `AGENTS.md`) for prohibited claims:
 
@@ -67,7 +91,7 @@ for stale in (
     assert stale.lower() not in active_docs.lower()
 ```
 
-- [ ] **Step 3: Run the focused test and verify it fails**
+- [ ] **Step 4: Run the focused test and verify it fails**
 
 Run:
 
@@ -79,7 +103,7 @@ Run:
 
 Expected: failure because `docs/RELEASE_RUNBOOK.md` and the required links/content do not yet exist.
 
-- [ ] **Step 4: Commit the failing contract**
+- [ ] **Step 5: Commit the failing contract**
 
 ```bash
 git add src/tests/test_container_build_contracts.py
@@ -252,12 +276,22 @@ Link to:
 Before the backup and pull commands, record:
 
 ```bash
-sudo docker inspect podly-pure-podcasts \
-  --format '{{.Config.Image}}' \
-  | sudo tee /home/bob/podly-unicorn-pre-deploy-image-2026-07-23.txt
+container_image_id=$(
+  sudo docker inspect podly-pure-podcasts --format '{{.Image}}'
+)
+{
+  echo "configured_ref=$(
+    sudo docker inspect podly-pure-podcasts --format '{{.Config.Image}}'
+  )"
+  echo "image_id=${container_image_id}"
+  sudo docker image inspect "${container_image_id}" \
+    --format '{{range .RepoDigests}}{{println "repo_digest=" .}}{{end}}'
+  echo "backup_archive=/home/bob/podly-unicorn-backup-2026-07-23.tar.gz"
+} | sudo tee /home/bob/podly-unicorn-pre-deploy-2026-07-23.txt
+sudo chmod 600 /home/bob/podly-unicorn-pre-deploy-2026-07-23.txt
 ```
 
-Also record the backup path. Add rollback instructions that pin `image:` to `ghcr.io/lukefind/podly-unicorn:sha-<full-commit>` or an immutable digest, preserve the bind mount, and restore the pre-deploy data backup if schema compatibility requires it.
+The record must include the configured reference, local image ID, every available registry repo digest, and exact backup archive path. Add rollback instructions that pin `image:` to `ghcr.io/lukefind/podly-unicorn:sha-<full-commit>` or an immutable digest, preserve the bind mount, and restore the pre-deploy data backup if schema compatibility requires it.
 
 - [ ] **Step 3: Audit the entire vault note**
 
@@ -303,7 +337,29 @@ Expected: all commands exit 0.
 
 - [ ] **Step 3: Run a cross-document stale-guidance audit**
 
-Search active repository Markdown and the Home Lab note for obsolete image names, unpublished-image claims, production local-build instructions, old migration-head claims, and incorrect shell commands. Review every match rather than relying only on prohibited-string tests.
+Run an exact active-document audit:
+
+```bash
+active_docs=(
+  README.md
+  docs/RELEASE_RUNBOOK.md
+  docs/contributors.md
+  AGENTS.md
+  .github/PULL_REQUEST_TEMPLATE.md
+)
+
+if rg -n -i \
+  'image is not published|pull access denied|do not.*compose pull|podly.*up -d --build|podly-pure-podcasts bash|Current Migration Head.*m0n1o2p3q4r5' \
+  "${active_docs[@]}"; then
+  exit 1
+fi
+
+rg -n \
+  'docs/RELEASE_RUNBOOK.md|ghcr.io/lukefind/podly-unicorn|sha-<full-commit>|r4s5t6u7v8w9' \
+  "${active_docs[@]}"
+```
+
+Then separately require both preserved historical files to contain the explicit supersession notice; their dated body content is excluded from stale-guidance rejection. Run the equivalent stale-guidance search against the Home Lab note. Review every remaining Podly build, pull, release, migration-head, tag, and shell match manually rather than relying only on prohibited-string tests.
 
 - [ ] **Step 4: Review the requirements line by line**
 
