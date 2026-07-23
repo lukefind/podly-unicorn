@@ -50,7 +50,9 @@ Create `docs/RELEASE_RUNBOOK.md` as the one complete maintainer and operator ref
    - verify OCI source revision;
    - perform an anonymous pull and `/health` check.
 6. Home Lab deployment:
+   - record the currently deployed image reference and digest before pulling `latest`;
    - secure backup;
+   - record the backup archive path alongside the pre-deploy digest;
    - preserve `PODLY_SECRET_KEY`;
    - `docker compose pull` and `up -d`;
    - automatic migrations;
@@ -74,6 +76,13 @@ Update these active documents to summarize their audience-specific workflow and 
 ### Historical documents
 
 Keep dated specs/plans unchanged as records, but place a prominent notice at the top of container-release documents pointing to `docs/RELEASE_RUNBOOK.md`. Do not rewrite history.
+
+The required historical notices are:
+
+- `docs/superpowers/specs/2026-07-22-unicorn-branding-and-public-container-design.md`
+- `docs/superpowers/plans/2026-07-22-unicorn-public-container-release.md`
+
+Each notice must explicitly say that the document is a preserved historical record, that its operational release instructions are superseded, and that `docs/RELEASE_RUNBOOK.md` is authoritative.
 
 ## Drift Prevention
 
