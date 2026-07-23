@@ -277,7 +277,9 @@ not use saved registry credentials.
 
 Use the values for the target Home Lab host. Replace every value beginning
 `/replace/` before running the block. The bind mount in `compose.yml` is
-`src/instance`; it contains the SQLite database and processed podcast data.
+`src/instance`; it contains the SQLite database and processed podcast data. Run
+this block and the later deploy or rollback block in the same shell. If a new
+shell is required, restore these variable values before running any command.
 
 ```sh
 COMPOSE_DIR="/replace/with/podly-compose-directory"
@@ -289,6 +291,7 @@ CONTAINER="podly-pure-podcasts"
 test -f "$COMPOSE_DIR/compose.yml"
 test -f "$ENV_FILE"
 grep -q '^PODLY_SECRET_KEY=.' "$ENV_FILE"
+export PODLY_ENV_FILE="$ENV_FILE"
 mkdir -p "$BACKUP_DIR"
 cd "$COMPOSE_DIR"
 
@@ -332,11 +335,17 @@ is not a substitute for securely backing up the environment file and other
 host configuration. Store the release record, backup, and configuration backup
 according to the Home Lab backup policy.
 
+Exporting `PODLY_ENV_FILE="$ENV_FILE"` binds Compose's
+`${PODLY_ENV_FILE:-./.env.local}` interpolation to the validated file. Preserve
+that export in the same shell through deployment and any rollback so Compose
+cannot silently use a different environment file.
+
 ## Deploy on the Home Lab
 
 From `COMPOSE_DIR`, pull and recreate the service:
 
 ```sh
+test "${PODLY_ENV_FILE:?run the pre-deploy setup in this shell first}" = "$ENV_FILE"
 cd "$COMPOSE_DIR"
 docker compose pull "$SERVICE"
 docker compose up -d "$SERVICE"
@@ -382,6 +391,7 @@ For an application-only rollback, replace the placeholder with either
 IMAGE="ghcr.io/lukefind/podly-unicorn"
 ROLLBACK_REF="replace-with-immutable-sha-tag-or-recorded-digest"
 
+test "${PODLY_ENV_FILE:?run the pre-deploy setup in this shell first}" = "$ENV_FILE"
 cd "$COMPOSE_DIR"
 docker pull "$ROLLBACK_REF"
 # This changes only the host-local tag; it does not mutate GHCR.
@@ -399,6 +409,7 @@ When schema restoration is required, keep the service stopped and use the exact
 ROLLBACK_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 POST_FAILURE_COPY="$BACKUP_DIR/podly-instance-post-failure-$ROLLBACK_TIMESTAMP.tar.gz"
 
+test "${PODLY_ENV_FILE:?run the pre-deploy setup in this shell first}" = "$ENV_FILE"
 cd "$COMPOSE_DIR"
 docker compose stop "$SERVICE"
 tar --create --gzip --file "$POST_FAILURE_COPY" \
