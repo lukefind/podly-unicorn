@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
   issues: write
   pull-requests: write
@@ -25,6 +26,11 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Record main before release
+        id: release-base
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -37,3 +43,24 @@ jobs:
           -p @semantic-release/github
           -p @semantic-release/release-notes-generator
           semantic-release
+
+      - name: Dispatch container publication for a new release commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORIGINAL_SHA: ${{ steps.release-base.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$ORIGINAL_SHA"
+          remote_main=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          test -n "$remote_main"
+
+          if [ "$remote_main" = "$ORIGINAL_SHA" ]; then
+            echo "No release commit was created; the original main push remains authoritative."
+            exit 0
+          fi
+
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/docker-publish.yml/dispatches" \
+            -f ref=main
+          echo "Dispatched container publication for main at $remote_main."

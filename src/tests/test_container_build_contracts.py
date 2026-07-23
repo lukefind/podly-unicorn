@@ -71,20 +71,37 @@ def test_publication_requires_full_release_acceptance():
     assert pr_validation["permissions"] == {"contents": "read"}
 
 
-def test_release_commit_triggers_replacement_main_validation_and_publication():
+def test_release_commit_explicitly_dispatches_main_container_publication():
     docker_workflow = (
         REPOSITORY_ROOT / ".github/workflows/docker-publish.yml"
     ).read_text()
-    release_workflow = (REPOSITORY_ROOT / ".github/workflows/release.yml").read_text()
+    release_workflow_path = REPOSITORY_ROOT / ".github/workflows/release.yml"
+    release_workflow = yaml.safe_load(release_workflow_path.read_text())
+    release_commands = _workflow_commands(release_workflow["jobs"]["release"])
 
     for config_name in (".releaserc.json", ".releaserc.cjs"):
         release_config = (REPOSITORY_ROOT / config_name).read_text().lower()
-        assert "[skip ci]" not in release_config
+        assert "[skip ci]" in release_config
         assert "chore(release): ${nextrelease.version}" in release_config
 
+    assert release_workflow["permissions"]["actions"] == "write"
+    original_sha = release_commands.index("git rev-parse HEAD")
+    semantic_release = release_commands.index("semantic-release")
+    remote_main = release_commands.index("git ls-remote origin refs/heads/main")
+    dispatch = release_commands.index(
+        "actions/workflows/docker-publish.yml/dispatches"
+    )
+    confirmation = release_commands.index("Dispatched container publication")
+    assert original_sha < semantic_release < remote_main < dispatch < confirmation
+    assert 'if [ "$remote_main" = "$ORIGINAL_SHA" ]' in release_commands
+    assert "gh api --method POST" in release_commands
+    assert "-f ref=main" in release_commands
+    assert "set -euo pipefail" in release_commands
+
     assert "branches: [main]" in docker_workflow
+    assert "workflow_dispatch:" in docker_workflow
+    assert "needs: release-tests" in docker_workflow
     assert "Confirm run still targets current main" in docker_workflow
-    assert "branches:\n      - main" in release_workflow
 
 
 def test_production_defaults_to_fixed_cpu_latest_on_gpu_host(tmp_path):
