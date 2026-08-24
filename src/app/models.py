@@ -37,6 +37,8 @@ class Feed(db.Model):  # type: ignore[name-defined, misc]
     # Naive-UTC timestamp of the last content change (new/updated posts,
     # channel metadata). Drives the RSS ETag/Last-Modified validators.
     last_changed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=True)
+    # NULL inherits the server-wide processed-episode retention policy.
+    processed_episode_retention_count = db.Column(db.Integer, nullable=True)
 
     posts = db.relationship(
         "Post", backref="feed", lazy=True, order_by="Post.release_date.desc()"

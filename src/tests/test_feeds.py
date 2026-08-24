@@ -43,6 +43,15 @@ def test_empty_combined_feed_uses_unicorn_product_identity(app, monkeypatch):
     assert "https://podly.example/images/logos/unicorn-logo.png" in xml
 
 
+def test_feed_processed_episode_retention_count_defaults_to_none(app):
+    with app.app_context():
+        feed = Feed(title="Example", rss_url="https://example.com/feed.xml")
+        db.session.add(feed)
+        db.session.commit()
+
+        assert feed.processed_episode_retention_count is None
+
+
 def test_subscribed_combined_feed_uses_unicorn_product_identity(app, monkeypatch):
     monkeypatch.setenv("PUBLIC_BASE_URL", "https://podly.example")
     app.config["SECRET_KEY"] = "test-only-secret"
