@@ -11,7 +11,7 @@ from app.auth import AuthSettings
 from app.extensions import db, migrate
 
 MIGRATIONS_DIR = Path(__file__).parents[1] / "migrations"
-CURRENT_MIGRATION_HEAD = "r4s5t6u7v8w9"
+CURRENT_MIGRATION_HEAD = "s5t6u7v8w9x0"
 
 
 def _column_names(inspector: sa.Inspector, table_name: str) -> set[str]:
