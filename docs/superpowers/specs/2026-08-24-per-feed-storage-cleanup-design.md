@@ -232,14 +232,26 @@ to exactly one feed.
 An attempt is preserved when any of these apply:
 
 - a pending or running job references the attempt;
-- any post currently references a file inside it;
 - any file in the attempt is newer than the 24-hour safety grace period; or
 - resolving the path would leave the configured jobs root.
 
-Otherwise, a stale attempt may be removed when its job is terminal or absent.
-After attempt removal, empty GUID directories may be removed. The traversal
-must not follow symlinks outside the jobs root. Missing paths are successful
-no-ops.
+For a post-referenced input path, terminal state determines whether the path is
+still useful:
+
+- preserve it when valid processed output exists, because normal feed
+  retention owns both artifacts;
+- preserve it when the associated attempt is not terminal or is inside the
+  grace period; and
+- when no processed output exists and the associated attempt is failed,
+  cancelled, or absent, remove the stale input after the grace period and clear
+  `Post.unprocessed_audio_path` after successful deletion.
+
+Unreferenced stale attempts may be removed when their job is terminal or
+absent. After attempt removal, empty GUID directories may be removed. The
+traversal must not follow symlinks outside the jobs root. Missing paths are
+successful no-ops. This ensures failed downloads and retries do not live
+forever merely because a post retained their last path; explicit reprocessing
+will download the source again.
 
 This sweep runs during daily storage maintenance, after an immediate per-feed
 cleanup where relevant, and when an administrator invokes server-wide cleanup.
@@ -353,9 +365,11 @@ Authorization is enforced by the backend even when the UI hides controls.
 Replace the buried generic cleanup number with a dedicated **Storage & Cleanup**
 section on the Settings page. It contains:
 
-- **Enable automatic cleanup** toggle;
+- **Enable global age cleanup** toggle;
 - **Keep processed episodes for X days** positive integer input;
 - explanation that per-feed episode limits override the global policy;
+- explanation that disabling global age cleanup does not disable per-feed
+  count limits or safe orphan-attempt maintenance;
 - explanation that orphaned abandoned job files are maintained separately; and
 - **Run cleanup now** administrator action.
 
@@ -429,7 +443,12 @@ Logs must not include credentials, feed access secrets, or unrelated user data.
 ### Orphan Sweep Tests
 
 - Stale unreferenced terminal/absent attempt directories are removed.
-- Current post paths, active jobs, and recent attempts are preserved.
+- Active jobs, recent attempts, and post-referenced inputs paired with valid
+  processed output are preserved.
+- Stale failed/cancelled or jobless inputs with no processed output are removed
+  and their post path is cleared even when they were the last referenced
+  attempt.
+- Post-referenced inputs remain intact when valid processed output exists.
 - Multiple retry attempts under one GUID are handled independently.
 - Shared GUIDs across feeds do not cause broad directory deletion.
 - Empty parent directories are removed only after safe child cleanup.
