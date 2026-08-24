@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Iterable, Optional, Set, cast
 
 from sqlalchemy import func
 
@@ -81,14 +81,16 @@ def get_active_run(session: Any) -> Optional[JobsManagerRun]:
     return _session_get(session, SINGLETON_RUN_ID)
 
 
-def recalculate_run_counts(session: Any) -> Optional[JobsManagerRun]:
+def _recalculate_run_counts_for_id(
+    session: Any, run_id: str
+) -> Optional[JobsManagerRun]:
     """
     Recompute aggregate counters for the singleton run.
 
     When no jobs remain in the system the counters are reset to zero so the UI
     reflects an idle manager.
     """
-    run = get_active_run(session)
+    run = _session_get(session, run_id)
     if not run:
         return None
 
@@ -146,6 +148,20 @@ def recalculate_run_counts(session: Any) -> Optional[JobsManagerRun]:
 
     session.flush()
     return run
+
+
+def recalculate_run_counts(session: Any) -> Optional[JobsManagerRun]:
+    """Recompute counters for the jobs-manager singleton."""
+    return _recalculate_run_counts_for_id(session, SINGLETON_RUN_ID)
+
+
+def recalculate_affected_run_counts(session: Any, run_ids: Iterable[str]) -> Set[str]:
+    """Repair explicit affected runs and the singleton after job deletion."""
+    recalculated: Set[str] = set()
+    for run_id in sorted(set(run_ids) | {SINGLETON_RUN_ID}):
+        if _recalculate_run_counts_for_id(session, run_id) is not None:
+            recalculated.add(run_id)
+    return recalculated
 
 
 def serialize_run(run: JobsManagerRun) -> Dict[str, object]:

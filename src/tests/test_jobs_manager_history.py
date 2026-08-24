@@ -4,7 +4,11 @@ from datetime import datetime, timedelta
 
 from app.extensions import db
 from app.jobs_manager import JobsManager
-from app.models import Feed, Post, ProcessingJob, ProcessingStatistics
+from app.jobs_manager_run_service import (
+    SINGLETON_RUN_ID,
+    recalculate_affected_run_counts,
+)
+from app.models import Feed, JobsManagerRun, Post, ProcessingJob, ProcessingStatistics
 from podcast_processor.processing_status_manager import ProcessingStatusManager
 
 
@@ -148,3 +152,60 @@ def test_sync_job_metrics_from_post_copies_processing_statistics(app) -> None:
         assert job.original_duration_seconds == 3600.0
         assert job.processed_duration_seconds == 3502.5
         assert job.percentage_removed == 2.7
+
+
+def test_recalculate_affected_runs_repairs_explicit_run_and_singleton(app) -> None:
+    with app.app_context():
+        now = datetime.utcnow()
+        explicit = JobsManagerRun(
+            id="explicit-history-run",
+            status="running",
+            trigger="manual",
+            total_jobs=9,
+            queued_jobs=2,
+            running_jobs=1,
+            completed_jobs=6,
+            counters_reset_at=now - timedelta(days=1),
+        )
+        singleton = JobsManagerRun(
+            id=SINGLETON_RUN_ID,
+            status="running",
+            trigger="scheduler",
+            total_jobs=9,
+            queued_jobs=9,
+            counters_reset_at=now - timedelta(days=1),
+        )
+        db.session.add_all([explicit, singleton])
+        db.session.add_all(
+            [
+                ProcessingJob(
+                    id="removed-history-job",
+                    jobs_manager_run_id=explicit.id,
+                    post_guid="removed",
+                    status="completed",
+                    created_at=now,
+                    completed_at=now,
+                ),
+                ProcessingJob(
+                    id="singleton-pending-job",
+                    jobs_manager_run_id=SINGLETON_RUN_ID,
+                    post_guid="active",
+                    status="pending",
+                    created_at=now,
+                ),
+            ]
+        )
+        db.session.commit()
+        db.session.query(ProcessingJob).filter_by(id="removed-history-job").delete()
+
+        recalculated = recalculate_affected_run_counts(
+            db.session, {"explicit-history-run"}
+        )
+        db.session.commit()
+
+        assert recalculated == {"explicit-history-run", SINGLETON_RUN_ID}
+        assert explicit.status == "idle"
+        assert explicit.total_jobs == 0
+        assert singleton.status == "pending"
+        assert singleton.total_jobs == 1
+        assert singleton.queued_jobs == 1
