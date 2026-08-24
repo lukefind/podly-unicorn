@@ -71,7 +71,7 @@ Expected: the build completes through dependency installation, `pip check`, fron
 - Create: `src/tests/test_feed_cleanup_policy_migration.py`
 - Modify: `src/tests/test_feeds.py`
 
-- [ ] **Step 1: Write failing model and migration tests**
+- [x] **Step 1: Write failing model and migration tests**
 
 Add tests proving:
 
@@ -88,11 +88,11 @@ pipenv run pytest src/tests/test_feed_cleanup_policy_migration.py src/tests/test
 
 Expected: FAIL because the model and migration do not exist.
 
-- [ ] **Step 2: Add the model column and focused migration**
+- [x] **Step 2: Add the model column and focused migration**
 
 Add a nullable `db.Integer` on `Feed`. Create revision `s5t6u7v8w9x0` with `down_revision = "r4s5t6u7v8w9"`; upgrade adds the nullable column and downgrade removes it. Do not touch existing production rows or unrelated schema.
 
-- [ ] **Step 3: Run the focused tests and migration graph check**
+- [x] **Step 3: Run the focused tests and migration graph check**
 
 ```bash
 pipenv run pytest src/tests/test_feed_cleanup_policy_migration.py src/tests/test_feeds.py -q
@@ -105,7 +105,7 @@ pipenv run flask db heads
 
 Expected: PASS and one head, `s5t6u7v8w9x0`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/models.py src/migrations/versions/s5t6u7v8w9x0_add_feed_processed_episode_retention_count.py src/tests/test_feed_cleanup_policy_migration.py src/tests/test_feeds.py
