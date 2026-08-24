@@ -37,15 +37,41 @@ def _create_schema(connection: sa.Connection) -> None:
         "feed",
         metadata,
         sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("alt_id", sa.Text, nullable=True),
         sa.Column("title", sa.Text, nullable=False),
-        sa.Column("rss_url", sa.Text, nullable=False),
+        sa.Column("description", sa.Text, nullable=True),
+        sa.Column("author", sa.Text, nullable=True),
+        sa.Column("rss_url", sa.Text, nullable=False, unique=True),
+        sa.Column("image_url", sa.Text, nullable=True),
+        sa.Column(
+            "default_prompt_preset_id",
+            sa.Integer,
+            sa.ForeignKey(
+                "prompt_preset.id", name="fk_feed_default_prompt_preset_id"
+            ),
+            nullable=True,
+        ),
+        sa.Column("is_hidden", sa.Boolean, nullable=False, default=False),
         sa.Column("last_changed_at", sa.DateTime, nullable=True),
     )
+    prompt_preset = sa.Table(
+        "prompt_preset", metadata, sa.Column("id", sa.Integer, primary_key=True)
+    )
     metadata.create_all(connection)
+    connection.execute(prompt_preset.insert().values(id=1))
     connection.execute(alembic_version.insert().values(version_num="r4s5t6u7v8w9"))
     connection.execute(
         feed.insert().values(
-            id=1, title="Existing feed", rss_url="https://example.com/feed.xml"
+            id=1,
+            alt_id="legacy-feed",
+            title="Existing feed",
+            description="Existing description",
+            author="Existing author",
+            rss_url="https://example.com/feed.xml",
+            image_url="https://example.com/image.jpg",
+            default_prompt_preset_id=1,
+            is_hidden=False,
+            last_changed_at=None,
         )
     )
 
@@ -54,6 +80,42 @@ def _run(connection: sa.Connection, function_name: str) -> None:
     migration = _load_migration()
     migration.op = Operations(MigrationContext.configure(connection))
     getattr(migration, function_name)()
+
+
+def _feed_schema(connection: sa.Connection):
+    inspector = sa.inspect(connection)
+    columns = {
+        column["name"]: (str(column["type"]), column["nullable"])
+        for column in inspector.get_columns("feed")
+    }
+    unique_constraints = {
+        (constraint.get("name"), tuple(constraint.get("column_names") or []))
+        for constraint in inspector.get_unique_constraints("feed")
+    }
+    indexes = {
+        (
+            index["name"],
+            tuple(index.get("column_names") or []),
+            index.get("unique", False),
+        )
+        for index in inspector.get_indexes("feed")
+    }
+    foreign_keys = {
+        (
+            foreign_key.get("name"),
+            tuple(foreign_key.get("constrained_columns") or []),
+            foreign_key["referred_table"],
+            tuple(foreign_key.get("referred_columns") or []),
+        )
+        for foreign_key in inspector.get_foreign_keys("feed")
+    }
+    return columns, unique_constraints, indexes, foreign_keys
+
+
+def _feed_row(connection: sa.Connection):
+    return connection.execute(
+        sa.text("SELECT * FROM feed WHERE id = 1")
+    ).mappings().one()
 
 
 @pytest.fixture
@@ -73,6 +135,8 @@ def test_upgrade_adds_nullable_column_and_preserves_existing_null_rows(connectio
         connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar()
         == "r4s5t6u7v8w9"
     )
+    original_schema = _feed_schema(connection)
+    original_row = _feed_row(connection)
 
     _run(connection, "upgrade")
 
@@ -87,12 +151,20 @@ def test_upgrade_adds_nullable_column_and_preserves_existing_null_rows(connectio
         sa.text("SELECT processed_episode_retention_count FROM feed WHERE id = 1")
     ).scalar() is None
 
+    upgraded_schema = _feed_schema(connection)
+    assert upgraded_schema[0].keys() == original_schema[0].keys() | {
+        "processed_episode_retention_count"
+    }
+    assert upgraded_schema[1:] == original_schema[1:]
+    upgraded_row = _feed_row(connection)
+    assert {name: upgraded_row[name] for name in original_row} == dict(original_row)
+
 
 def test_downgrade_removes_only_the_new_column(connection):
+    original_schema = _feed_schema(connection)
+    original_row = _feed_row(connection)
     _run(connection, "upgrade")
     _run(connection, "downgrade")
 
-    columns = {column["name"] for column in sa.inspect(connection).get_columns("feed")}
-    assert "processed_episode_retention_count" not in columns
-    assert {"id", "title", "rss_url", "last_changed_at"}.issubset(columns)
-    assert connection.execute(sa.text("SELECT count(*) FROM feed")).scalar() == 1
+    assert _feed_schema(connection) == original_schema
+    assert _feed_row(connection) == original_row
