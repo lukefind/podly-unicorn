@@ -105,14 +105,19 @@ time over enabling/disabling the scheduler solely from the global days value.
 
 ### Per-Feed Count Policy
 
-A processed episode counts toward the retained set when its processed-audio
-artifact exists. Candidate episodes are ordered by:
+A post initially participates in retained-set ranking when
+`processed_audio_path` is non-empty, including a stale path left by a partial
+cleanup failure. Candidate episodes are ordered by:
 
 1. `Post.release_date DESC`, with missing release dates last.
 2. `Post.id DESC` as a deterministic tie-breaker.
 
-The first `X` episodes are retained. Every remaining processed episode is a
-cleanup candidate.
+The first `X` episodes are provisionally retained. Every remaining post with a
+processed path is a cleanup candidate. Missing artifacts are then handled by
+the reconciliation phase below, after which count selection is recomputed using
+the processed artifacts that actually exist. This prevents stale paths from
+permanently consuming retained slots while preserving enough state to finish a
+partially completed cleanup.
 
 The selection and final deletion checks must use the feed ID and post ID. GUIDs
 are not globally unique across feeds.
@@ -140,17 +145,28 @@ treated conservatively as a reason to skip cleanup.
 
 ### Missing-Artifact Reconciliation
 
-Before policy selection, maintenance performs a reconciliation pass for posts
-whose database audio path is set but whose artifact is missing. If the post has
-no active work, this pass finishes the database side of cleanup: it clears stale
-audio paths and removes the same processing-derived rows described below. This
-is the durable retry path when file removal succeeded but a prior database
-transaction failed. It also prevents a missing artifact from occupying one of a
-feed's retained count slots indefinitely.
+Before final policy selection, maintenance reconciles stale audio paths for
+posts with no active work:
 
-Reconciliation is independent of age/count eligibility because there is no
-artifact left to retain. It keeps the post and audit data, is idempotent, and
-uses the same shared-GUID job scoping rules as normal cleanup.
+- If only the unprocessed/input artifact is missing while processed output
+  exists, clear only `unprocessed_audio_path`. The valid processed episode and
+  its processing-derived data remain intact.
+- If processed output is missing and the post is provisionally eligible for
+  cleanup under its current count/age policy, finish that cleanup: retry
+  removal of any remaining input artifact, clear both paths, and remove the
+  processing-derived rows described below.
+- If processed output is missing but the post is provisionally retained, or no
+  episode-retention policy is enabled for it, clear only the stale
+  `processed_audio_path`. Preserve an existing input artifact and processing
+  data so explicit reprocessing can reuse them.
+
+After reconciliation, count ranking is recomputed from processed artifacts that
+exist and normal policy cleanup proceeds. This is the durable retry path when
+only one of two file removals succeeded or when filesystem removal succeeded
+but a prior database transaction failed. It also prevents a missing output from
+occupying a retained count slot indefinitely. Reconciliation keeps the post and
+audit data, is idempotent, and uses the same shared-GUID job scoping rules as
+normal cleanup.
 
 ## Episode Cleanup Operation
 
@@ -310,13 +326,15 @@ durably saved, but its response becomes an explicit envelope:
 
 `cleanup_dispatch.status` is one of `queued`, `coalesced`,
 `scheduler_disabled`, or `not_requested`. `requested` is true only when the
-submitted payload changed the global retention value. The complete sanitized
-configuration remains in `config`; the abbreviated object above is only an
-example. The frontend updates its `ConfigUpdateResponse` type, continues to
-refetch configuration after saving, and uses `cleanup_dispatch` for the toast.
-Configuration success is not reported as failure merely because dispatch is
-disabled; the UI clearly says the policy was saved but automatic enforcement
-is unavailable.
+submitted payload enables global retention or changes one positive day count
+to another. Disabling global age retention (`positive → null`) saves the policy
+without deletion work and returns `requested: false` with `not_requested`.
+The complete sanitized configuration remains in `config`; the abbreviated
+object above is only an example. The frontend updates its
+`ConfigUpdateResponse` type, continues to refetch configuration after saving,
+and uses `cleanup_dispatch` for the toast. Configuration success is not
+reported as failure merely because dispatch is disabled; the UI clearly says
+the policy was saved but automatic enforcement is unavailable.
 
 ### Manual Run
 
@@ -389,8 +407,13 @@ Logs must not include credentials, feed access secrets, or unrelated user data.
 - Disabled global age retention leaves unconfigured feed artifacts intact.
 - Age retention uses the newer of completion time and file modification time.
 - Missing timestamps are skipped safely.
-- Missing-artifact reconciliation completes database cleanup after a simulated
-  filesystem-success/database-failure sequence.
+- Missing input with valid processed output clears only the stale input path.
+- A provisionally retained post with missing processed output preserves its
+  valid input and processing data while clearing the stale output path.
+- A cleanup-eligible post with missing processed output retries deletion of any
+  remaining input and completes database cleanup.
+- Reconciliation completes database cleanup after simulated one-file deletion
+  and filesystem-success/database-failure sequences.
 - Pending and running work is excluded and rechecked.
 - Final eligibility is recomputed before deletion.
 - Cleanup retains the post, RSS metadata, whitelist state, and download audit.
@@ -424,6 +447,8 @@ Logs must not include credentials, feed access secrets, or unrelated user data.
 - Global settings changes dispatch immediate maintenance when appropriate.
 - Global configuration responses distinguish queued, coalesced,
   scheduler-disabled, and not-requested dispatch states.
+- Disabling global age retention returns `requested: false` and does not queue
+  deletion work.
 
 ### Frontend Tests and Checks
 
