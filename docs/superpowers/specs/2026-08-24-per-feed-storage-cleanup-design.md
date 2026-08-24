@@ -138,6 +138,20 @@ database records so a job that started after candidate selection is preserved.
 Because legacy job identity is GUID-based, an active job sharing a GUID is
 treated conservatively as a reason to skip cleanup.
 
+### Missing-Artifact Reconciliation
+
+Before policy selection, maintenance performs a reconciliation pass for posts
+whose database audio path is set but whose artifact is missing. If the post has
+no active work, this pass finishes the database side of cleanup: it clears stale
+audio paths and removes the same processing-derived rows described below. This
+is the durable retry path when file removal succeeded but a prior database
+transaction failed. It also prevents a missing artifact from occupying one of a
+feed's retained count slots indefinitely.
+
+Reconciliation is independent of age/count eligibility because there is no
+artifact left to retain. It keeps the post and audit data, is idempotent, and
+uses the same shared-GUID job scoping rules as normal cleanup.
+
 ## Episode Cleanup Operation
 
 Cleanup is idempotent and isolated per episode.
@@ -155,6 +169,21 @@ For an eligible post:
    processing statistics, refined-boundary data, and the processed-preset
    reference.
 6. Clear `unprocessed_audio_path` and `processed_audio_path` on the post.
+
+Processing-job reads and deletes require special scoping because legacy rows
+are linked by GUID and `ProcessingJob.feed_id` is nullable:
+
+- jobs with `feed_id == Post.feed_id` belong to the post's feed;
+- a legacy job with `feed_id IS NULL` may be attributed only when the GUID maps
+  to exactly one current post/feed;
+- an ambiguous legacy job for a GUID shared across feeds is preserved and
+  logged rather than guessed; and
+- pending/running rows sharing the GUID remain a conservative skip signal.
+
+The same rule applies when deriving the latest successful completion timestamp.
+Before deleting jobs, collect their non-null `jobs_manager_run_id` values. After
+deletion, recalculate the affected `JobsManagerRun` counters within the database
+transaction so run history cannot retain stale totals.
 
 The following remain:
 
@@ -212,6 +241,11 @@ coalesces duplicate immediate requests. The daily recurring schedule must not
 be replaced accidentally when a one-shot run is queued. Each run resolves
 settings from the database at execution time.
 
+Immediately before deleting an episode, the coordinator recomputes its active
+state and its eligibility under the current count rank or age cutoff. This
+protects an artifact that was recreated or moved into the retained set after
+the initial candidate query.
+
 The existing `PODLY_DISABLE_SCHEDULER=1` behavior remains authoritative. When
 the scheduler is disabled, saving a policy still succeeds but the API must not
 claim that automatic enforcement is running; it returns a clear status that
@@ -260,6 +294,29 @@ The existing combined configuration API continues to persist
 a positive value or `null`. Backend validation rejects enabled values below one.
 Changing from disabled to enabled, or changing the day count, queues immediate
 server-wide enforcement.
+
+`PUT /api/config` continues to return HTTP 200 after the configuration is
+durably saved, but its response becomes an explicit envelope:
+
+```json
+{
+  "config": { "app": { "post_cleanup_retention_days": 14 } },
+  "cleanup_dispatch": {
+    "requested": true,
+    "status": "queued"
+  }
+}
+```
+
+`cleanup_dispatch.status` is one of `queued`, `coalesced`,
+`scheduler_disabled`, or `not_requested`. `requested` is true only when the
+submitted payload changed the global retention value. The complete sanitized
+configuration remains in `config`; the abbreviated object above is only an
+example. The frontend updates its `ConfigUpdateResponse` type, continues to
+refetch configuration after saving, and uses `cleanup_dispatch` for the toast.
+Configuration success is not reported as failure merely because dispatch is
+disabled; the UI clearly says the policy was saved but automatic enforcement
+is unavailable.
 
 ### Manual Run
 
@@ -332,12 +389,19 @@ Logs must not include credentials, feed access secrets, or unrelated user data.
 - Disabled global age retention leaves unconfigured feed artifacts intact.
 - Age retention uses the newer of completion time and file modification time.
 - Missing timestamps are skipped safely.
+- Missing-artifact reconciliation completes database cleanup after a simulated
+  filesystem-success/database-failure sequence.
 - Pending and running work is excluded and rechecked.
+- Final eligibility is recomputed before deletion.
 - Cleanup retains the post, RSS metadata, whitelist state, and download audit.
 - Cleanup removes audio and processing-derived records and clears processing
   fields.
 - A file-deletion error preserves retryable database state.
 - Repeated cleanup is idempotent.
+- Feed-scoped jobs are deleted without touching another feed that shares a
+  GUID.
+- Ambiguous legacy null-feed jobs are preserved and logged.
+- Affected jobs-manager run counters are recalculated after job deletion.
 
 ### Orphan Sweep Tests
 
@@ -358,6 +422,8 @@ Logs must not include credentials, feed access secrets, or unrelated user data.
 - Responses include configured and effective policies and dispatch state.
 - Manual server-wide cleanup is administrator-only and coalesces overlaps.
 - Global settings changes dispatch immediate maintenance when appropriate.
+- Global configuration responses distinguish queued, coalesced,
+  scheduler-disabled, and not-requested dispatch states.
 
 ### Frontend Tests and Checks
 
