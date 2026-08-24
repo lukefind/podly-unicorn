@@ -308,13 +308,14 @@ def test_debian_family_build_installs_python_alias_before_version_assertions():
     )
 
 
-def test_container_pip_supports_externally_managed_distribution_python():
+def test_container_pip_replaces_newer_distribution_package_before_downgrade():
     dockerfile = (REPOSITORY_ROOT / "Dockerfile").read_text()
 
     override = dockerfile.index("ENV PIP_BREAK_SYSTEM_PACKAGES=1")
     pip_bootstrap = dockerfile.index(
-        "python3 -m pip install --no-cache-dir --upgrade --ignore-installed"
+        "python3 -m pip install --no-cache-dir --upgrade --force-reinstall"
     )
     first_install = dockerfile.index("python3 -m pip install")
     assert override < first_install
     assert pip_bootstrap == first_install
+    assert "--ignore-installed \"pip==${PINNED_PIP_VERSION}\"" not in dockerfile

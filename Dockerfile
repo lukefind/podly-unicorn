@@ -100,7 +100,7 @@ COPY Pipfile Pipfile.lock Pipfile.lite Pipfile.lite.lock ./
 # an isolated container filesystem, so allow the intentional system install.
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 RUN set -e && \
-    python3 -m pip install --no-cache-dir --upgrade --ignore-installed "pip==${PINNED_PIP_VERSION}" && \
+    python3 -m pip install --no-cache-dir --upgrade --force-reinstall "pip==${PINNED_PIP_VERSION}" && \
     PINNED_PIP_VERSION="${PINNED_PIP_VERSION}" python3 -c 'import os, pip; assert pip.__version__ == os.environ["PINNED_PIP_VERSION"]' && \
     python3 -m pip --version | grep -F "pip ${PINNED_PIP_VERSION}" && \
     pip --version | grep -F "pip ${PINNED_PIP_VERSION}" && \
