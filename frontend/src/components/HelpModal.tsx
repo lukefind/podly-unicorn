@@ -291,7 +291,7 @@ export default function HelpModal({ isOpen, onClose, onReplayTutorial }: HelpMod
 
             <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg">
               <p className="text-sm text-purple-800 dark:text-purple-200">
-                <strong>Storage:</strong> Processed files are auto-deleted after 14 days (configurable in Settings).
+                <strong>Storage:</strong> Admins can configure global age cleanup in Settings → Storage &amp; Cleanup and per-show retention in Show settings. Daily maintenance still removes stale processing artifacts when global age cleanup is off.
               </p>
             </div>
           </div>
