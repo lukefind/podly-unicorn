@@ -397,7 +397,7 @@ git commit -m "feat: add global storage cleanup settings"
 - Modify: `frontend/src/types/index.ts`
 - Modify: `frontend/src/services/api.ts`
 
-- [ ] **Step 1: Write failing policy-view-model tests**
+- [x] **Step 1: Write failing policy-view-model tests**
 
 Test:
 
@@ -414,7 +414,7 @@ cd frontend
 npm test -- feedCleanupPolicy.test.ts
 ```
 
-- [ ] **Step 2: Implement an admin-only portal modal**
+- [x] **Step 2: Implement an admin-only portal modal**
 
 Use `createPortal(..., document.body)`. Add an admin-only “Storage cleanup” item in the show Settings menu. The modal must:
 
@@ -426,7 +426,7 @@ Use `createPortal(..., document.body)`. Add an admin-only “Storage cleanup” 
 
 Use `user?.role === "admin"`; regular users must not see the menu item, while backend authorization remains authoritative.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 ```bash
 cd frontend
