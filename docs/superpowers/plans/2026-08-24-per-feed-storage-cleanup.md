@@ -487,7 +487,7 @@ git commit -m "docs: explain storage cleanup policies"
 - Verify all changed files
 - Modify only defects revealed by failing checks, using a fresh red/green cycle
 
-- [ ] **Step 1: Backend and migration verification**
+- [x] **Step 1: Backend and migration verification**
 
 ```bash
 pipenv run pytest --disable-warnings
@@ -501,7 +501,7 @@ pipenv run flask db heads
 
 Create one explicit temporary instance directory, point `PODLY_INSTANCE_DIR` and `PODLY_PODCAST_DATA_DIR` below that directory, set `PODLY_DISABLE_SCHEDULER=1`, then run every `flask db stamp/upgrade/current` command in that environment. Podly derives the SQLite URI from `PODLY_INSTANCE_DIR`. Seed the disposable database at the previous head with representative feeds/posts/jobs, upgrade it, run cleanup, and prove metadata remains while eligible artifacts are removed. Never run Flask migration commands against the worktree default `src/instance/sqlite3.db` or production data.
 
-- [ ] **Step 2: Frontend verification**
+- [x] **Step 2: Frontend verification**
 
 ```bash
 cd frontend
@@ -513,7 +513,7 @@ npm audit --audit-level=high
 cd ..
 ```
 
-- [ ] **Step 3: Production-container verification**
+- [x] **Step 3: Production-container verification**
 
 ```bash
 docker build --build-arg LITE_BUILD=true -t podly-storage-cleanup-candidate:local .
@@ -522,11 +522,11 @@ docker run --rm --entrypoint python3 podly-storage-cleanup-candidate:local -m pi
 
 Start the candidate against a brand-new disposable instance directory, wait for `/health`, verify the migration head, exercise authenticated global/per-feed saves, create disposable artifact fixtures through test setup, run cleanup, and confirm UI/API behavior. Never mount `src/instance/sqlite3.db` or any production data.
 
-- [ ] **Step 4: Independent code review**
+- [x] **Step 4: Independent code review**
 
 Use `superpowers:requesting-code-review`. Resolve every correctness issue with targeted tests. Re-run the affected suite after each fix and the full release gates afterward.
 
-- [ ] **Step 5: Commit verification-only fixes and confirm clean tree**
+- [x] **Step 5: Commit verification-only fixes and confirm clean tree**
 
 ```bash
 git status --short
