@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { CombinedConfig } from './types';
 
 import {
+  MAX_GLOBAL_RETENTION_DAYS,
   cleanupDispatchMessage,
   globalCleanupExplanation,
+  normalizeStorageCleanupConfig,
   toGlobalRetentionDays,
 } from './storageCleanup';
 
@@ -15,6 +18,9 @@ describe('toGlobalRetentionDays', () => {
   it('returns a positive integer day count when enabled', () => {
     expect(toGlobalRetentionDays(true, 14)).toBe(14);
     expect(toGlobalRetentionDays(true, '14')).toBe(14);
+    expect(toGlobalRetentionDays(true, MAX_GLOBAL_RETENTION_DAYS)).toBe(
+      MAX_GLOBAL_RETENTION_DAYS,
+    );
   });
 
   it.each([undefined, null, 0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
@@ -34,15 +40,48 @@ describe('toGlobalRetentionDays', () => {
       );
     },
   );
+
+  it('rejects day counts above the shared frontend maximum', () => {
+    expect(() =>
+      toGlobalRetentionDays(true, MAX_GLOBAL_RETENTION_DAYS + 1),
+    ).toThrow('maximum 36,500');
+  });
+});
+
+describe('normalizeStorageCleanupConfig', () => {
+  const configWithRetention = (retentionDays: number | null): CombinedConfig =>
+    ({ app: { post_cleanup_retention_days: retentionDays } }) as CombinedConfig;
+
+  it.each([0, -1, MAX_GLOBAL_RETENTION_DAYS + 1])(
+    'normalizes legacy retention value %s to disabled',
+    (retentionDays) => {
+      const original = configWithRetention(retentionDays);
+      const normalized = normalizeStorageCleanupConfig(original);
+
+      expect(normalized.app.post_cleanup_retention_days).toBeNull();
+      expect(original.app.post_cleanup_retention_days).toBe(retentionDays);
+    },
+  );
+
+  it.each([null, 1, MAX_GLOBAL_RETENTION_DAYS])(
+    'preserves supported retention value %s',
+    (retentionDays) => {
+      const original = configWithRetention(retentionDays);
+
+      expect(
+        normalizeStorageCleanupConfig(original).app.post_cleanup_retention_days,
+      ).toBe(retentionDays);
+    },
+  );
 });
 
 describe('cleanupDispatchMessage', () => {
   it.each([
     ['queued', 'Cleanup was queued and will run shortly.'],
-    ['coalesced', 'Cleanup was added to the maintenance run already in progress.'],
+    ['coalesced', 'Cleanup is already queued or running.'],
     [
       'scheduler_disabled',
-      'Automatic cleanup is disabled on this server; run maintenance manually or externally.',
+      'Automatic cleanup is disabled on this server; enable the scheduler or run maintenance from an external process.',
     ],
     ['not_requested', 'No cleanup run was needed.'],
   ] as const)('describes the %s dispatch state', (status, expected) => {

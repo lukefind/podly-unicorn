@@ -1,6 +1,8 @@
-import type { CleanupDispatch } from './types';
+import type { CleanupDispatch, CombinedConfig } from './types';
 
-const INVALID_DAYS_MESSAGE = 'Enter a positive whole number of days.';
+export const MAX_GLOBAL_RETENTION_DAYS = 36_500;
+const INVALID_DAYS_MESSAGE =
+  'Enter a positive whole number of days (maximum 36,500).';
 
 export function toGlobalRetentionDays(
   enabled: boolean,
@@ -14,10 +16,35 @@ export function toGlobalRetentionDays(
     typeof days === 'string' && /^[1-9]\d*$/.test(days.trim())
       ? Number(days.trim())
       : days;
-  if (!Number.isSafeInteger(parsedDays) || (parsedDays as number) <= 0) {
+  if (
+    !Number.isSafeInteger(parsedDays) ||
+    (parsedDays as number) <= 0 ||
+    (parsedDays as number) > MAX_GLOBAL_RETENTION_DAYS
+  ) {
     throw new Error(INVALID_DAYS_MESSAGE);
   }
   return parsedDays as number;
+}
+
+export function normalizeStorageCleanupConfig(
+  config: CombinedConfig,
+): CombinedConfig {
+  const retentionDays = config.app.post_cleanup_retention_days;
+  const supported =
+    retentionDays === null ||
+    (Number.isSafeInteger(retentionDays) &&
+      retentionDays > 0 &&
+      retentionDays <= MAX_GLOBAL_RETENTION_DAYS);
+  if (supported) {
+    return config;
+  }
+  return {
+    ...config,
+    app: {
+      ...config.app,
+      post_cleanup_retention_days: null,
+    },
+  };
 }
 
 export function cleanupDispatchMessage(dispatch: CleanupDispatch): string {
@@ -25,9 +52,9 @@ export function cleanupDispatchMessage(dispatch: CleanupDispatch): string {
     case 'queued':
       return 'Cleanup was queued and will run shortly.';
     case 'coalesced':
-      return 'Cleanup was added to the maintenance run already in progress.';
+      return 'Cleanup is already queued or running.';
     case 'scheduler_disabled':
-      return 'Automatic cleanup is disabled on this server; run maintenance manually or externally.';
+      return 'Automatic cleanup is disabled on this server; enable the scheduler or run maintenance from an external process.';
     case 'not_requested':
       return 'No cleanup run was needed.';
   }

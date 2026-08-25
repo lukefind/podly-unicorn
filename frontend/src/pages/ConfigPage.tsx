@@ -20,8 +20,10 @@ import { useTheme } from '../contexts/ThemeContext';
 import AdminUserStats from '../components/AdminUserStats';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import {
+  MAX_GLOBAL_RETENTION_DAYS,
   cleanupDispatchMessage,
   globalCleanupExplanation,
+  normalizeStorageCleanupConfig,
   toGlobalRetentionDays,
 } from '../storageCleanup';
 
@@ -99,6 +101,10 @@ export default function ConfigPage() {
   });
 
   const configData = data?.config;
+  const formConfigData = useMemo(
+    () => (configData ? normalizeStorageCleanupConfig(configData) : undefined),
+    [configData],
+  );
   const envOverrides = useMemo<EnvOverrideMap>(() => data?.env_overrides ?? {}, [data]);
   const getEnvHint = useCallback(
     (path: string, fallback?: EnvOverrideEntry) => envOverrides[path] ?? fallback ?? DEFAULT_ENV_HINTS[path],
@@ -206,6 +212,28 @@ export default function ConfigPage() {
     }
     return fallback;
   };
+
+  const hydrateConfigForm = useCallback((config: CombinedConfig) => {
+    const normalized = normalizeStorageCleanupConfig(config);
+    setPending(normalized);
+    setGlobalCleanupDaysInput(
+      normalized.app.post_cleanup_retention_days?.toString() ?? '14',
+    );
+    setGlobalCleanupDaysError(null);
+  }, []);
+
+  const acceptConfigUpdate = useCallback(
+    (response: Awaited<ReturnType<typeof configApi.updateConfig>>) => {
+      queryClient.setQueryData<ConfigResponse>(['config'], (current) => ({
+        ...(current ?? {}),
+        config: response.config,
+      }));
+      hydrateConfigForm(response.config);
+      setHasEdits(false);
+      void refetch();
+    },
+    [hydrateConfigForm, queryClient, refetch],
+  );
 
   const runStorageCleanupMutation = useMutation({
     mutationFn: configApi.runStorageCleanup,
@@ -552,25 +580,11 @@ export default function ConfigPage() {
   );
 
   useEffect(() => {
-    if (!configData) {
+    if (!formConfigData || hasEdits) {
       return;
     }
-    setPending((prev) => {
-      if (prev === null) {
-        return configData;
-      }
-      if (hasEdits) {
-        return prev;
-      }
-      return configData;
-    });
-    if (!hasEdits) {
-      setGlobalCleanupDaysInput(
-        configData.app.post_cleanup_retention_days?.toString() ?? '14',
-      );
-      setGlobalCleanupDaysError(null);
-    }
-  }, [configData, hasEdits]);
+    hydrateConfigForm(formConfigData);
+  }, [formConfigData, hasEdits, hydrateConfigForm]);
 
   const probeConnections = async () => {
     if (!pending) return;
@@ -628,13 +642,7 @@ export default function ConfigPage() {
       return configApi.updateConfig((pending ?? {}) as Partial<CombinedConfig>);
     },
     onSuccess: (response) => {
-      setPending(response.config);
-      setGlobalCleanupDaysInput(
-        response.config.app.post_cleanup_retention_days?.toString() ?? '14',
-      );
-      setGlobalCleanupDaysError(null);
-      setHasEdits(false);
-      refetch();
+      acceptConfigUpdate(response);
     },
   });
 
@@ -741,13 +749,7 @@ export default function ConfigPage() {
       return await configApi.updateConfig(next);
     },
     onSuccess: (response) => {
-      setPending(response.config);
-      setGlobalCleanupDaysInput(
-        response.config.app.post_cleanup_retention_days?.toString() ?? '14',
-      );
-      setGlobalCleanupDaysError(null);
-      setHasEdits(false);
-      refetch();
+      acceptConfigUpdate(response);
       toast.success('Groq key verified and saved. Defaults applied.');
       setLlmStatus('ok');
       setLlmMessage(`Connected to ${groqRecommendedModel}`);
@@ -1624,6 +1626,7 @@ export default function ConfigPage() {
                           className="input"
                           type="number"
                           min={1}
+                          max={MAX_GLOBAL_RETENTION_DAYS}
                           step={1}
                           inputMode="numeric"
                           value={globalCleanupDaysInput}
@@ -2149,7 +2152,11 @@ export default function ConfigPage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
-                  setPending(configData ?? null);
+                  if (formConfigData) {
+                    hydrateConfigForm(formConfigData);
+                  } else {
+                    setPending(null);
+                  }
                   setHasEdits(false);
                 }}
                 className="px-4 py-2 text-sm font-medium text-purple-700 dark:text-purple-300 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-600 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-colors"
