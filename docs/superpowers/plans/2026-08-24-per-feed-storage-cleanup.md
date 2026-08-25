@@ -204,7 +204,7 @@ git commit -m "feat: reconcile processed episode storage safely"
 - Modify: `src/tests/test_post_cleanup.py`
 - Modify: `src/shared/processing_paths.py` only if a path helper is needed
 
-- [ ] **Step 1: Write failing filesystem tests**
+- [x] **Step 1: Write failing filesystem tests**
 
 Using `PODLY_PODCAST_DATA_DIR` and temporary directories, cover:
 
@@ -222,11 +222,11 @@ Run and observe expected failures:
 pipenv run pytest src/tests/test_post_cleanup.py -k orphan -q
 ```
 
-- [ ] **Step 2: Implement the 24-hour orphan sweep**
+- [x] **Step 2: Implement the 24-hour orphan sweep**
 
 Implement the walk in focused `storage_orphans.py`, and keep `storage_cleanup.py` responsible only for invoking it and merging counters into the run result. Walk only immediate GUID/job directories below the resolved jobs root. Use database job status plus post references to decide eligibility. Apply the same containment, symlink, ambiguity, and partial-failure rules as episode cleanup. Return orphan counts and warnings through the shared result object.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 ```bash
 pipenv run pytest src/tests/test_post_cleanup.py -q
