@@ -182,6 +182,73 @@ def test_orphan_sweep_only_removes_stale_exact_attempt_layout_when_age_disabled(
     assert result.unsafe_skips == 2
 
 
+@pytest.mark.parametrize("status", ["pending", "running"])
+def test_orphan_sweep_preserves_empty_guid_parent_with_active_job(
+    app,
+    data_roots: tuple[Path, Path],
+    status: str,
+) -> None:
+    in_root, _ = data_roots
+    guid = f"empty-active-{status}-guid"
+    guid_parent = in_root / "jobs" / guid
+    guid_parent.mkdir(parents=True)
+
+    with app.app_context():
+        db.session.add(
+            ProcessingJob(
+                id=f"empty-active-{status}-job",
+                post_guid=guid,
+                feed_id=None,
+                status=status,
+                created_at=datetime.utcnow() - timedelta(days=2),
+            )
+        )
+        db.session.commit()
+
+        run_storage_cleanup(None, trigger=f"empty-active-{status}")
+
+    assert guid_parent.exists()
+
+
+def test_feed_scoped_orphan_sweep_removes_only_allowed_empty_guid_parent(
+    app,
+    data_roots: tuple[Path, Path],
+) -> None:
+    in_root, _ = data_roots
+    jobs_root = in_root / "jobs"
+    allowed_parent = jobs_root / "empty-allowed-guid"
+    out_of_scope_parent = jobs_root / "empty-out-of-scope-guid"
+    ambiguous_parent = jobs_root / "empty-ambiguous-guid"
+    for parent in (allowed_parent, out_of_scope_parent, ambiguous_parent):
+        parent.mkdir(parents=True)
+
+    with app.app_context():
+        target_feed = _create_feed("empty-scope-target")
+        other_feed = _create_feed("empty-scope-other")
+        _create_post(
+            target_feed, "empty-allowed-guid", release_date=datetime.utcnow()
+        )
+        _create_post(
+            other_feed, "empty-out-of-scope-guid", release_date=datetime.utcnow()
+        )
+        _create_post(
+            target_feed, "empty-ambiguous-guid", release_date=datetime.utcnow()
+        )
+        _create_post(
+            other_feed, "empty-ambiguous-guid", release_date=datetime.utcnow()
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(
+            None, feed_id=target_feed.id, trigger="empty-feed-scope"
+        )
+
+    assert not allowed_parent.exists()
+    assert out_of_scope_parent.exists()
+    assert ambiguous_parent.exists()
+    assert any("empty-ambiguous-guid" in warning for warning in result.warnings)
+
+
 def test_orphan_sweep_preserves_all_attempts_for_active_same_guid_job(
     app, data_roots: tuple[Path, Path]
 ) -> None:
@@ -478,6 +545,44 @@ def test_orphan_sweep_rejects_guid_parent_swap_before_attempt_deletion(
     assert result.unsafe_skips == 1
 
 
+def test_orphan_sweep_preserves_file_changed_in_place_before_unlink(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    in_root, _ = data_roots
+    attempt, input_path = _stale_attempt(
+        in_root, "changed-orphan-guid", "changed-orphan-job", payload=b"original"
+    )
+    original_stat = os.stat
+    file_stats = 0
+
+    def change_file_on_revalidation(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        *args: object,
+        **kwargs: object,
+    ) -> os.stat_result:
+        nonlocal file_stats
+        if path == input_path.name and kwargs.get("dir_fd") is not None:
+            file_stats += 1
+            if file_stats == 2:
+                input_path.write_bytes(b"replacement-content")
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", change_file_on_revalidation)
+
+    with app.app_context():
+        result = run_storage_cleanup(None, trigger="orphan-file-change")
+
+    assert file_stats >= 2
+    assert attempt.exists()
+    assert input_path.read_bytes() == b"replacement-content"
+    assert result.attempts_removed == 0
+    assert result.failed_count == 1
+    assert result.unsafe_skips == 1
+    assert result.skipped_count == 1
+
+
 def test_orphan_sweep_retries_pointer_clear_after_database_commit_failure(
     app,
     data_roots: tuple[Path, Path],
@@ -528,6 +633,49 @@ def test_orphan_sweep_retries_pointer_clear_after_database_commit_failure(
 
         db.session.refresh(post)
         assert post.unprocessed_audio_path is None
+        assert second.failed_count == 0
+
+
+def test_orphan_sweep_retries_jobless_pointer_clear_after_database_commit_failure(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    in_root, _ = data_roots
+    attempt, input_path = _stale_attempt(
+        in_root, "jobless-db-retry-guid", "jobless-db-retry-attempt"
+    )
+
+    with app.app_context():
+        feed = _create_feed("jobless-db-retry")
+        post = _create_post(
+            feed,
+            "jobless-db-retry-guid",
+            release_date=datetime.utcnow(),
+            input_path=input_path,
+        )
+        db.session.commit()
+        session = db.session()
+        original_commit = session.commit
+
+        def fail_commit() -> None:
+            raise RuntimeError("synthetic jobless pointer commit failure")
+
+        monkeypatch.setattr(session, "commit", fail_commit)
+        first = run_storage_cleanup(None, trigger="jobless-db-failure")
+
+        db.session.refresh(post)
+        assert post.unprocessed_audio_path == str(input_path)
+        assert not attempt.exists()
+        assert first.attempts_removed == 1
+        assert first.failed_count == 1
+
+        monkeypatch.setattr(session, "commit", original_commit)
+        second = run_storage_cleanup(None, trigger="jobless-db-retry")
+
+        db.session.refresh(post)
+        assert post.unprocessed_audio_path is None
+        assert second.attempts_removed == 0
         assert second.failed_count == 0
 
 

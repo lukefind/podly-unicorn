@@ -42,6 +42,7 @@ class _EntrySnapshot:
     mode: int
     size: int
     modified_ns: int
+    changed_ns: int
     children: tuple[_EntrySnapshot, ...] = ()
 
 
@@ -52,9 +53,16 @@ class _UnsafeAttempt(Exception):
 class _RemovalFailure(Exception):
     """Descriptor-relative removal failed after reclaiming zero or more bytes."""
 
-    def __init__(self, message: str, reclaimed_bytes: int = 0) -> None:
+    def __init__(
+        self,
+        message: str,
+        reclaimed_bytes: int = 0,
+        *,
+        unsafe: bool = False,
+    ) -> None:
         super().__init__(message)
         self.reclaimed_bytes = reclaimed_bytes
+        self.unsafe = unsafe
 
 
 def _directory_flags() -> int:
@@ -66,10 +74,17 @@ def _directory_flags() -> int:
 
 
 def _same_entry(current: os.stat_result, snapshot: _EntrySnapshot) -> bool:
-    return (
+    same_identity = (
         current.st_dev == snapshot.device
         and current.st_ino == snapshot.inode
         and stat.S_IFMT(current.st_mode) == stat.S_IFMT(snapshot.mode)
+    )
+    if not same_identity or not stat.S_ISREG(snapshot.mode):
+        return same_identity
+    return (
+        current.st_size == snapshot.size
+        and current.st_mtime_ns == snapshot.modified_ns
+        and current.st_ctime_ns == snapshot.changed_ns
     )
 
 
@@ -97,6 +112,7 @@ def _snapshot_directory(directory_fd: int) -> tuple[_EntrySnapshot, ...]:
                     mode=entry_stat.st_mode,
                     size=entry_stat.st_size,
                     modified_ns=entry_stat.st_mtime_ns,
+                    changed_ns=entry_stat.st_ctime_ns,
                 )
             )
             continue
@@ -120,6 +136,7 @@ def _snapshot_directory(directory_fd: int) -> tuple[_EntrySnapshot, ...]:
                 mode=entry_stat.st_mode,
                 size=0,
                 modified_ns=entry_stat.st_mtime_ns,
+                changed_ns=entry_stat.st_ctime_ns,
                 children=children,
             )
         )
@@ -159,7 +176,9 @@ def _remove_snapshot(directory_fd: int, snapshots: tuple[_EntrySnapshot, ...]) -
     except OSError as exc:
         raise _RemovalFailure(f"unable to re-list directory: {exc}") from exc
     if current_names != expected_names:
-        raise _RemovalFailure("directory contents changed during cleanup")
+        raise _RemovalFailure(
+            "directory contents changed during cleanup", unsafe=True
+        )
 
     reclaimed = 0
     for snapshot in snapshots:
@@ -171,7 +190,9 @@ def _remove_snapshot(directory_fd: int, snapshots: tuple[_EntrySnapshot, ...]) -
             ) from exc
         if not _same_entry(current, snapshot):
             raise _RemovalFailure(
-                f"entry changed during cleanup: {snapshot.name}", reclaimed
+                f"entry changed during cleanup: {snapshot.name}",
+                reclaimed,
+                unsafe=True,
             )
         if stat.S_ISREG(snapshot.mode):
             try:
@@ -191,18 +212,26 @@ def _remove_snapshot(directory_fd: int, snapshots: tuple[_EntrySnapshot, ...]) -
         try:
             if not _same_entry(os.fstat(child_fd), snapshot):
                 raise _RemovalFailure(
-                    f"directory changed while opening {snapshot.name}", reclaimed
+                    f"directory changed while opening {snapshot.name}",
+                    reclaimed,
+                    unsafe=True,
                 )
             reclaimed += _remove_snapshot(child_fd, snapshot.children)
         except _RemovalFailure as exc:
-            raise _RemovalFailure(str(exc), reclaimed + exc.reclaimed_bytes) from exc
+            raise _RemovalFailure(
+                str(exc),
+                reclaimed + exc.reclaimed_bytes,
+                unsafe=exc.unsafe,
+            ) from exc
         finally:
             os.close(child_fd)
         try:
             current = os.stat(snapshot.name, dir_fd=directory_fd, follow_symlinks=False)
             if not _same_entry(current, snapshot):
                 raise _RemovalFailure(
-                    f"directory changed during cleanup: {snapshot.name}", reclaimed
+                    f"directory changed during cleanup: {snapshot.name}",
+                    reclaimed,
+                    unsafe=True,
                 )
             os.rmdir(snapshot.name, dir_fd=directory_fd)
         except _RemovalFailure:
@@ -419,14 +448,15 @@ def _reconcile_missing_attempt_references(
             _record_skipped_attempt(result, attempt_key)
             continue
         job = ProcessingJob.query.filter_by(id=job_id).first()
-        if job is None or job.post_guid != guid:
-            continue
-        if job.status not in ("failed", "cancelled"):
-            continue
-        if _job_latest_modified_ns(job) >= cutoff_ns:
-            result.grace_skips += 1
-            _record_skipped_attempt(result, attempt_key)
-            continue
+        if job is not None:
+            if job.post_guid != guid:
+                continue
+            if job.status not in ("failed", "cancelled"):
+                continue
+            if _job_latest_modified_ns(job) >= cutoff_ns:
+                result.grace_skips += 1
+                _record_skipped_attempt(result, attempt_key)
+                continue
         references = _posts_referencing_attempt(attempt_path)
         if len(references) != 1 or references[0].id != post.id:
             result.ambiguous_skips += 1
@@ -510,12 +540,20 @@ def _remove_bound_attempt(
         reclaimed = _remove_snapshot(attempt_fd, snapshots)
         current_attempt = os.stat(job_id, dir_fd=guid_fd, follow_symlinks=False)
         if not _same_directory(current_attempt, attempt_stat):
-            raise _RemovalFailure("attempt directory changed during cleanup", reclaimed)
+            raise _RemovalFailure(
+                "attempt directory changed during cleanup", reclaimed, unsafe=True
+            )
         os.rmdir(job_id, dir_fd=guid_fd)
     except _RemovalFailure as exc:
         result.reclaimed_bytes += exc.reclaimed_bytes
         result.failed_count += 1
         result.errors.append(f"unable to remove attempt {label}: {exc}")
+        if exc.unsafe:
+            _record_unsafe(
+                result,
+                f"unsafe attempt changed during removal {label}: {exc}",
+                attempt_key=label,
+            )
         return False
     except OSError as exc:
         result.reclaimed_bytes += reclaimed
@@ -727,7 +765,11 @@ def _sweep_guid(
         except OSError as exc:
             result.warnings.append(f"unable to inspect GUID directory {guid}: {exc}")
             return
-        if is_empty:
+        if is_empty and guid_scope == "ambiguous":
+            result.warnings.append(
+                f"ambiguous GUID mapping preserved for empty parent {guid}"
+            )
+        if is_empty and active_guid is None and guid_scope == "allowed":
             try:
                 current = os.stat(guid, dir_fd=root_fd, follow_symlinks=False)
                 if _same_directory(current, guid_stat):
