@@ -123,7 +123,7 @@ git commit -m "feat: add per-feed processed episode retention policy"
 - Rewrite/extend: `src/tests/test_post_cleanup.py`
 - Modify: `src/tests/test_jobs_manager_history.py`
 
-- [ ] **Step 1: Write failing tests for candidate ordering and eligibility**
+- [x] **Step 1: Write failing tests for candidate ordering and eligibility**
 
 Cover real database rows for:
 
@@ -144,11 +144,11 @@ pipenv run pytest src/tests/test_post_cleanup.py -q
 
 Expected: FAIL because the storage coordinator is absent and the legacy routine deletes `Post` rows.
 
-- [ ] **Step 2: Implement selection and a structured result**
+- [x] **Step 2: Implement selection and a structured result**
 
 In `storage_cleanup.py`, introduce a result dataclass with requested/selected/cleaned/skipped/failed counters, warning details, file/attempt counts, reclaimed bytes, unsafe/grace skips, trigger, scope, and evaluated-policy details. Implement deterministic selectors without mutating data. Keep `post_cleanup.py` as a compatibility entry point that delegates to the new coordinator; remove its post-deletion behavior.
 
-- [ ] **Step 3: Write failing tests for successful artifact cleanup**
+- [x] **Step 3: Write failing tests for successful artifact cleanup**
 
 For an eligible post, prove cleanup:
 
@@ -159,11 +159,11 @@ For an eligible post, prove cleanup:
 - clears `Post.refined_ad_boundaries`, `refined_ad_boundaries_updated_at`, and `processed_with_preset_id`;
 - leaves the episode able to enter the ordinary Process/Reprocess path again.
 
-- [ ] **Step 4: Implement transactional reconciliation**
+- [x] **Step 4: Implement transactional reconciliation**
 
 Add helpers that first resolve and validate allowed roots (`get_in_root()` and `get_srv_root()`), reject symlinks/path escapes, attempt filesystem deletion, and only clear each database pointer when the file was removed or already absent. Implement the count-policy two-phase reconciliation exactly: provisionally rank non-empty paths, reconcile artifact existence, recompute retained/candidate positions from valid outputs, then mutate. Commit database-derived cleanup together; on database failure, roll back and report a retryable partial state. Never delete the `Post`.
 
-- [ ] **Step 5: Write failing tests for shared GUIDs, active work, and partial failure**
+- [x] **Step 5: Write failing tests for shared GUIDs, active work, and partial failure**
 
 Cover:
 
@@ -178,15 +178,15 @@ Cover:
 - A provisionally retained count item whose processed output is missing is removed from the retained ranking, but its input and processing data remain unless it becomes cleanup-eligible after recomputation.
 - A missing processed output under a disabled policy preserves input and processing data while reporting reconciliation drift.
 
-- [ ] **Step 6: Implement job attribution and affected-run counter repair**
+- [x] **Step 6: Implement job attribution and affected-run counter repair**
 
 Add a jobs-manager helper that recalculates every explicit affected `JobsManagerRun` ID as well as the singleton when attributable job rows are removed. Preserve ambiguous rows. Keep active rows untouched.
 
-- [ ] **Step 7: Emit and test one structured summary per run**
+- [x] **Step 7: Emit and test one structured summary per run**
 
 At coordinator completion, log one JSON-serializable summary containing trigger, scope, policies evaluated, candidates selected, episodes cleaned, active/ambiguous/unsafe/grace skips, files removed, stale attempts removed, reclaimed bytes, warnings, and errors. Add log-capture tests for scheduled, feed-scoped, and partial-failure runs; do not rely on scattered per-file log lines as the run summary.
 
-- [ ] **Step 8: Run focused tests and commit**
+- [x] **Step 8: Run focused tests and commit**
 
 ```bash
 pipenv run pytest src/tests/test_post_cleanup.py src/tests/test_jobs_manager_history.py -q
