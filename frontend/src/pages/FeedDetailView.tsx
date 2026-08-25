@@ -12,6 +12,7 @@ import ProcessButton from '../components/ProcessButton';
 import EpisodeProcessingStatus from '../components/EpisodeProcessingStatus';
 import EpisodeDetailModal from '../components/episodes/EpisodeDetailModal';
 import FeedCleanupPolicyModal from '../components/FeedCleanupPolicyModal';
+import { canManageFeedCleanup } from '../feedCleanupPolicy';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePodcastsContext } from '../layouts/PodcastsLayout';
@@ -29,6 +30,10 @@ export default function FeedDetailView() {
   const { theme } = useTheme();
   const isOriginal = theme === 'original';
   const isDark = isDarkSurfaceTheme(theme);
+  const showCleanupPolicyControls = canManageFeedCleanup(
+    requireAuth,
+    user?.role,
+  );
 
   const selectedFeed = feeds.find((f) => f.id === selectedFeedId);
 
@@ -298,11 +303,15 @@ export default function FeedDetailView() {
                       </button>
                     )}
 
-                    {user?.role === 'admin' && (
+                    {showCleanupPolicyControls && (
                       <button
-                        onClick={() => {
-                          setShowCleanupPolicyModal(true);
+                        onClick={async () => {
                           setShowSettingsMenu(false);
+                          try {
+                            await queryClient.refetchQueries({ queryKey: ['feeds'] });
+                          } finally {
+                            setShowCleanupPolicyModal(true);
+                          }
                         }}
                         className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 hover:opacity-80"
                         style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e5e7eb' : '#374151' }}
@@ -602,7 +611,7 @@ export default function FeedDetailView() {
         />
       )}
 
-      {showCleanupPolicyModal && user?.role === 'admin' && (
+      {showCleanupPolicyModal && showCleanupPolicyControls && (
         <FeedCleanupPolicyModal
           key={selectedFeed.id}
           feed={selectedFeed}

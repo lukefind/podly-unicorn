@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
@@ -47,6 +47,8 @@ export default function FeedCleanupPolicyModal({
   const isOriginal = theme === 'original';
   const isDark = isDarkSurfaceTheme(theme);
   const queryClient = useQueryClient();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [mode, setMode] = useState<FeedCleanupMode>(() =>
     initialFeedCleanupMode(feed.processed_episode_retention_count),
   );
@@ -105,6 +107,46 @@ export default function FeedCleanupPolicyModal({
 
   useEscapeKey(true, closeIfIdle);
 
+  useEffect(() => {
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const dialog = dialogRef.current;
+    closeButtonRef.current?.focus();
+
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || !dialog) {
+        return;
+      }
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hasAttribute('hidden'));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    dialog?.addEventListener('keydown', trapFocus);
+    return () => {
+      dialog?.removeEventListener('keydown', trapFocus);
+      previousFocus?.focus();
+    };
+  }, []);
+
   const submitPolicy = () => {
     if (countError || saveMutation.isPending) {
       return;
@@ -144,9 +186,11 @@ export default function FeedCleanupPolicyModal({
       onClick={closeIfIdle}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="feed-cleanup-title"
+        tabIndex={-1}
         className="modal-content flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-purple-200 bg-white shadow-2xl dark:border-purple-700 dark:bg-slate-900"
         style={panelStyle}
         onClick={(event) => event.stopPropagation()}
@@ -180,6 +224,7 @@ export default function FeedCleanupPolicyModal({
             </p>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             aria-label="Close storage cleanup settings"
             disabled={saveMutation.isPending}
@@ -298,6 +343,7 @@ export default function FeedCleanupPolicyModal({
                   {mode === 'count' && (
                     <span className="mt-3 block max-w-xs">
                       <span
+                        id="feed-cleanup-count-label"
                         className={`mb-1 block text-xs font-medium ${
                           isOriginal ? 'text-blue-100' : 'text-gray-700 dark:text-purple-200'
                         }`}
@@ -305,6 +351,7 @@ export default function FeedCleanupPolicyModal({
                         Number of processed episodes to keep
                       </span>
                       <input
+                        aria-labelledby="feed-cleanup-count-label"
                         type="number"
                         min={1}
                         max={FEED_RETENTION_COUNT_MAX}

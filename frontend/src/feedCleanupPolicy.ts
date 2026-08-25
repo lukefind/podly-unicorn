@@ -1,9 +1,19 @@
-import { cleanupDispatchMessage } from './storageCleanup';
+import {
+  cleanupDispatchMessage,
+  normalizeGlobalRetentionDays,
+} from './storageCleanup';
 import type { CleanupDispatch, EffectiveCleanupPolicy } from './types';
 
 export const FEED_RETENTION_COUNT_MAX = 10_000;
 
 export type FeedCleanupMode = 'inherit' | 'count';
+
+export function canManageFeedCleanup(
+  requireAuth: boolean,
+  userRole: string | null | undefined,
+): boolean {
+  return !requireAuth || userRole === 'admin';
+}
 
 const INVALID_COUNT_MESSAGE =
   `Enter a whole number between 1 and ${FEED_RETENTION_COUNT_MAX}.`;
@@ -63,10 +73,11 @@ export function describeEffectiveCleanupPolicy(
 export function describeGlobalFeedPolicy(
   retentionDays: number | null | undefined,
 ): string {
-  if (retentionDays == null) {
+  const normalizedRetentionDays = normalizeGlobalRetentionDays(retentionDays);
+  if (normalizedRetentionDays === null) {
     return 'Global policy: age-based episode cleanup is disabled; orphan maintenance still runs.';
   }
-  return `Global policy: remove processed episode files older than ${retentionDays} days.`;
+  return `Global policy: remove processed episode files older than ${normalizedRetentionDays} days.`;
 }
 
 export function feedCleanupSaveMessage(

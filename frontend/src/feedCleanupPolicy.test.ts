@@ -3,12 +3,25 @@ import { describe, expect, it } from 'vitest';
 import type { CleanupDispatch, EffectiveCleanupPolicy } from './types';
 import {
   FEED_RETENTION_COUNT_MAX,
+  canManageFeedCleanup,
   describeEffectiveCleanupPolicy,
   describeGlobalFeedPolicy,
   feedCleanupSaveMessage,
   initialFeedCleanupMode,
   toFeedRetentionCount,
 } from './feedCleanupPolicy';
+
+describe('canManageFeedCleanup', () => {
+  it('allows administrators and auth-disabled installations', () => {
+    expect(canManageFeedCleanup(true, 'admin')).toBe(true);
+    expect(canManageFeedCleanup(false, null)).toBe(true);
+  });
+
+  it('hides controls from authenticated regular users', () => {
+    expect(canManageFeedCleanup(true, 'user')).toBe(false);
+    expect(canManageFeedCleanup(true, null)).toBe(false);
+  });
+});
 
 describe('toFeedRetentionCount', () => {
   it('maps inherit mode to the global policy regardless of the count input', () => {
@@ -124,6 +137,15 @@ describe('describeGlobalFeedPolicy', () => {
       'Global policy: age-based episode cleanup is disabled; orphan maintenance still runs.',
     );
   });
+
+  it.each([0, -1, 36_501])(
+    'treats legacy invalid global retention %s as disabled',
+    (retentionDays) => {
+      expect(describeGlobalFeedPolicy(retentionDays)).toContain(
+        'age-based episode cleanup is disabled',
+      );
+    },
+  );
 });
 
 describe('feedCleanupSaveMessage', () => {

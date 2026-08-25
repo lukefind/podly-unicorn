@@ -26,23 +26,27 @@ export function toGlobalRetentionDays(
   return parsedDays as number;
 }
 
+export function normalizeGlobalRetentionDays(value: unknown): number | null {
+  return Number.isSafeInteger(value) &&
+    (value as number) > 0 &&
+    (value as number) <= MAX_GLOBAL_RETENTION_DAYS
+    ? (value as number)
+    : null;
+}
+
 export function normalizeStorageCleanupConfig(
   config: CombinedConfig,
 ): CombinedConfig {
   const retentionDays = config.app.post_cleanup_retention_days;
-  const supported =
-    retentionDays === null ||
-    (Number.isSafeInteger(retentionDays) &&
-      retentionDays > 0 &&
-      retentionDays <= MAX_GLOBAL_RETENTION_DAYS);
-  if (supported) {
+  const normalizedRetentionDays = normalizeGlobalRetentionDays(retentionDays);
+  if (retentionDays === normalizedRetentionDays) {
     return config;
   }
   return {
     ...config,
     app: {
       ...config.app,
-      post_cleanup_retention_days: null,
+      post_cleanup_retention_days: normalizedRetentionDays,
     },
   };
 }
