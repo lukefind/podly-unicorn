@@ -11,6 +11,7 @@ import ReprocessButton from '../components/ReprocessButton';
 import ProcessButton from '../components/ProcessButton';
 import EpisodeProcessingStatus from '../components/EpisodeProcessingStatus';
 import EpisodeDetailModal from '../components/episodes/EpisodeDetailModal';
+import FeedCleanupPolicyModal from '../components/FeedCleanupPolicyModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePodcastsContext } from '../layouts/PodcastsLayout';
@@ -21,9 +22,10 @@ export default function FeedDetailView() {
   const navigate = useNavigate();
   const { feeds, selectedFeedId, queryClient } = usePodcastsContext();
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showCleanupPolicyModal, setShowCleanupPolicyModal] = useState(false);
   const [processingPollTriggers, setProcessingPollTriggers] = useState<Record<string, number>>({});
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
-  const { requireAuth, isAuthenticated } = useAuth();
+  const { requireAuth, isAuthenticated, user } = useAuth();
   const { theme } = useTheme();
   const isOriginal = theme === 'original';
   const isDark = isDarkSurfaceTheme(theme);
@@ -293,6 +295,22 @@ export default function FeedDetailView() {
                             (selectedFeed.auto_download_enabled || selectedFeed.auto_download_enabled_by_user) ? 'translate-x-4' : 'translate-x-0.5'
                           }`} />
                         </span>
+                      </button>
+                    )}
+
+                    {user?.role === 'admin' && (
+                      <button
+                        onClick={() => {
+                          setShowCleanupPolicyModal(true);
+                          setShowSettingsMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 hover:opacity-80"
+                        style={{ color: isOriginal ? '#dbeafe' : isDark ? '#e5e7eb' : '#374151' }}
+                      >
+                        <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16M7 12h10M10 17h4" />
+                        </svg>
+                        Storage cleanup
                       </button>
                     )}
 
@@ -581,6 +599,14 @@ export default function FeedDetailView() {
               [guid]: Date.now()
             }));
           }}
+        />
+      )}
+
+      {showCleanupPolicyModal && user?.role === 'admin' && (
+        <FeedCleanupPolicyModal
+          key={selectedFeed.id}
+          feed={selectedFeed}
+          onClose={() => setShowCleanupPolicyModal(false)}
         />
       )}
     </>
