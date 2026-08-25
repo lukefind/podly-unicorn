@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/lukefind/podly-unicorn/compare/v1.3.0...v1.3.1) (2026-08-25)
+
+
+### Bug Fixes
+
+* remediate container security scan findings ([391d64b](https://github.com/lukefind/podly-unicorn/commit/391d64b3762db65c5de38744da05018de5d22b05))
+
 # [1.3.0](https://github.com/lukefind/podly-unicorn/compare/v1.2.2...v1.3.0) (2026-08-25)
 
 
