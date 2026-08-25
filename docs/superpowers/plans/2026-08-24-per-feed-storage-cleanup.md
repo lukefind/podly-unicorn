@@ -287,7 +287,7 @@ git commit -m "feat: schedule storage maintenance independently of age policy"
 - Create: `src/tests/test_storage_cleanup_routes.py`
 - Modify: `src/tests/test_admin_routes.py`
 
-- [ ] **Step 1: Write failing authorization, validation, and response tests**
+- [x] **Step 1: Write failing authorization, validation, and response tests**
 
 Test all three endpoints with auth disabled, anonymous, regular-user, admin, missing feed, malformed JSON, `true`, zero, negative, float/string, excessive integer, valid positive integer, and `null`:
 
@@ -311,19 +311,19 @@ Run:
 pipenv run pytest src/tests/test_storage_cleanup_routes.py src/tests/test_admin_routes.py -q
 ```
 
-- [ ] **Step 2: Serialize feed policy data**
+- [x] **Step 2: Serialize feed policy data**
 
 Add `processed_episode_retention_count` and an `effective_cleanup_policy` object to `/feeds` responses. The effective object must state either per-feed count, inherited global age, or disabled age while explaining that orphan maintenance remains active.
 
-- [ ] **Step 3: Implement feed policy and manual-run endpoints**
+- [x] **Step 3: Implement feed policy and manual-run endpoints**
 
 Parse JSON strictly so Python booleans do not pass as integers. Bound positive counts to a documented safe maximum. Commit the policy first, then request a coalesced feed-scoped sweep for both positive-count saves and `null`/inherit saves. Return 202 because cleanup is asynchronous.
 
-- [ ] **Step 4: Refactor config update metadata without changing unrelated persistence**
+- [x] **Step 4: Refactor config update metadata without changing unrelated persistence**
 
 Make the app-settings update report old/new retention to the route. Preserve the existing runtime hydration and secret sanitation. Return the new response envelope and dispatch server-wide whenever the changed new value is positive, whether the day count increases or decreases; disabling positive-to-null must explicitly report `requested: false`, `status: "not_requested"`.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 pipenv run pytest src/tests/test_storage_cleanup_routes.py src/tests/test_admin_routes.py src/tests/test_post_cleanup.py -q
