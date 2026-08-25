@@ -19,6 +19,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import AdminUserStats from '../components/AdminUserStats';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import {
+  cleanupDispatchMessage,
+  globalCleanupExplanation,
+  toGlobalRetentionDays,
+} from '../storageCleanup';
 
 const ENV_FIELD_LABELS: Record<string, string> = {
   'groq.api_key': 'Groq API Key',
@@ -110,6 +115,7 @@ export default function ConfigPage() {
   const [showEnvWarning, setShowEnvWarning] = useState(false);
 
   const showSecurityControls = requireAuth && !!user;
+  const showAdminCleanupControls = !requireAuth || user?.role === 'admin';
 
   const {
     data: managedUsers,
@@ -172,6 +178,8 @@ export default function ConfigPage() {
 
   const [pending, setPending] = useState<CombinedConfig | null>(null);
   const [hasEdits, setHasEdits] = useState(false);
+  const [globalCleanupDaysInput, setGlobalCleanupDaysInput] = useState('14');
+  const [globalCleanupDaysError, setGlobalCleanupDaysError] = useState<string | null>(null);
   const [showBaseUrlInfo, setShowBaseUrlInfo] = useState(false);
   const [manualLlmKey, setManualLlmKey] = useState('');
   const [llmKeyProfileName, setLlmKeyProfileName] = useState('');
@@ -198,6 +206,21 @@ export default function ConfigPage() {
     }
     return fallback;
   };
+
+  const runStorageCleanupMutation = useMutation({
+    mutationFn: configApi.runStorageCleanup,
+    onSuccess: (dispatch) => {
+      const message = cleanupDispatchMessage(dispatch);
+      if (dispatch.status === 'scheduler_disabled') {
+        toast.error(message);
+      } else {
+        toast.success(message);
+      }
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, 'Failed to queue storage cleanup.'));
+    },
+  });
 
   const downloadBlobResponse = async (
     response: Awaited<ReturnType<typeof adminApi.backupDatabase>>,
@@ -541,6 +564,12 @@ export default function ConfigPage() {
       }
       return configData;
     });
+    if (!hasEdits) {
+      setGlobalCleanupDaysInput(
+        configData.app.post_cleanup_retention_days?.toString() ?? '14',
+      );
+      setGlobalCleanupDaysError(null);
+    }
   }, [configData, hasEdits]);
 
   const probeConnections = async () => {
@@ -598,7 +627,12 @@ export default function ConfigPage() {
     mutationFn: async () => {
       return configApi.updateConfig((pending ?? {}) as Partial<CombinedConfig>);
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      setPending(response.config);
+      setGlobalCleanupDaysInput(
+        response.config.app.post_cleanup_retention_days?.toString() ?? '14',
+      );
+      setGlobalCleanupDaysError(null);
       setHasEdits(false);
       refetch();
     },
@@ -606,7 +640,10 @@ export default function ConfigPage() {
 
   const saveToastMessages = {
     loading: 'Saving changes...',
-    success: 'Configuration saved',
+    success: (response: Awaited<ReturnType<typeof configApi.updateConfig>>) =>
+      response.cleanup_dispatch.status === 'not_requested'
+        ? 'Configuration saved'
+        : `Configuration saved. ${cleanupDispatchMessage(response.cleanup_dispatch)}`,
     error: (err: unknown) => {
       if (typeof err === 'object' && err !== null) {
         const e = err as {
@@ -637,6 +674,13 @@ export default function ConfigPage() {
   };
 
   const triggerSaveMutation = () => {
+    if (
+      pending?.app.post_cleanup_retention_days !== null &&
+      globalCleanupDaysError
+    ) {
+      toast.error(globalCleanupDaysError);
+      return;
+    }
     toast.promise(saveMutation.mutateAsync(), saveToastMessages);
   };
 
@@ -696,7 +740,12 @@ export default function ConfigPage() {
 
       return await configApi.updateConfig(next);
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      setPending(response.config);
+      setGlobalCleanupDaysInput(
+        response.config.app.post_cleanup_retention_days?.toString() ?? '14',
+      );
+      setGlobalCleanupDaysError(null);
       setHasEdits(false);
       refetch();
       toast.success('Groq key verified and saved. Defaults applied.');
@@ -1495,14 +1544,6 @@ export default function ConfigPage() {
                   onChange={(val) => setField(['app', 'background_update_interval_minute'], val)}
                 />
               </Field>
-              <Field label="Cleanup Retention (days)">
-                <NumberInput
-                  value={pending?.app?.post_cleanup_retention_days}
-                  allowEmpty
-                  min={0}
-                  onChange={(val) => setField(['app', 'post_cleanup_retention_days'], val)}
-                />
-              </Field>
               <Field label="Auto-whitelist new episodes">
                 <input
                   type="checkbox"
@@ -1520,6 +1561,147 @@ export default function ConfigPage() {
               </Field>
             </div>
           </Section>
+
+          {showAdminCleanupControls && (
+            <Section title="Storage & Cleanup">
+              <div className="space-y-4">
+                <div
+                  className={`rounded-lg border p-4 ${
+                    isOriginal
+                      ? 'border-blue-300/25 bg-blue-800/30'
+                      : 'border-purple-200 bg-purple-50/70 dark:border-purple-700 dark:bg-purple-900/30'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <label
+                        htmlFor="enable-global-age-cleanup"
+                        className={`text-sm font-semibold ${
+                          isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'
+                        }`}
+                      >
+                        Enable global age cleanup
+                      </label>
+                      <p
+                        className={`mt-1 text-xs ${
+                          isOriginal ? 'text-blue-300/70' : 'text-gray-600 dark:text-purple-300'
+                        }`}
+                      >
+                        Applies to feeds that inherit the server-wide policy.
+                      </p>
+                    </div>
+                    <input
+                      id="enable-global-age-cleanup"
+                      type="checkbox"
+                      className="mt-0.5 h-5 w-5"
+                      checked={pending.app.post_cleanup_retention_days !== null}
+                      onChange={(event) => {
+                        if (!event.target.checked) {
+                          setGlobalCleanupDaysError(null);
+                          setField(['app', 'post_cleanup_retention_days'], null);
+                          return;
+                        }
+                        let days: number;
+                        try {
+                          days = toGlobalRetentionDays(
+                            true,
+                            globalCleanupDaysInput,
+                          ) as number;
+                        } catch {
+                          days = 14;
+                          setGlobalCleanupDaysInput('14');
+                        }
+                        setGlobalCleanupDaysError(null);
+                        setField(['app', 'post_cleanup_retention_days'], days);
+                      }}
+                    />
+                  </div>
+
+                  {pending.app.post_cleanup_retention_days !== null && (
+                    <div className="mt-4 max-w-sm">
+                      <Field label="Delete processed episode files older than … days">
+                        <input
+                          className="input"
+                          type="number"
+                          min={1}
+                          step={1}
+                          inputMode="numeric"
+                          value={globalCleanupDaysInput}
+                          aria-invalid={globalCleanupDaysError ? 'true' : undefined}
+                          onChange={(event) => {
+                            const rawValue = event.target.value;
+                            setGlobalCleanupDaysInput(rawValue);
+                            try {
+                              const value = toGlobalRetentionDays(true, rawValue);
+                              setGlobalCleanupDaysError(null);
+                              setField(
+                                ['app', 'post_cleanup_retention_days'],
+                                value,
+                              );
+                            } catch (error) {
+                              setGlobalCleanupDaysError(
+                                getErrorMessage(error, 'Enter a positive whole number of days.'),
+                              );
+                            }
+                          }}
+                        />
+                        {globalCleanupDaysError && (
+                          <span className="mt-1 block text-xs text-red-600 dark:text-red-300">
+                            {globalCleanupDaysError}
+                          </span>
+                        )}
+                      </Field>
+                    </div>
+                  )}
+
+                  <p
+                    className={`mt-3 text-sm ${
+                      isOriginal ? 'text-blue-200/80' : 'text-gray-700 dark:text-purple-200'
+                    }`}
+                  >
+                    {globalCleanupExplanation(
+                      pending.app.post_cleanup_retention_days !== null,
+                    )}
+                  </p>
+                </div>
+
+                <div
+                  className={`rounded-lg border p-4 ${
+                    isOriginal
+                      ? 'border-blue-300/20 bg-blue-900/20'
+                      : 'border-gray-200 bg-white/70 dark:border-purple-700 dark:bg-purple-950/30'
+                  }`}
+                >
+                  <h4
+                    className={`text-sm font-semibold ${
+                      isOriginal ? 'text-blue-100' : 'text-gray-900 dark:text-purple-100'
+                    }`}
+                  >
+                    What cleanup removes
+                  </h4>
+                  <p
+                    className={`mt-1 text-xs leading-5 ${
+                      isOriginal ? 'text-blue-300/70' : 'text-gray-600 dark:text-purple-300'
+                    }`}
+                  >
+                    Local processed and input audio plus processing-derived data may be removed.
+                    Feed and episode metadata, source URLs, subscriptions, and whitelist state remain,
+                    so an episode can be processed again. Per-feed count limits take precedence over
+                    the inherited global age policy, and abandoned job artifacts are maintained
+                    separately even when global age cleanup is disabled.
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-3 rounded-lg bg-gradient-to-r from-purple-600 to-pink-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:from-purple-700 hover:to-pink-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={runStorageCleanupMutation.isPending}
+                    onClick={() => runStorageCleanupMutation.mutate()}
+                  >
+                    {runStorageCleanupMutation.isPending ? 'Queueing cleanup…' : 'Run cleanup now'}
+                  </button>
+                </div>
+              </div>
+            </Section>
+          )}
 
           {showSecurityControls && user?.role === 'admin' && (
             <Section title="User Signups & Email">

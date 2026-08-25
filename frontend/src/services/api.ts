@@ -11,6 +11,9 @@ import type {
   WhisperConfig,
   PodcastSearchResult,
   ConfigResponse,
+  ConfigUpdateResponse,
+  CleanupDispatch,
+  FeedCleanupPolicyResponse,
   PromptPreset,
   ProcessingStatsSummary,
 } from '../types';
@@ -37,6 +40,16 @@ const buildAbsoluteUrl = (path: string): string => {
 export const feedsApi = {
   getFeeds: async (): Promise<Feed[]> => {
     const response = await api.get('/feeds');
+    return response.data;
+  },
+
+  setCleanupPolicy: async (
+    feedId: number,
+    retentionCount: number | null,
+  ): Promise<FeedCleanupPolicyResponse> => {
+    const response = await api.post(`/api/feeds/${feedId}/cleanup-policy`, {
+      retention_count: retentionCount,
+    });
     return response.data;
   },
 
@@ -746,8 +759,12 @@ export const configApi = {
     const response = await api.get('/api/config/api_configured_check');
     return { configured: !!response.data?.configured };
   },
-  updateConfig: async (payload: Partial<CombinedConfig>): Promise<CombinedConfig> => {
+  updateConfig: async (payload: Partial<CombinedConfig>): Promise<ConfigUpdateResponse> => {
     const response = await api.put('/api/config', payload);
+    return response.data;
+  },
+  runStorageCleanup: async (): Promise<CleanupDispatch> => {
+    const response = await api.post('/api/admin/storage-cleanup/run');
     return response.data;
   },
   testLLM: async (

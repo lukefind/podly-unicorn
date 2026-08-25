@@ -12,6 +12,54 @@ export interface Feed {
   auto_download_enabled?: boolean;
   auto_download_enabled_by_user?: boolean;
   auto_download_enabled_by_other?: boolean;
+  processed_episode_retention_count?: number | null;
+  effective_cleanup_policy?: EffectiveCleanupPolicy;
+}
+
+export type CleanupDispatchStatus =
+  | 'queued'
+  | 'coalesced'
+  | 'scheduler_disabled'
+  | 'not_requested';
+
+export interface CleanupDispatch {
+  requested: boolean;
+  status: CleanupDispatchStatus;
+}
+
+interface CleanupPolicyBase {
+  inherited: boolean;
+  orphan_maintenance_active: boolean;
+}
+
+export type EffectiveCleanupPolicy =
+  | (CleanupPolicyBase & {
+      type: 'count';
+      source: 'feed';
+      retention_count: number;
+    })
+  | (CleanupPolicyBase & {
+      type: 'age';
+      source: 'global';
+      retention_days: number;
+    })
+  | (CleanupPolicyBase & {
+      type: 'disabled';
+      source: 'global';
+      retention_days: null;
+    })
+  | (CleanupPolicyBase & {
+      type: 'disabled';
+      source: 'feed';
+      retention_count: number;
+      invalid_configured_value: true;
+    });
+
+export interface FeedCleanupPolicyResponse {
+  feed_id: number;
+  processed_episode_retention_count: number | null;
+  effective_cleanup_policy: EffectiveCleanupPolicy;
+  cleanup_dispatch: CleanupDispatch;
 }
 
 export interface Episode {
@@ -167,6 +215,11 @@ export type EnvOverrideMap = Record<string, EnvOverrideEntry>;
 export interface ConfigResponse {
   config: CombinedConfig;
   env_overrides?: EnvOverrideMap;
+}
+
+export interface ConfigUpdateResponse {
+  config: CombinedConfig;
+  cleanup_dispatch: CleanupDispatch;
 }
 
 export interface LLMProviderOption {
