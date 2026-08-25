@@ -234,16 +234,24 @@ def _delete_derived_records(post: Post, result: StorageCleanupResult) -> None:
     post.processed_with_preset_id = None
 
 
+def _record_active_skip(post: Post, result: StorageCleanupResult) -> bool:
+    """Record the single skip outcome when any job sharing the GUID is active."""
+    active = ProcessingJob.query.filter(
+        ProcessingJob.post_guid == post.guid,
+        ProcessingJob.status.in_(["pending", "running"]),
+    ).first()
+    if not active:
+        return False
+    result.active_skips += 1
+    result.skipped_count += 1
+    return True
+
+
 def _cleanup_selected_post(
     post: Post,
     result: StorageCleanupResult,
 ) -> None:
-    if ProcessingJob.query.filter(
-        ProcessingJob.post_guid == post.guid,
-        ProcessingJob.status.in_(["pending", "running"]),
-    ).first():
-        result.active_skips += 1
-        result.skipped_count += 1
+    if _record_active_skip(post, result):
         return
     for attribute, root in (
         ("processed_audio_path", get_srv_root()),
@@ -255,13 +263,16 @@ def _cleanup_selected_post(
             result.skipped_count += 1
             result.warnings.append(f"unsafe {attribute} for post {post.id}")
             return
-    output_removed = _remove_audio_file(
-        post, "processed_audio_path", get_srv_root(), result
-    )
     input_removed = _remove_audio_file(
         post, "unprocessed_audio_path", get_in_root(), result
     )
-    if not (output_removed and input_removed):
+    if not input_removed:
+        result.failed_count += 1
+        return
+    output_removed = _remove_audio_file(
+        post, "processed_audio_path", get_srv_root(), result
+    )
+    if not output_removed:
         result.failed_count += 1
         return
     _delete_derived_records(post, result)
@@ -270,22 +281,34 @@ def _cleanup_selected_post(
 
 def _cleanup_candidate_and_commit(post: Post, result: StorageCleanupResult) -> None:
     """Isolate one candidate's database mutation from unrelated candidates."""
+    post_id = post.id
     cleaned_before = result.cleaned_count
     failed_before = result.failed_count
-    _cleanup_selected_post(post, result)
-    if result.cleaned_count == cleaned_before and result.failed_count == failed_before:
-        return
+    skipped_before = result.skipped_count
+    active_before = result.active_skips
+    ambiguous_before = result.ambiguous_skips
+    unsafe_before = result.unsafe_skips
+    grace_before = result.grace_skips
     try:
+        _cleanup_selected_post(post, result)
+        if (
+            result.cleaned_count == cleaned_before
+            and result.failed_count == failed_before
+        ):
+            return
         db.session.commit()
     except Exception as exc:  # pylint: disable=broad-except
         db.session.rollback()
-        if result.cleaned_count > cleaned_before:
-            result.cleaned_count = cleaned_before
-        if result.failed_count == failed_before:
-            result.failed_count += 1
+        result.cleaned_count = cleaned_before
+        result.failed_count = failed_before + 1
+        result.skipped_count = skipped_before
+        result.active_skips = active_before
+        result.ambiguous_skips = ambiguous_before
+        result.unsafe_skips = unsafe_before
+        result.grace_skips = grace_before
         result.errors.append(
             "database cleanup failed for post "
-            f"{post.id}; retry required after partial filesystem cleanup: {exc}"
+            f"{post_id}; retry required after partial filesystem cleanup: {exc}"
         )
 
 
@@ -293,16 +316,14 @@ def _reconcile_missing_input(post: Post, result: StorageCleanupResult) -> None:
     """Clear only a confirmed-missing input while valid output is retained."""
     if not post.unprocessed_audio_path:
         return
-    if ProcessingJob.query.filter(
-        ProcessingJob.post_guid == post.guid,
-        ProcessingJob.status.in_(["pending", "running"]),
-    ).first():
+    if _record_active_skip(post, result):
         return
     path, state = _contained_file(post.unprocessed_audio_path, get_in_root())
     if state == "missing" and path is not None:
         post.unprocessed_audio_path = None
     elif state == "unsafe":
         result.unsafe_skips += 1
+        result.skipped_count += 1
         result.warnings.append(f"unsafe unprocessed_audio_path for post {post.id}")
 
 
@@ -311,12 +332,7 @@ def _reconcile_missing_output_preserving_state(
 ) -> None:
     if not post.processed_audio_path:
         return
-    if ProcessingJob.query.filter(
-        ProcessingJob.post_guid == post.guid,
-        ProcessingJob.status.in_(["pending", "running"]),
-    ).first():
-        result.active_skips += 1
-        result.skipped_count += 1
+    if _record_active_skip(post, result):
         return
     path, state = _contained_file(post.processed_audio_path, get_srv_root())
     if state == "missing" and path is not None:
@@ -326,6 +342,7 @@ def _reconcile_missing_output_preserving_state(
         )
     elif state == "unsafe":
         result.unsafe_skips += 1
+        result.skipped_count += 1
         result.warnings.append(f"unsafe processed_audio_path for post {post.id}")
 
 
@@ -361,6 +378,7 @@ def run_storage_cleanup(
             for post in ranked:
                 if states[post.id][1] == "unsafe":
                     result.unsafe_skips += 1
+                    result.skipped_count += 1
                     result.warnings.append(
                         f"unsafe processed_audio_path for post {post.id}"
                     )
@@ -423,6 +441,8 @@ def run_storage_cleanup(
                 result.warnings.append(
                     f"unsafe processed_audio_path for post {post.id}"
                 )
+                continue
+            if state == "missing" and _record_active_skip(post, result):
                 continue
             timestamps = [
                 stamp

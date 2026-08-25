@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import logging
 import os
 from datetime import datetime, timedelta
@@ -8,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+import app.storage_cleanup as storage_cleanup_module
 from app.extensions import db, scheduler
 from app.jobs_manager_run_service import SINGLETON_RUN_ID
 from app.models import Feed, Post, ProcessingJob
@@ -552,6 +554,7 @@ def test_path_escape_is_preserved_and_reported_unsafe(
         assert escaped.exists()
         assert result.cleaned_count == 0
         assert result.unsafe_skips == 1
+        assert result.skipped_count == 1
 
 
 def test_database_failure_rolls_back_and_reports_retryable_partial_state(
@@ -1203,3 +1206,287 @@ def test_count_candidates_keep_provisional_release_order_after_reconciliation(
         result = run_storage_cleanup(None, trigger="test")
 
         assert result.candidate_post_ids == [valid.id, missing.id]
+
+
+def test_input_unlink_failure_keeps_output_selectable_for_next_run(
+    app, data_roots: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    in_root, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("input-retry", retention_count=1)
+        now = datetime.utcnow()
+        _create_post(
+            feed,
+            "input-retry-retained",
+            release_date=now,
+            processed_path=_audio(srv_root / "input-retry-retained.mp3"),
+        )
+        input_path = _audio(in_root / "input-retry.mp3")
+        output_path = _audio(srv_root / "output-retry.mp3")
+        post = _create_post(
+            feed,
+            "input-retry-candidate",
+            release_date=now - timedelta(days=1),
+            processed_path=output_path,
+            input_path=input_path,
+        )
+        model_call = ModelCall(
+            post_id=post.id,
+            first_segment_sequence_num=0,
+            last_segment_sequence_num=0,
+            model_name="test",
+            prompt="prompt",
+            status="completed",
+        )
+        db.session.add(model_call)
+        db.session.flush()
+        model_call_id = model_call.id
+        db.session.commit()
+        original_unlink = Path.unlink
+        failed_once = False
+
+        def fail_input_once(path: Path, *args: object, **kwargs: object) -> None:
+            nonlocal failed_once
+            if path == input_path and not failed_once:
+                failed_once = True
+                raise OSError("synthetic input unlink failure")
+            original_unlink(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "unlink", fail_input_once)
+
+        first_result = run_storage_cleanup(None, trigger="first-pass")
+
+        db.session.refresh(post)
+        assert first_result.cleaned_count == 0
+        assert first_result.failed_count == 1
+        assert post.unprocessed_audio_path == str(input_path)
+        assert post.processed_audio_path == str(output_path)
+        assert input_path.exists()
+        assert output_path.exists()
+        assert db.session.get(ModelCall, model_call_id) is not None
+
+        second_result = run_storage_cleanup(None, trigger="second-pass")
+
+        db.session.refresh(post)
+        assert second_result.cleaned_count == 1
+        assert post.unprocessed_audio_path is None
+        assert post.processed_audio_path is None
+        assert not input_path.exists()
+        assert not output_path.exists()
+        assert db.session.get(ModelCall, model_call_id) is None
+
+
+def test_per_post_database_exception_does_not_abort_later_candidate_or_summary(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    _, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("post-exception", retention_count=1)
+        now = datetime.utcnow()
+        _create_post(
+            feed,
+            "post-exception-retained",
+            release_date=now,
+            processed_path=_audio(srv_root / "post-exception-retained.mp3"),
+        )
+        first_output = _audio(srv_root / "post-exception-first.mp3")
+        first = _create_post(
+            feed,
+            "post-exception-first",
+            release_date=now - timedelta(days=1),
+            processed_path=first_output,
+        )
+        second = _create_post(
+            feed,
+            "post-exception-second",
+            release_date=now - timedelta(days=2),
+            processed_path=_audio(srv_root / "post-exception-second.mp3"),
+        )
+        first_id = first.id
+        second_id = second.id
+        db.session.commit()
+        original_delete = storage_cleanup_module._delete_derived_records
+        calls = 0
+
+        def fail_first_delete(post: Post, result: object) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise RuntimeError("synthetic derived-row failure")
+            original_delete(post, result)
+
+        monkeypatch.setattr(
+            storage_cleanup_module, "_delete_derived_records", fail_first_delete
+        )
+
+        with caplog.at_level(logging.INFO, logger="global_logger"):
+            result = run_storage_cleanup(None, trigger="post-exception")
+
+        first_after = db.session.get(Post, first_id)
+        second_after = db.session.get(Post, second_id)
+        assert first_after is not None
+        assert second_after is not None
+        assert first_after.processed_audio_path == str(first_output)
+        assert not first_output.exists()
+        assert second_after.processed_audio_path is None
+        assert result.failed_count == 1
+        assert result.cleaned_count == 1
+        assert any("synthetic derived-row failure" in error for error in result.errors)
+        assert (
+            sum(
+                record.getMessage().startswith("storage_cleanup_summary ")
+                for record in caplog.records
+            )
+            == 1
+        )
+
+
+def test_stat_race_preserves_episode_and_does_not_abort_later_candidate(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    _, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("stat-race", retention_count=1)
+        now = datetime.utcnow()
+        _create_post(
+            feed,
+            "stat-race-retained",
+            release_date=now,
+            processed_path=_audio(srv_root / "stat-race-retained.mp3"),
+        )
+        first_output = _audio(srv_root / "stat-race-first.mp3")
+        first = _create_post(
+            feed,
+            "stat-race-first",
+            release_date=now - timedelta(days=1),
+            processed_path=first_output,
+        )
+        second = _create_post(
+            feed,
+            "stat-race-second",
+            release_date=now - timedelta(days=2),
+            processed_path=_audio(srv_root / "stat-race-second.mp3"),
+        )
+        first_id = first.id
+        second_id = second.id
+        db.session.commit()
+        original_stat = Path.stat
+
+        def fail_cleanup_stat(path: Path, *args: object, **kwargs: object):
+            caller = inspect.currentframe().f_back
+            if (
+                path == first_output
+                and caller is not None
+                and caller.f_code.co_name == "_remove_audio_file"
+            ):
+                raise PermissionError("synthetic stat race")
+            return original_stat(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "stat", fail_cleanup_stat)
+
+        with caplog.at_level(logging.INFO, logger="global_logger"):
+            result = run_storage_cleanup(None, trigger="stat-race")
+
+        first_after = db.session.get(Post, first_id)
+        second_after = db.session.get(Post, second_id)
+        assert first_after is not None
+        assert second_after is not None
+        assert first_after.processed_audio_path == str(first_output)
+        assert first_output.exists()
+        assert second_after.processed_audio_path is None
+        assert result.failed_count == 1
+        assert result.cleaned_count == 1
+        assert result.files_removed == 1
+        assert any("synthetic stat race" in error for error in result.errors)
+        assert (
+            sum(
+                record.getMessage().startswith("storage_cleanup_summary ")
+                for record in caplog.records
+            )
+            == 1
+        )
+
+
+def test_active_work_on_retained_missing_input_records_one_skip(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("retained-active-input", retention_count=1)
+        now = datetime.utcnow()
+        missing_input = in_root / "retained-active-missing-input.mp3"
+        post = _create_post(
+            feed,
+            "retained-active-input",
+            release_date=now,
+            processed_path=_audio(srv_root / "retained-active-output.mp3"),
+            input_path=missing_input,
+        )
+        db.session.add(
+            ProcessingJob(
+                id="retained-active-input-job",
+                post_guid=post.guid,
+                feed_id=feed.id,
+                status="running",
+                current_step=2,
+                total_steps=4,
+                progress_percentage=50.0,
+                created_at=now,
+                started_at=now,
+            )
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(None, trigger="retained-active-input")
+
+        db.session.refresh(post)
+        assert post.unprocessed_audio_path == str(missing_input)
+        assert result.cleaned_count == 0
+        assert result.failed_count == 0
+        assert result.skipped_count == 1
+        assert result.active_skips == 1
+
+
+def test_age_missing_output_with_active_work_records_one_skip(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    _, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("age-active-missing")
+        now = datetime.utcnow()
+        missing_output = srv_root / "age-active-missing.mp3"
+        post = _create_post(
+            feed,
+            "age-active-missing",
+            release_date=now - timedelta(days=30),
+            processed_path=missing_output,
+        )
+        db.session.add(
+            ProcessingJob(
+                id="age-active-missing-job",
+                post_guid=post.guid,
+                feed_id=feed.id,
+                status="running",
+                current_step=2,
+                total_steps=4,
+                progress_percentage=50.0,
+                created_at=now,
+                started_at=now,
+            )
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(5, trigger="age-active-missing")
+
+        db.session.refresh(post)
+        assert post.processed_audio_path == str(missing_output)
+        assert result.cleaned_count == 0
+        assert result.failed_count == 0
+        assert result.skipped_count == 1
+        assert result.active_skips == 1
