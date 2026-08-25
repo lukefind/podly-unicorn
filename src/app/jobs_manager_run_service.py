@@ -94,7 +94,7 @@ def _recalculate_run_counts_for_id(
     if not run:
         return None
 
-    cutoff = run.counters_reset_at
+    cutoff = run.counters_reset_at if run_id == SINGLETON_RUN_ID else None
     # The linter incorrectly flags func.count as not callable.
     query = session.query(
         ProcessingJob.status,
@@ -132,7 +132,7 @@ def _recalculate_run_counts_for_id(
         if not run.counters_reset_at:
             run.counters_reset_at = run.started_at or now
         run.completed_at = None
-    else:
+    elif run_id == SINGLETON_RUN_ID:
         run.status = "idle"
         run.completed_at = now
         run.started_at = None
@@ -145,6 +145,17 @@ def _recalculate_run_counts_for_id(
             run.skipped_jobs = 0
         run.updated_at = now
         run.counters_reset_at = now
+    else:
+        run.total_jobs = total_jobs
+        run.queued_jobs = queued
+        run.running_jobs = running
+        run.completed_jobs = completed
+        run.failed_jobs = failed
+        if hasattr(run, "skipped_jobs"):
+            run.skipped_jobs = skipped
+        run.status = "failed" if failed else "completed"
+        run.completed_at = run.completed_at or now
+        run.updated_at = now
 
     session.flush()
     return run

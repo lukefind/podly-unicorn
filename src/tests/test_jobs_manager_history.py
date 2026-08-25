@@ -204,8 +204,95 @@ def test_recalculate_affected_runs_repairs_explicit_run_and_singleton(app) -> No
         db.session.commit()
 
         assert recalculated == {"explicit-history-run", SINGLETON_RUN_ID}
-        assert explicit.status == "idle"
+        assert explicit.status == "completed"
         assert explicit.total_jobs == 0
         assert singleton.status == "pending"
         assert singleton.total_jobs == 1
         assert singleton.queued_jobs == 1
+
+
+def test_recalculate_explicit_run_preserves_remaining_terminal_history(app) -> None:
+    with app.app_context():
+        now = datetime.utcnow()
+        reset_at = now - timedelta(days=1)
+        explicit = JobsManagerRun(
+            id="explicit-terminal-history",
+            status="running",
+            trigger="manual",
+            total_jobs=99,
+            queued_jobs=10,
+            running_jobs=5,
+            completed_jobs=80,
+            failed_jobs=4,
+            skipped_jobs=0,
+            counters_reset_at=reset_at,
+        )
+        singleton = JobsManagerRun(
+            id=SINGLETON_RUN_ID,
+            status="running",
+            trigger="scheduler",
+            total_jobs=99,
+            queued_jobs=99,
+            counters_reset_at=reset_at,
+        )
+        db.session.add_all([explicit, singleton])
+        jobs = [
+            ProcessingJob(
+                id="explicit-removed",
+                jobs_manager_run_id=explicit.id,
+                post_guid="removed",
+                status="completed",
+                created_at=now,
+                completed_at=now,
+            ),
+            ProcessingJob(
+                id="explicit-completed-one",
+                jobs_manager_run_id=explicit.id,
+                post_guid="completed-one",
+                status="completed",
+                created_at=reset_at - timedelta(hours=1),
+                completed_at=now,
+            ),
+            ProcessingJob(
+                id="explicit-completed-two",
+                jobs_manager_run_id=explicit.id,
+                post_guid="completed-two",
+                status="completed",
+                created_at=now,
+                completed_at=now,
+            ),
+            ProcessingJob(
+                id="explicit-failed",
+                jobs_manager_run_id=explicit.id,
+                post_guid="failed",
+                status="failed",
+                created_at=now,
+                completed_at=now,
+            ),
+            ProcessingJob(
+                id="explicit-skipped",
+                jobs_manager_run_id=explicit.id,
+                post_guid="skipped",
+                status="skipped",
+                created_at=now,
+                completed_at=now,
+            ),
+        ]
+        db.session.add_all(jobs)
+        db.session.commit()
+        db.session.delete(jobs[0])
+
+        recalculate_affected_run_counts(db.session, {explicit.id})
+        db.session.commit()
+
+        assert explicit.status == "failed"
+        assert explicit.total_jobs == 4
+        assert explicit.queued_jobs == 0
+        assert explicit.running_jobs == 0
+        assert explicit.completed_jobs == 2
+        assert explicit.failed_jobs == 1
+        assert explicit.skipped_jobs == 1
+        assert explicit.completed_at is not None
+        assert explicit.counters_reset_at == reset_at
+        assert singleton.status == "idle"
+        assert singleton.total_jobs == 0

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import inspect
 import logging
 import os
 from datetime import datetime, timedelta
@@ -650,7 +649,7 @@ def test_cleanup_repairs_affected_explicit_run_and_singleton_counters(
 
         db.session.refresh(explicit)
         db.session.refresh(singleton)
-        assert explicit.status == "idle"
+        assert explicit.status == "completed"
         assert explicit.total_jobs == 0
         assert singleton.status == "idle"
         assert singleton.total_jobs == 0
@@ -831,14 +830,18 @@ def test_unlink_failure_preserves_failed_pointer_and_derived_state(
         db.session.flush()
         model_call_id = model_call.id
         db.session.commit()
-        original_unlink = Path.unlink
+        original_unlink = os.unlink
 
-        def selective_unlink(path: Path, *args: object, **kwargs: object) -> None:
-            if path == output_path:
+        def selective_unlink(
+            path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+            *args: object,
+            **kwargs: object,
+        ) -> None:
+            if path == output_path.name and kwargs.get("dir_fd") is not None:
                 raise OSError("synthetic unlink failure")
             original_unlink(path, *args, **kwargs)
 
-        monkeypatch.setattr(Path, "unlink", selective_unlink)
+        monkeypatch.setattr(os, "unlink", selective_unlink)
 
         with caplog.at_level(logging.INFO, logger="global_logger"):
             result = run_storage_cleanup(None, trigger="partial-failure")
@@ -1158,15 +1161,19 @@ def test_file_disappearing_during_unlink_is_confirmed_absent_and_cleared(
             processed_path=output,
         )
         db.session.commit()
-        original_unlink = Path.unlink
+        original_unlink = os.unlink
 
-        def disappear_then_raise(path: Path, *args: object, **kwargs: object) -> None:
-            if path == output:
+        def disappear_then_raise(
+            path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+            *args: object,
+            **kwargs: object,
+        ) -> None:
+            if path == output.name and kwargs.get("dir_fd") is not None:
                 original_unlink(path, *args, **kwargs)
                 raise FileNotFoundError(str(path))
             original_unlink(path, *args, **kwargs)
 
-        monkeypatch.setattr(Path, "unlink", disappear_then_raise)
+        monkeypatch.setattr(os, "unlink", disappear_then_raise)
 
         result = run_storage_cleanup(None, trigger="test")
 
@@ -1242,17 +1249,25 @@ def test_input_unlink_failure_keeps_output_selectable_for_next_run(
         db.session.flush()
         model_call_id = model_call.id
         db.session.commit()
-        original_unlink = Path.unlink
+        original_unlink = os.unlink
         failed_once = False
 
-        def fail_input_once(path: Path, *args: object, **kwargs: object) -> None:
+        def fail_input_once(
+            path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+            *args: object,
+            **kwargs: object,
+        ) -> None:
             nonlocal failed_once
-            if path == input_path and not failed_once:
+            if (
+                path == input_path.name
+                and kwargs.get("dir_fd") is not None
+                and not failed_once
+            ):
                 failed_once = True
                 raise OSError("synthetic input unlink failure")
             original_unlink(path, *args, **kwargs)
 
-        monkeypatch.setattr(Path, "unlink", fail_input_once)
+        monkeypatch.setattr(os, "unlink", fail_input_once)
 
         first_result = run_storage_cleanup(None, trigger="first-pass")
 
@@ -1376,19 +1391,22 @@ def test_stat_race_preserves_episode_and_does_not_abort_later_candidate(
         first_id = first.id
         second_id = second.id
         db.session.commit()
-        original_stat = Path.stat
+        original_stat = os.stat
 
-        def fail_cleanup_stat(path: Path, *args: object, **kwargs: object):
-            caller = inspect.currentframe().f_back
+        def fail_cleanup_stat(
+            path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+            *args: object,
+            **kwargs: object,
+        ):
             if (
-                path == first_output
-                and caller is not None
-                and caller.f_code.co_name == "_remove_audio_file"
+                path == first_output.name
+                and kwargs.get("dir_fd") is not None
+                and kwargs.get("follow_symlinks") is False
             ):
                 raise PermissionError("synthetic stat race")
             return original_stat(path, *args, **kwargs)
 
-        monkeypatch.setattr(Path, "stat", fail_cleanup_stat)
+        monkeypatch.setattr(os, "stat", fail_cleanup_stat)
 
         with caplog.at_level(logging.INFO, logger="global_logger"):
             result = run_storage_cleanup(None, trigger="stat-race")
@@ -1628,3 +1646,322 @@ def test_count_reconciliation_failure_does_not_abort_later_feed_or_summary(
             )
             == 1
         )
+
+
+def test_same_feed_shared_processed_file_is_preserved_for_retained_post(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    _, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("shared-processed", retention_count=1)
+        now = datetime.utcnow()
+        shared_output = _audio(srv_root / "shared-processed.mp3")
+        retained = _create_post(
+            feed,
+            "shared-processed-retained",
+            release_date=now,
+            processed_path=shared_output,
+        )
+        cleaned = _create_post(
+            feed,
+            "shared-processed-cleaned",
+            release_date=now - timedelta(days=1),
+            processed_path=shared_output,
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(None, trigger="shared-processed")
+
+        db.session.refresh(retained)
+        db.session.refresh(cleaned)
+        assert cleaned.processed_audio_path is None
+        assert retained.processed_audio_path == str(shared_output)
+        assert shared_output.exists()
+        assert result.cleaned_count == 1
+        assert result.files_removed == 0
+
+
+def test_cross_feed_shared_input_file_is_preserved_for_other_post(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, srv_root = data_roots
+    with app.app_context():
+        target_feed = _create_feed("shared-input-target", retention_count=1)
+        now = datetime.utcnow()
+        _create_post(
+            target_feed,
+            "shared-input-retained",
+            release_date=now,
+            processed_path=_audio(srv_root / "shared-input-retained.mp3"),
+        )
+        shared_input = _audio(in_root / "shared-input.mp3")
+        target_output = _audio(srv_root / "shared-input-target.mp3")
+        target = _create_post(
+            target_feed,
+            "shared-input-target",
+            release_date=now - timedelta(days=1),
+            processed_path=target_output,
+            input_path=shared_input,
+        )
+        other_feed = _create_feed("shared-input-other")
+        other = _create_post(
+            other_feed,
+            "shared-input-other",
+            release_date=now,
+            input_path=shared_input,
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(None, trigger="shared-input")
+
+        db.session.refresh(target)
+        db.session.refresh(other)
+        assert target.unprocessed_audio_path is None
+        assert target.processed_audio_path is None
+        assert other.unprocessed_audio_path == str(shared_input)
+        assert shared_input.exists()
+        assert not target_output.exists()
+        assert result.cleaned_count == 1
+        assert result.files_removed == 1
+
+
+def test_age_expired_missing_output_cleans_remaining_input_and_derived_state(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("age-missing-expired")
+        old = datetime.utcnow() - timedelta(days=30)
+        input_path = _audio(in_root / "age-missing-expired-input.mp3")
+        post = _create_post(
+            feed,
+            "age-missing-expired",
+            release_date=old,
+            processed_path=srv_root / "age-missing-expired-output.mp3",
+            input_path=input_path,
+        )
+        model_call = ModelCall(
+            post_id=post.id,
+            first_segment_sequence_num=0,
+            last_segment_sequence_num=0,
+            model_name="test",
+            prompt="prompt",
+            status="completed",
+        )
+        job = _completed_job(post, old)
+        db.session.add(model_call)
+        db.session.flush()
+        post_id = post.id
+        model_call_id = model_call.id
+        job_id = job.id
+        db.session.commit()
+
+        result = run_storage_cleanup(5, trigger="age-missing-expired")
+
+        cleaned = db.session.get(Post, post_id)
+        assert cleaned is not None
+        assert cleaned.processed_audio_path is None
+        assert cleaned.unprocessed_audio_path is None
+        assert not input_path.exists()
+        assert db.session.get(ModelCall, model_call_id) is None
+        assert db.session.get(ProcessingJob, job_id) is None
+        assert result.selected_count == 1
+        assert result.cleaned_count == 1
+
+
+def test_age_missing_output_retries_after_filesystem_success_and_database_rollback(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    in_root, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("age-missing-rollback")
+        old = datetime.utcnow() - timedelta(days=30)
+        input_path = _audio(in_root / "age-missing-rollback-input.mp3")
+        missing_output = srv_root / "age-missing-rollback-output.mp3"
+        post = _create_post(
+            feed,
+            "age-missing-rollback",
+            release_date=old,
+            processed_path=missing_output,
+            input_path=input_path,
+        )
+        model_call = ModelCall(
+            post_id=post.id,
+            first_segment_sequence_num=0,
+            last_segment_sequence_num=0,
+            model_name="test",
+            prompt="prompt",
+            status="completed",
+        )
+        _completed_job(post, old)
+        db.session.add(model_call)
+        db.session.flush()
+        post_id = post.id
+        model_call_id = model_call.id
+        db.session.commit()
+        session = db.session()
+        original_commit = session.commit
+        failed_once = False
+
+        def fail_first_commit() -> None:
+            nonlocal failed_once
+            if not failed_once:
+                failed_once = True
+                raise RuntimeError("synthetic age retry rollback")
+            original_commit()
+
+        monkeypatch.setattr(session, "commit", fail_first_commit)
+
+        first_result = run_storage_cleanup(5, trigger="age-missing-rollback-first")
+
+        first_after = db.session.get(Post, post_id)
+        assert first_after is not None
+        assert first_after.processed_audio_path == str(missing_output)
+        assert first_after.unprocessed_audio_path == str(input_path)
+        assert not input_path.exists()
+        assert db.session.get(ModelCall, model_call_id) is not None
+        assert first_result.failed_count == 1
+        assert first_result.cleaned_count == 0
+
+        second_result = run_storage_cleanup(5, trigger="age-missing-rollback-second")
+
+        second_after = db.session.get(Post, post_id)
+        assert second_after is not None
+        assert second_after.processed_audio_path is None
+        assert second_after.unprocessed_audio_path is None
+        assert db.session.get(ModelCall, model_call_id) is None
+        assert second_result.selected_count == 1
+        assert second_result.cleaned_count == 1
+
+
+@pytest.mark.parametrize("new_retention_count", [None, 2])
+def test_feed_policy_change_after_selection_prevents_stale_count_deletion(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    new_retention_count: int | None,
+) -> None:
+    _, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("stale-policy", retention_count=1)
+        now = datetime.utcnow()
+        _create_post(
+            feed,
+            "stale-policy-retained",
+            release_date=now,
+            processed_path=_audio(srv_root / "stale-policy-retained.mp3"),
+        )
+        target_output = _audio(srv_root / "stale-policy-target.mp3")
+        target = _create_post(
+            feed,
+            "stale-policy-target",
+            release_date=now - timedelta(days=1),
+            processed_path=target_output,
+        )
+        model_call = ModelCall(
+            post_id=target.id,
+            first_segment_sequence_num=0,
+            last_segment_sequence_num=0,
+            model_name="test",
+            prompt="prompt",
+            status="completed",
+        )
+        db.session.add(model_call)
+        db.session.flush()
+        target_id = target.id
+        feed_id = feed.id
+        model_call_id = model_call.id
+        db.session.commit()
+        original_cleanup = storage_cleanup_module._cleanup_candidate_and_commit
+        policy_changed = False
+
+        def change_policy_before_cleanup(
+            post: Post, result: object, global_retention_days: int | None
+        ) -> None:
+            nonlocal policy_changed
+            if post.id == target_id and not policy_changed:
+                policy_changed = True
+                db.session.query(Feed).filter(Feed.id == feed_id).update(
+                    {Feed.processed_episode_retention_count: new_retention_count}
+                )
+                db.session.commit()
+            original_cleanup(post, result, global_retention_days)
+
+        monkeypatch.setattr(
+            storage_cleanup_module,
+            "_cleanup_candidate_and_commit",
+            change_policy_before_cleanup,
+        )
+
+        result = run_storage_cleanup(None, trigger="stale-policy")
+
+        after = db.session.get(Post, target_id)
+        assert after is not None
+        assert after.processed_audio_path == str(target_output)
+        assert target_output.exists()
+        assert db.session.get(ModelCall, model_call_id) is not None
+        assert result.cleaned_count == 0
+        assert result.skipped_count == 1
+
+
+def test_parent_swap_before_unlink_cannot_delete_outside_file(
+    app,
+    data_roots: tuple[Path, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("parent-swap", retention_count=1)
+        now = datetime.utcnow()
+        _create_post(
+            feed,
+            "parent-swap-retained",
+            release_date=now,
+            processed_path=_audio(srv_root / "parent-swap-retained.mp3"),
+        )
+        inside_parent = srv_root / "swappable-parent"
+        inside_output = _audio(inside_parent / "episode.mp3", b"inside")
+        parked_parent = srv_root / "swappable-parent-original"
+        outside_parent = tmp_path / "outside-parent"
+        outside_output = _audio(outside_parent / "episode.mp3", b"outside")
+        target = _create_post(
+            feed,
+            "parent-swap-target",
+            release_date=now - timedelta(days=1),
+            processed_path=inside_output,
+        )
+        target_id = target.id
+        db.session.commit()
+        original_open = os.open
+        swapped = False
+
+        def swap_parent_on_descriptor_open(
+            path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+            flags: int,
+            mode: int = 0o777,
+            *,
+            dir_fd: int | None = None,
+        ) -> int:
+            nonlocal swapped
+            if path == "swappable-parent" and dir_fd is not None and not swapped:
+                inside_parent.rename(parked_parent)
+                inside_parent.symlink_to(outside_parent, target_is_directory=True)
+                swapped = True
+            return original_open(path, flags, mode, dir_fd=dir_fd)
+
+        monkeypatch.setattr(os, "open", swap_parent_on_descriptor_open)
+
+        result = run_storage_cleanup(None, trigger="parent-swap")
+
+        after = db.session.get(Post, target_id)
+        assert after is not None
+        assert swapped is True
+        assert after.processed_audio_path == str(inside_output)
+        assert outside_output.read_bytes() == b"outside"
+        assert (parked_parent / "episode.mp3").read_bytes() == b"inside"
+        assert result.cleaned_count == 0
+        assert result.failed_count == 1
+        assert result.unsafe_skips == 1

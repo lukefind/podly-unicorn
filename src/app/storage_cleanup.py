@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import stat
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -136,6 +137,81 @@ def _latest_successful_completion(post: Post) -> Optional[datetime]:
     return max((job.completed_at for job in query.all()), default=None)
 
 
+def _other_post_references_path(post: Post, path: Path) -> bool:
+    """Return whether another episode points at the same normalized file."""
+    normalized = os.path.normcase(os.path.abspath(path))
+    rows = (
+        db.session.query(Post.processed_audio_path, Post.unprocessed_audio_path)
+        .filter(Post.id != post.id)
+        .filter(
+            or_(
+                Post.processed_audio_path.isnot(None),
+                Post.unprocessed_audio_path.isnot(None),
+            )
+        )
+        .all()
+    )
+    return any(
+        os.path.normcase(os.path.abspath(pointer)) == normalized
+        for row in rows
+        for pointer in row
+        if pointer
+    )
+
+
+def _unlink_contained_file(
+    path_text: str, root: Path
+) -> tuple[str, int, Optional[OSError]]:
+    """Unlink below root using no-follow directory descriptors."""
+    root_absolute = Path(os.path.abspath(root))
+    candidate = Path(os.path.abspath(path_text))
+    try:
+        relative = candidate.relative_to(root_absolute)
+    except ValueError:
+        return "unsafe", 0, None
+    if not relative.parts:
+        return "unsafe", 0, None
+
+    directory_flags = os.O_RDONLY
+    directory_flags |= getattr(os, "O_DIRECTORY", 0)
+    directory_flags |= getattr(os, "O_NOFOLLOW", 0)
+    directory_flags |= getattr(os, "O_CLOEXEC", 0)
+    try:
+        parent_fd = os.open(os.fspath(root_absolute), directory_flags)
+    except OSError as exc:
+        return "unsafe", 0, exc
+
+    try:
+        for component in relative.parts[:-1]:
+            try:
+                next_fd = os.open(component, directory_flags, dir_fd=parent_fd)
+            except FileNotFoundError:
+                return "missing", 0, None
+            except OSError as exc:
+                return "unsafe", 0, exc
+            os.close(parent_fd)
+            parent_fd = next_fd
+
+        filename = relative.parts[-1]
+        try:
+            file_stat = os.stat(filename, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            return "missing", 0, None
+        except OSError as exc:
+            return "failed", 0, exc
+        if not stat.S_ISREG(file_stat.st_mode):
+            return "unsafe", 0, None
+        try:
+            os.unlink(filename, dir_fd=parent_fd)
+        except FileNotFoundError:
+            return "missing", 0, None
+        except OSError as exc:
+            return "failed", 0, exc
+        return "removed", file_stat.st_size, None
+    finally:
+        os.close(parent_fd)
+
+
 def _remove_audio_file(
     post: Post,
     attribute: str,
@@ -153,15 +229,25 @@ def _remove_audio_file(
     if state == "missing":
         setattr(post, attribute, None)
         return True
+    if _other_post_references_path(post, path):
+        setattr(post, attribute, None)
+        result.warnings.append(f"preserved shared {attribute} for post {post.id}")
+        return True
     result.file_delete_attempts += 1
-    size = path.stat().st_size
-    try:
-        path.unlink()
-    except FileNotFoundError:
+    unlink_state, size, error = _unlink_contained_file(path_text, root)
+    if unlink_state == "missing":
         setattr(post, attribute, None)
         return True
-    except OSError as exc:
-        result.errors.append(f"unable to remove {attribute} for post {post.id}: {exc}")
+    if unlink_state == "unsafe":
+        result.unsafe_skips += 1
+        result.warnings.append(
+            f"unsafe {attribute} for post {post.id}" + (f": {error}" if error else "")
+        )
+        return False
+    if unlink_state == "failed":
+        result.errors.append(
+            f"unable to remove {attribute} for post {post.id}: {error}"
+        )
         return False
     setattr(post, attribute, None)
     result.files_removed += 1
@@ -247,11 +333,78 @@ def _record_active_skip(post: Post, result: StorageCleanupResult) -> bool:
     return True
 
 
+def _current_policy_allows_cleanup(
+    post: Post,
+    result: StorageCleanupResult,
+    global_retention_days: Optional[int],
+) -> bool:
+    """Re-evaluate the feed override immediately before destructive work."""
+    feed = db.session.get(Feed, post.feed_id)
+    if feed is None:
+        return False
+    db.session.refresh(feed, ["processed_episode_retention_count"])
+    current_count = feed.processed_episode_retention_count
+    if is_valid_retention_count(current_count):
+        ranked = sorted(
+            Post.query.filter(
+                Post.feed_id == post.feed_id,
+                Post.processed_audio_path.isnot(None),
+                Post.processed_audio_path != "",
+            ).all(),
+            key=_release_sort_key,
+            reverse=True,
+        )
+        valid_ranked = [
+            item
+            for item in ranked
+            if _contained_file(item.processed_audio_path, get_srv_root())[1] == "file"
+        ]
+        retained_ids = {item.id for item in valid_ranked[:current_count]}
+        return post.id not in retained_ids
+    if current_count is not None:
+        return False
+
+    original_policy = next(
+        (
+            policy.get("policy")
+            for policy in result.evaluated_policies
+            if policy.get("feed_id") == post.feed_id
+        ),
+        None,
+    )
+    if original_policy == "age":
+        return True
+    cutoff = _global_age_cutoff(global_retention_days)
+    if cutoff is None:
+        return False
+    path, state = _contained_file(post.processed_audio_path, get_srv_root())
+    if state == "unsafe":
+        return False
+    timestamps = [
+        timestamp
+        for timestamp in (
+            _latest_successful_completion(post),
+            (
+                datetime.utcfromtimestamp(path.stat().st_mtime)
+                if path is not None and state == "file"
+                else None
+            ),
+        )
+        if timestamp is not None
+    ]
+    return bool(timestamps) and max(timestamps) < cutoff
+
+
 def _cleanup_selected_post(
     post: Post,
     result: StorageCleanupResult,
+    global_retention_days: Optional[int],
 ) -> None:
     if _record_active_skip(post, result):
+        return
+    if not _current_policy_allows_cleanup(post, result, global_retention_days):
+        result.skipped_count += 1
+        result.warnings.append(f"policy changed before cleanup for post {post.id}")
         return
     for attribute, root in (
         ("processed_audio_path", get_srv_root()),
@@ -279,7 +432,11 @@ def _cleanup_selected_post(
     result.cleaned_count += 1
 
 
-def _cleanup_candidate_and_commit(post: Post, result: StorageCleanupResult) -> None:
+def _cleanup_candidate_and_commit(
+    post: Post,
+    result: StorageCleanupResult,
+    global_retention_days: Optional[int],
+) -> None:
     """Isolate one candidate's database mutation from unrelated candidates."""
     post_id = post.id
     cleaned_before = result.cleaned_count
@@ -290,7 +447,7 @@ def _cleanup_candidate_and_commit(post: Post, result: StorageCleanupResult) -> N
     unsafe_before = result.unsafe_skips
     grace_before = result.grace_skips
     try:
-        _cleanup_selected_post(post, result)
+        _cleanup_selected_post(post, result, global_retention_days)
         if (
             result.cleaned_count == cleaned_before
             and result.failed_count == failed_before
@@ -392,6 +549,7 @@ def _run_isolated_post_operation(
 def _process_age_post(
     post: Post,
     age_cutoff: datetime,
+    global_retention_days: Optional[int],
     srv_root: Path,
     result: StorageCleanupResult,
 ) -> None:
@@ -432,7 +590,7 @@ def _process_age_post(
     result.requested_count += 1
     result.selected_count += 1
     result.candidate_post_ids.append(post.id)
-    _cleanup_candidate_and_commit(post, result)
+    _cleanup_candidate_and_commit(post, result, global_retention_days)
 
 
 def run_storage_cleanup(
@@ -505,7 +663,7 @@ def run_storage_cleanup(
                     )
 
             for post in selected:
-                _cleanup_candidate_and_commit(post, result)
+                _cleanup_candidate_and_commit(post, result, global_retention_days)
             continue
 
         if count is not None or age_cutoff is None:
@@ -550,7 +708,13 @@ def run_storage_cleanup(
             _run_isolated_post_operation(
                 post,
                 result,
-                lambda post=post: _process_age_post(post, age_cutoff, srv_root, result),
+                lambda post=post: _process_age_post(
+                    post,
+                    age_cutoff,
+                    global_retention_days,
+                    srv_root,
+                    result,
+                ),
                 "age evaluation",
             )
 
