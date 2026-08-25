@@ -2898,3 +2898,48 @@ def test_count_revalidation_preserves_missing_provisionally_retained_post(
         assert result.cleaned_count == 0
         assert result.skipped_count == 1
         assert len(summaries) == 1
+
+
+def test_count_policy_revalidation_inspects_each_ranked_path_once(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("count-revalidation-linear", retention_count=1)
+        now = datetime.utcnow()
+        posts = [
+            _create_post(
+                feed,
+                f"count-revalidation-linear-{index}",
+                release_date=now - timedelta(days=index),
+                processed_path=_audio(
+                    srv_root / f"count-revalidation-linear-{index}.mp3"
+                ),
+            )
+            for index in range(3)
+        ]
+        db.session.commit()
+        contained_file_calls = 0
+        original_contained_file = storage_cleanup_module._contained_file
+
+        def count_contained_file_calls(path_text: str, root: Path):
+            nonlocal contained_file_calls
+            contained_file_calls += 1
+            return original_contained_file(path_text, root)
+
+        monkeypatch.setattr(
+            storage_cleanup_module, "_contained_file", count_contained_file_calls
+        )
+
+        allowed = storage_cleanup_module._current_policy_allows_cleanup(
+            posts[-1],
+            storage_cleanup_module.StorageCleanupResult(
+                trigger="count-revalidation-linear", scope={"feed_id": feed.id}
+            ),
+            None,
+        )
+
+        assert allowed is True
+        assert contained_file_calls == len(posts)
