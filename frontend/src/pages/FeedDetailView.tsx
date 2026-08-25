@@ -310,7 +310,10 @@ export default function FeedDetailView() {
                         onClick={async () => {
                           setShowSettingsMenu(false);
                           try {
-                            await queryClient.refetchQueries({ queryKey: ['feeds'] });
+                            await queryClient.refetchQueries(
+                              { queryKey: ['feeds'] },
+                              { throwOnError: true },
+                            );
                             setShowCleanupPolicyModal(true);
                           } catch {
                             toast.error(
