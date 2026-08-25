@@ -244,7 +244,7 @@ git commit -m "feat: clean stale processing attempt artifacts"
 - Modify: `src/app/__init__.py`
 - Create: `src/tests/test_storage_cleanup_scheduler.py`
 
-- [ ] **Step 1: Write failing scheduler/dispatcher tests**
+- [x] **Step 1: Write failing scheduler/dispatcher tests**
 
 Prove:
 
@@ -264,11 +264,11 @@ pipenv run pytest src/tests/test_storage_cleanup_scheduler.py -q
 
 Expected: FAIL because the legacy scheduler removes cleanup entirely when global age is disabled.
 
-- [ ] **Step 2: Implement the always-on maintenance schedule and dispatcher**
+- [x] **Step 2: Implement the always-on maintenance schedule and dispatcher**
 
 Rename the scheduled job ID to an unambiguous storage-maintenance ID, keep the 24-hour interval and coalescing, and make global age merely one selector input. Add a fixed-ID immediate APScheduler date job plus a process-local locked accumulator that merges feed IDs and escalates to server-wide for global/manual requests. Atomically drain scope when execution begins. Map an existing pending job to `coalesced` and a disabled scheduler to `scheduler_disabled`.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 ```bash
 pipenv run pytest src/tests/test_storage_cleanup_scheduler.py src/tests/test_post_cleanup.py -q
