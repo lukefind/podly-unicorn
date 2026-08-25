@@ -694,6 +694,82 @@ def test_orphan_sweep_merges_one_summary_when_global_age_is_disabled(
     assert result.to_dict() == payload
 
 
+def test_orphan_summary_counts_each_preserved_attempt_as_one_generic_skip(
+    app,
+    data_roots: tuple[Path, Path],
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    in_root, _ = data_roots
+    active_attempt, _ = _stale_attempt(
+        in_root, "summary-active-guid", "summary-active-job"
+    )
+    recent_attempt = in_root / "jobs" / "summary-grace-guid" / "summary-grace-job"
+    _audio(recent_attempt / "episode.mp3")
+    ambiguous_attempt, _ = _stale_attempt(
+        in_root, "summary-ambiguous-guid", "summary-ambiguous-job"
+    )
+    unsafe_attempt, _ = _stale_attempt(
+        in_root, "summary-unsafe-guid", "summary-unsafe-job"
+    )
+    outside = _audio(tmp_path / "outside-summary.mp3")
+    (unsafe_attempt / "escape.mp3").symlink_to(outside)
+
+    with app.app_context(), caplog.at_level(logging.INFO, logger="global_logger"):
+        first_feed = _create_feed("summary-ambiguous-first")
+        second_feed = _create_feed("summary-ambiguous-second")
+        _create_post(
+            first_feed,
+            "summary-ambiguous-guid",
+            release_date=datetime.utcnow(),
+        )
+        _create_post(
+            second_feed,
+            "summary-ambiguous-guid",
+            release_date=datetime.utcnow(),
+        )
+        old = datetime.utcnow() - timedelta(days=2)
+        db.session.add_all(
+            [
+                ProcessingJob(
+                    id="summary-active-job",
+                    post_guid="summary-active-guid",
+                    feed_id=None,
+                    status="running",
+                    created_at=old,
+                ),
+                ProcessingJob(
+                    id="summary-ambiguous-job",
+                    post_guid="summary-ambiguous-guid",
+                    feed_id=first_feed.id,
+                    status="failed",
+                    created_at=old,
+                    completed_at=old,
+                ),
+            ]
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(None, trigger="orphan-skip-summary")
+
+    assert active_attempt.exists()
+    assert recent_attempt.exists()
+    assert ambiguous_attempt.exists()
+    assert unsafe_attempt.exists()
+    assert result.active_skips == 1
+    assert result.grace_skips == 1
+    assert result.ambiguous_skips == 1
+    assert result.unsafe_skips == 1
+    assert result.skipped_count == 4
+    summaries = [
+        json.loads(record.getMessage().removeprefix("storage_cleanup_summary "))
+        for record in caplog.records
+        if record.getMessage().startswith("storage_cleanup_summary ")
+    ]
+    assert len(summaries) == 1
+    assert summaries[0]["skipped_count"] == 4
+
+
 def test_global_age_uses_newer_of_successful_job_and_processed_file_mtime(
     app, data_roots: tuple[Path, Path]
 ) -> None:

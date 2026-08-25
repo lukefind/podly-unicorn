@@ -27,9 +27,11 @@ class OrphanCleanupResult:
     ambiguous_skips: int = 0
     unsafe_skips: int = 0
     grace_skips: int = 0
+    skipped_count: int = 0
     failed_count: int = 0
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    _skipped_attempts: set[str] = field(default_factory=set, init=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -212,9 +214,23 @@ def _remove_snapshot(directory_fd: int, snapshots: tuple[_EntrySnapshot, ...]) -
     return reclaimed
 
 
-def _record_unsafe(result: OrphanCleanupResult, message: str) -> None:
+def _record_skipped_attempt(result: OrphanCleanupResult, attempt_key: str) -> None:
+    if attempt_key in result._skipped_attempts:
+        return
+    result._skipped_attempts.add(attempt_key)
+    result.skipped_count += 1
+
+
+def _record_unsafe(
+    result: OrphanCleanupResult,
+    message: str,
+    *,
+    attempt_key: Optional[str] = None,
+) -> None:
     result.unsafe_skips += 1
     result.warnings.append(message)
+    if attempt_key is not None:
+        _record_skipped_attempt(result, attempt_key)
 
 
 def _job_latest_modified_ns(job: Optional[ProcessingJob]) -> int:
@@ -363,17 +379,21 @@ def _reconcile_missing_attempt_references(
             )
             continue
         guid, job_id = relative.parts[:2]
+        attempt_key = f"{guid}/{job_id}"
         attempt_path = jobs_root / guid / job_id
         state = _attempt_directory_state(jobs_root, guid, job_id)
         if state == "directory":
             continue
         if state == "unsafe":
             _record_unsafe(
-                result, f"unsafe missing-attempt reference for post {post.id}"
+                result,
+                f"unsafe missing-attempt reference for post {post.id}",
+                attempt_key=attempt_key,
             )
             continue
         if post.guid != guid:
             result.ambiguous_skips += 1
+            _record_skipped_attempt(result, attempt_key)
             result.warnings.append(
                 f"ambiguous attempt reference preserved for post {post.id}"
             )
@@ -381,6 +401,7 @@ def _reconcile_missing_attempt_references(
         scope, _ = _guid_scope(guid, feed_id)
         if scope == "ambiguous":
             result.ambiguous_skips += 1
+            _record_skipped_attempt(result, attempt_key)
             result.warnings.append(
                 f"ambiguous GUID mapping preserved for post {post.id}"
             )
@@ -395,6 +416,7 @@ def _reconcile_missing_attempt_references(
             is not None
         ):
             result.active_skips += 1
+            _record_skipped_attempt(result, attempt_key)
             continue
         job = ProcessingJob.query.filter_by(id=job_id).first()
         if job is None or job.post_guid != guid:
@@ -403,10 +425,12 @@ def _reconcile_missing_attempt_references(
             continue
         if _job_latest_modified_ns(job) >= cutoff_ns:
             result.grace_skips += 1
+            _record_skipped_attempt(result, attempt_key)
             continue
         references = _posts_referencing_attempt(attempt_path)
         if len(references) != 1 or references[0].id != post.id:
             result.ambiguous_skips += 1
+            _record_skipped_attempt(result, attempt_key)
             result.warnings.append(
                 f"ambiguous attempt reference preserved for post {post.id}"
             )
@@ -470,12 +494,16 @@ def _remove_bound_attempt(
         current_guid = os.stat(guid, dir_fd=root_fd, follow_symlinks=False)
         current_attempt = os.stat(job_id, dir_fd=guid_fd, follow_symlinks=False)
     except OSError as exc:
-        _record_unsafe(result, f"attempt parent changed for {label}: {exc}")
+        _record_unsafe(
+            result,
+            f"attempt parent changed for {label}: {exc}",
+            attempt_key=label,
+        )
         return False
     if not _same_directory(current_guid, guid_stat) or not _same_directory(
         current_attempt, attempt_stat
     ):
-        _record_unsafe(result, f"attempt parent changed for {label}")
+        _record_unsafe(result, f"attempt parent changed for {label}", attempt_key=label)
         return False
     reclaimed = 0
     try:
@@ -516,16 +544,24 @@ def _sweep_attempt(
     try:
         attempt_stat = os.stat(job_id, dir_fd=guid_fd, follow_symlinks=False)
     except OSError as exc:
-        _record_unsafe(result, f"unsafe attempt entry {label}: {exc}")
+        _record_unsafe(
+            result, f"unsafe attempt entry {label}: {exc}", attempt_key=label
+        )
         return
     if not stat.S_ISDIR(attempt_stat.st_mode):
-        _record_unsafe(result, f"unknown entry in GUID directory {guid}: {job_id}")
+        _record_unsafe(
+            result,
+            f"unknown entry in GUID directory {guid}: {job_id}",
+            attempt_key=label,
+        )
         return
     if active_guid is not None:
         result.active_skips += 1
+        _record_skipped_attempt(result, label)
         return
     if guid_scope == "ambiguous":
         result.ambiguous_skips += 1
+        _record_skipped_attempt(result, label)
         result.warnings.append(f"ambiguous GUID mapping preserved for {label}")
         return
     if guid_scope == "out_of_scope":
@@ -533,6 +569,7 @@ def _sweep_attempt(
     job = ProcessingJob.query.filter_by(id=job_id).first()
     if job is not None and job.post_guid != guid:
         result.ambiguous_skips += 1
+        _record_skipped_attempt(result, label)
         result.warnings.append(f"mismatched attempt/job mapping preserved: {label}")
         return
     if job is not None and job.status not in ("failed", "cancelled"):
@@ -541,6 +578,7 @@ def _sweep_attempt(
     references = _posts_referencing_attempt(attempt_path)
     if len(references) > 1 or any(post.guid != guid for post in references):
         result.ambiguous_skips += 1
+        _record_skipped_attempt(result, label)
         result.warnings.append(f"ambiguous attempt reference preserved for {label}")
         return
     if references and any(
@@ -551,16 +589,20 @@ def _sweep_attempt(
     try:
         attempt_fd = os.open(job_id, _directory_flags(), dir_fd=guid_fd)
     except OSError as exc:
-        _record_unsafe(result, f"unsafe attempt directory {label}: {exc}")
+        _record_unsafe(
+            result, f"unsafe attempt directory {label}: {exc}", attempt_key=label
+        )
         return
     try:
         if not _same_directory(os.fstat(attempt_fd), attempt_stat):
-            _record_unsafe(result, f"attempt changed while opening {label}")
+            _record_unsafe(
+                result, f"attempt changed while opening {label}", attempt_key=label
+            )
             return
         try:
             snapshots = _snapshot_directory(attempt_fd)
         except _UnsafeAttempt as exc:
-            _record_unsafe(result, f"unsafe attempt {label}: {exc}")
+            _record_unsafe(result, f"unsafe attempt {label}: {exc}", attempt_key=label)
             return
         if (
             max(
@@ -570,6 +612,7 @@ def _sweep_attempt(
             >= cutoff_ns
         ):
             result.grace_skips += 1
+            _record_skipped_attempt(result, label)
             return
         if (
             ProcessingJob.query.filter(
@@ -579,10 +622,12 @@ def _sweep_attempt(
             is not None
         ):
             result.active_skips += 1
+            _record_skipped_attempt(result, label)
             return
         current_scope, _ = _guid_scope(guid, feed_id)
         if current_scope == "ambiguous":
             result.ambiguous_skips += 1
+            _record_skipped_attempt(result, label)
             result.warnings.append(f"ambiguous GUID mapping preserved for {label}")
             return
         if current_scope == "out_of_scope":
@@ -594,6 +639,7 @@ def _sweep_attempt(
         ):
             result.ambiguous_skips += current_job.post_guid != guid
             if current_job.post_guid != guid:
+                _record_skipped_attempt(result, label)
                 result.warnings.append(
                     f"mismatched attempt/job mapping preserved: {label}"
                 )
@@ -603,6 +649,7 @@ def _sweep_attempt(
             post.guid != guid for post in current_references
         ):
             result.ambiguous_skips += 1
+            _record_skipped_attempt(result, label)
             result.warnings.append(f"ambiguous attempt reference preserved for {label}")
             return
         if current_references and any(

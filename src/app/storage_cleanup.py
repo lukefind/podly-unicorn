@@ -742,6 +742,7 @@ def run_storage_cleanup(
             "ambiguous_skips",
             "unsafe_skips",
             "grace_skips",
+            "skipped_count",
             "failed_count",
         ):
             setattr(
