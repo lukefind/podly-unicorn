@@ -342,7 +342,7 @@ git commit -m "feat: expose admin storage cleanup controls"
 - Create: `frontend/src/storageCleanup.ts`
 - Create: `frontend/src/storageCleanup.test.ts`
 
-- [ ] **Step 1: Write failing frontend contract tests**
+- [x] **Step 1: Write failing frontend contract tests**
 
 Test pure helpers for:
 
@@ -360,11 +360,11 @@ npm test -- storageCleanup.test.ts
 
 Expected: FAIL because the helpers and response types do not exist.
 
-- [ ] **Step 2: Add API types and client methods**
+- [x] **Step 2: Add API types and client methods**
 
 Add `CleanupDispatch`, the new config-update envelope, feed effective-policy types, `feedsApi.setCleanupPolicy()`, and `configApi.runStorageCleanup()`. Update existing config-save callers to consume `response.config` and show dispatch feedback without breaking secret previews or env override behavior.
 
-- [ ] **Step 3: Build the dedicated “Storage & Cleanup” section**
+- [x] **Step 3: Build the dedicated “Storage & Cleanup” section**
 
 Remove the buried generic “Cleanup Retention (days)” field from App. Add a clearly titled admin section with:
 
@@ -373,7 +373,7 @@ Remove the buried generic “Cleanup Retention (days)” field from App. Add a c
 - copy explaining inheritance, metadata preservation, per-feed count overrides, and orphan maintenance;
 - “Run cleanup now” button with pending state and result toast.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 cd frontend
