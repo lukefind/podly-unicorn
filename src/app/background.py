@@ -18,6 +18,7 @@ IMMEDIATE_STORAGE_CLEANUP_JOB_ID = "storage_cleanup_immediate"
 _cleanup_scope_lock = threading.Lock()
 _pending_cleanup_feed_ids: set[int] = set()
 _pending_cleanup_server_wide = False
+_pending_cleanup_triggers: set[str] = set()
 _immediate_cleanup_pending = False
 
 
@@ -62,7 +63,9 @@ def schedule_cleanup_job(retention_days: Optional[int]) -> None:
     )
 
 
-def request_storage_cleanup(*, feed_id: Optional[int] = None) -> str:
+def request_storage_cleanup(
+    *, feed_id: Optional[int] = None, trigger: str = "immediate"
+) -> str:
     """Queue or coalesce an immediate cleanup request.
 
     Feed requests are unioned while a server-wide request supersedes every
@@ -82,6 +85,7 @@ def request_storage_cleanup(*, feed_id: Optional[int] = None) -> str:
             _pending_cleanup_feed_ids.clear()
         elif not _pending_cleanup_server_wide:
             _pending_cleanup_feed_ids.add(feed_id)
+        _pending_cleanup_triggers.add(trigger)
 
         if _immediate_cleanup_pending:
             return "coalesced"
@@ -101,8 +105,9 @@ def request_storage_cleanup(*, feed_id: Optional[int] = None) -> str:
             _immediate_cleanup_pending = False
             _pending_cleanup_server_wide = False
             _pending_cleanup_feed_ids.clear()
+            _pending_cleanup_triggers.clear()
             logger.error("Unable to queue immediate storage cleanup", exc_info=True)
-            raise
+            return "scheduler_disabled"
     return "queued"
 
 
@@ -122,9 +127,12 @@ def run_immediate_storage_cleanup() -> None:
                 _pending_cleanup_feed_ids.clear()
             else:
                 _immediate_cleanup_pending = False
+                _pending_cleanup_triggers.clear()
                 return
+            trigger = "+".join(sorted(_pending_cleanup_triggers)) or "immediate"
+            _pending_cleanup_triggers.clear()
 
         try:
-            immediate_cleanup_processed_posts(scope)
+            immediate_cleanup_processed_posts(scope, trigger=trigger)
         except Exception:  # pylint: disable=broad-except
             logger.error("Immediate storage cleanup failed", exc_info=True)

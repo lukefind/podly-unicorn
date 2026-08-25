@@ -7,12 +7,14 @@ from unittest.mock import MagicMock
 import pytest
 
 from app import background, post_cleanup
+from app.extensions import db
 
 
 @pytest.fixture(autouse=True)
 def reset_dispatch_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(background, "_pending_cleanup_feed_ids", set())
     monkeypatch.setattr(background, "_pending_cleanup_server_wide", False)
+    monkeypatch.setattr(background, "_pending_cleanup_triggers", set())
     monkeypatch.setattr(background, "_immediate_cleanup_pending", False)
 
 
@@ -81,7 +83,7 @@ def test_feed_requests_coalesce_and_worker_receives_union(
 
     background.run_immediate_storage_cleanup()
 
-    dispatch.assert_called_once_with({7, 9})
+    dispatch.assert_called_once_with({7, 9}, trigger="immediate")
 
 
 def test_global_request_escalates_pending_feed_scopes(
@@ -98,7 +100,7 @@ def test_global_request_escalates_pending_feed_scopes(
 
     background.run_immediate_storage_cleanup()
 
-    dispatch.assert_called_once_with(None)
+    dispatch.assert_called_once_with(None, trigger="immediate")
 
 
 def test_feed_request_after_pending_global_scope_stays_server_wide(
@@ -115,7 +117,7 @@ def test_feed_request_after_pending_global_scope_stays_server_wide(
 
     background.run_immediate_storage_cleanup()
 
-    dispatch.assert_called_once_with(None)
+    dispatch.assert_called_once_with(None, trigger="immediate")
 
 
 def test_request_arriving_during_worker_run_is_drained_without_a_second_job(
@@ -124,7 +126,8 @@ def test_request_arriving_during_worker_run_is_drained_without_a_second_job(
     fake_scheduler = MagicMock()
     scopes: list[set[int] | None] = []
 
-    def dispatch(scope: set[int] | None) -> None:
+    def dispatch(scope: set[int] | None, *, trigger: str) -> None:
+        assert trigger == "immediate"
         scopes.append(scope)
         if scope == {7}:
             assert background.request_storage_cleanup(feed_id=9) == "coalesced"
@@ -139,6 +142,79 @@ def test_request_arriving_during_worker_run_is_drained_without_a_second_job(
     assert scopes == [{7}, {9}]
     assert fake_scheduler.add_job.call_count == 1
     assert background._immediate_cleanup_pending is False
+
+
+def test_enqueue_failure_is_contained_and_reported_as_scheduler_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake_scheduler = MagicMock()
+    fake_scheduler.add_job.side_effect = RuntimeError("scheduler stopped")
+    monkeypatch.setattr(background, "scheduler", fake_scheduler)
+    monkeypatch.delenv("PODLY_DISABLE_SCHEDULER", raising=False)
+
+    with caplog.at_level("ERROR", logger="global_logger"):
+        status = background.request_storage_cleanup(
+            feed_id=7, trigger="feed_policy_save"
+        )
+
+    assert status == "scheduler_disabled"
+    assert background._immediate_cleanup_pending is False
+    assert background._pending_cleanup_feed_ids == set()
+    assert background._pending_cleanup_triggers == set()
+    assert "Unable to queue immediate storage cleanup" in caplog.text
+
+
+def test_coalesced_cleanup_preserves_request_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_scheduler = MagicMock()
+    dispatch = MagicMock()
+    monkeypatch.setattr(background, "scheduler", fake_scheduler)
+    monkeypatch.setattr(background, "immediate_cleanup_processed_posts", dispatch)
+    monkeypatch.delenv("PODLY_DISABLE_SCHEDULER", raising=False)
+
+    assert (
+        background.request_storage_cleanup(
+            feed_id=7, trigger="feed_policy_save"
+        )
+        == "queued"
+    )
+    assert (
+        background.request_storage_cleanup(trigger="manual_admin") == "coalesced"
+    )
+
+    background.run_immediate_storage_cleanup()
+
+    dispatch.assert_called_once_with(
+        None, trigger="feed_policy_save+manual_admin"
+    )
+
+
+def test_failed_feed_rolls_back_before_later_feed_runs(
+    app, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_scheduler = MagicMock()
+    fake_scheduler.app = app
+    cleanup = MagicMock(side_effect=[RuntimeError("poisoned session"), MagicMock()])
+    rollback = MagicMock()
+    monkeypatch.setattr(post_cleanup, "scheduler", fake_scheduler)
+    monkeypatch.setattr(post_cleanup, "run_storage_cleanup", cleanup)
+    monkeypatch.setattr(db.session, "rollback", rollback)
+
+    post_cleanup.immediate_cleanup_processed_posts(
+        {9, 7}, trigger="feed_policy_save"
+    )
+
+    assert cleanup.call_args_list[0].kwargs == {
+        "feed_id": 7,
+        "trigger": "feed_policy_save",
+    }
+    assert cleanup.call_args_list[1].kwargs == {
+        "feed_id": 9,
+        "trigger": "feed_policy_save",
+    }
+    rollback.assert_called_once_with()
 
 
 def test_immediate_worker_logs_exception_and_resets_pending_state(

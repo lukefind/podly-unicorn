@@ -7,7 +7,7 @@ import threading
 from collections.abc import Iterable
 from typing import Optional
 
-from app.extensions import scheduler
+from app.extensions import db, scheduler
 from app.runtime_config import config as runtime_config
 from app.storage_cleanup import run_storage_cleanup
 from shared import defaults as DEFAULTS
@@ -50,6 +50,7 @@ def _run_scheduled_scope(
                 try:
                     run_storage_cleanup(retention, feed_id=feed_id, trigger=trigger)
                 except Exception as exc:  # pylint: disable=broad-except
+                    db.session.rollback()
                     logger.error(
                         "Storage cleanup failed for feed %s: %s",
                         feed_id,
@@ -66,6 +67,8 @@ def scheduled_cleanup_processed_posts() -> None:
     _run_scheduled_scope(None, trigger="scheduled")
 
 
-def immediate_cleanup_processed_posts(feed_ids: Optional[set[int]]) -> None:
+def immediate_cleanup_processed_posts(
+    feed_ids: Optional[set[int]], *, trigger: str = "immediate"
+) -> None:
     """Run one coalesced immediate server-wide or feed-scoped maintenance pass."""
-    _run_scheduled_scope(feed_ids, trigger="immediate")
+    _run_scheduled_scope(feed_ids, trigger=trigger)
