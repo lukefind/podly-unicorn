@@ -162,7 +162,7 @@ with app.app_context():
 ### Episode Processing (On-Demand)
 
 ```
-1. Trigger (podcast app request OR manual "Process" click)
+1. Trigger (explicit podcast-app trigger link, manual "Process" click, or auto-process after feed refresh)
        ↓
 2. Check if episode is enabled (whitelisted)
        ↓ (if disabled, skip)
@@ -178,14 +178,15 @@ with app.app_context():
        ↓
 8. Remove ad segments from audio (ffmpeg)
        ↓
-9. Save processed audio, update post.has_processed_audio = True
+9. Save processed audio and update `post.processed_audio_path`
 ```
 
 ### Key Point: On-Demand Processing
 
 Episodes are **NOT** processed automatically when enabled. Processing occurs:
-- When a podcast app requests the episode from the Podly RSS feed
+- When a listener opens the explicit processing trigger link in the episode description
 - When you manually click "Process" in the web UI
+- When a feed refresh discovers a new episode for a show with auto-process enabled
 
 This saves compute resources and API costs.
 
@@ -221,8 +222,9 @@ unreferenced attempts can then be removed.
 APScheduler owns distinct recurring and immediate jobs. Daily storage
 maintenance remains scheduled even when global age cleanup is disabled and
 reads the current policies when it runs. Feed-policy saves queue feed-scoped
-maintenance, global-policy saves and **Run cleanup now** queue server-wide
-maintenance, and overlapping requests are coalesced. Setting
+maintenance. Changing the global age policy to a positive value and **Run
+cleanup now** queue server-wide maintenance; disabling global age cleanup is
+saved without requesting an immediate run. Overlapping requests are coalesced. Setting
 `PODLY_DISABLE_SCHEDULER=1` disables both scheduled and immediate dispatch, so
 maintenance must be run by an external process.
 

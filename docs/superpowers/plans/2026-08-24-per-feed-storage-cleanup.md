@@ -449,7 +449,7 @@ git commit -m "feat: add per-feed storage cleanup controls"
 - Modify: `docs/RELEASE_RUNBOOK.md`
 - Create or modify relevant screenshot/help copy only if the existing docs use it
 
-- [ ] **Step 1: Document actual behavior**
+- [x] **Step 1: Document actual behavior**
 
 Describe:
 
@@ -461,7 +461,7 @@ Describe:
 - daily maintenance remaining active with global age off;
 - new migration head `s5t6u7v8w9x0`.
 
-- [ ] **Step 2: Update documentation contract tests if needed**
+- [x] **Step 2: Update documentation contract tests if needed**
 
 Run:
 
@@ -472,7 +472,7 @@ rg -n "Cleanup Retention \(days\)|processed files are automatically deleted afte
 
 Expected: no stale user-facing description of the old destructive or hidden behavior.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add AGENTS.md README.md docs/ARCHITECTURE.md docs/RELEASE_RUNBOOK.md src/tests/test_container_build_contracts.py
@@ -520,7 +520,7 @@ docker build --build-arg LITE_BUILD=true -t podly-storage-cleanup-candidate:loca
 docker run --rm --entrypoint python3 podly-storage-cleanup-candidate:local -m pip check
 ```
 
-Start the candidate against a brand-new disposable instance directory, wait for `/api/health`, verify the migration head, exercise authenticated global/per-feed saves, create disposable artifact fixtures through test setup, run cleanup, and confirm UI/API behavior. Never mount `src/instance/sqlite3.db` or any production data.
+Start the candidate against a brand-new disposable instance directory, wait for `/health`, verify the migration head, exercise authenticated global/per-feed saves, create disposable artifact fixtures through test setup, run cleanup, and confirm UI/API behavior. Never mount `src/instance/sqlite3.db` or any production data.
 
 - [ ] **Step 4: Independent code review**
 

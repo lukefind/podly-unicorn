@@ -345,11 +345,19 @@ docker restart podly-unicorn
 # Stop
 docker stop podly-unicorn
 
-# Backup database
-docker cp podly-unicorn:/app/src/instance/sqlite3.db ./backup.db
+# Create a consistent whole-instance backup
+backup_dir="podly-instance-backup-$(date -u +%Y%m%dT%H%M%SZ)"
+docker stop podly-unicorn
+mkdir -p "$backup_dir"
+docker cp podly-unicorn:/app/src/instance/. "$backup_dir/"
+test -s "$backup_dir/sqlite3.db"
+docker start podly-unicorn
 ```
 
 Compose users can use `docker compose logs -f`, `docker compose restart`, and `docker compose down` from their deployment directory.
+For release backup and rollback, including failure recovery, follow
+[`docs/RELEASE_RUNBOOK.md`](docs/RELEASE_RUNBOOK.md) and keep the service
+stopped between the consistent backup and deployment.
 
 ---
 

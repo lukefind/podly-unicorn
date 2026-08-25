@@ -65,44 +65,19 @@ def downgrade():
     pass
 ```
 
-### Manual SQL Migrations in Docker
+### Applying Migrations in Docker
 
-The Docker container does NOT have `sqlite3` CLI installed. For manual SQL migrations, use Python:
+The supported production path is to deploy the new container and let
+application startup run Alembic before it begins serving requests. Startup
+fails closed if the migration fails. Never hand-edit production schema or
+`alembic_version`: stamping a revision without every migration operation can
+leave the database looking current while its schema is incomplete.
 
-```bash
-sudo docker exec podly-pure-podcasts python -c "
-import sqlite3
-conn = sqlite3.connect('/app/src/instance/sqlite3.db')
-cursor = conn.cursor()
-cursor.execute('YOUR SQL HERE')
-conn.commit()
-conn.close()
-print('Done!')
-"
-```
-
-**Example: Making a column nullable in SQLite** (requires table recreation):
-```bash
-sudo docker exec podly-pure-podcasts python -c "
-import sqlite3
-conn = sqlite3.connect('/app/src/instance/sqlite3.db')
-cursor = conn.cursor()
-
-# SQLite doesn't support ALTER COLUMN, must recreate table
-cursor.execute('''CREATE TABLE tablename_new (
-    id INTEGER PRIMARY KEY,
-    column_to_change INTEGER,  -- removed NOT NULL
-    other_column TEXT NOT NULL
-)''')
-cursor.execute('INSERT INTO tablename_new SELECT * FROM tablename')
-cursor.execute('DROP TABLE tablename')
-cursor.execute('ALTER TABLE tablename_new RENAME TO tablename')
-
-conn.commit()
-conn.close()
-print('Migration complete!')
-"
-```
+Rehearse migrations only against an explicit disposable
+`PODLY_INSTANCE_DIR`, with `PODLY_PODCAST_DATA_DIR` under the same temporary
+root and `PODLY_DISABLE_SCHEDULER=1`. For production backup, deployment,
+read-only migration verification, and rollback commands, follow
+`docs/RELEASE_RUNBOOK.md`.
 
 ---
 
@@ -508,35 +483,14 @@ Per-feed toggle to automatically process new episodes when they are released. (R
 
 ## Migrations
 
-### Running Migrations in Docker
+### Production Migration Verification
 
-**IMPORTANT:** The standard `flask db upgrade` command often fails in Docker because the Flask app startup initializes the scheduler and jobs manager, which conflicts with the running container's SQLite locks.
-
-**Recommended approach:** Apply migrations directly via Python script:
-
-```bash
-docker exec <container-name> sh -lc 'python - <<"PY"
-import sqlite3
-
-conn = sqlite3.connect("/app/src/instance/sqlite3.db")
-cursor = conn.cursor()
-
-# Example: Add a column
-# cursor.execute("ALTER TABLE table_name ADD COLUMN column_name TYPE DEFAULT value")
-
-# Update alembic_version to the new revision
-# cursor.execute("UPDATE alembic_version SET version_num = ?", ("new_revision_id",))
-
-conn.commit()
-conn.close()
-print("Migration complete!")
-PY'
-```
-
-Then restart the container:
-```bash
-docker restart <container-name>
-```
+Do not start a second Flask application or run a manual schema mutation inside
+the live container. After startup reports healthy, verify only the recorded
+Alembic version with a read-only `sqlite3` query from Python, as documented in
+`docs/RELEASE_RUNBOOK.md`. If startup migration or the version check fails,
+stop the candidate and use the runbook's coordinated instance backup and
+rollback procedure.
 
 ### Current Migration Head
 
