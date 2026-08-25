@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
-from app.background import add_background_job, schedule_cleanup_job
+from app.background import add_background_job
 from app.extensions import db, scheduler
 from app.llm_key_profiles import resolve_llm_api_key_reference
 from app.models import (
@@ -26,6 +27,16 @@ from shared.config import (
 )
 
 logger = logging.getLogger("global_logger")
+
+
+@dataclass(frozen=True)
+class ConfigUpdateResult:
+    """Persisted configuration plus cleanup-policy change metadata."""
+
+    config: Dict[str, Any]
+    post_cleanup_retention_changed: bool = False
+    old_post_cleanup_retention_days: Optional[int] = None
+    new_post_cleanup_retention_days: Optional[int] = None
 
 
 def _is_empty(value: Any) -> bool:
@@ -602,7 +613,10 @@ def _update_section_app(data: Dict[str, Any]) -> Tuple[Optional[int], Optional[i
     return old_interval, old_retention
 
 
-def update_combined(payload: Dict[str, Any]) -> Dict[str, Any]:
+def update_combined(payload: Dict[str, Any]) -> ConfigUpdateResult:
+    retention_changed = False
+    old_retention: Optional[int] = None
+    new_retention: Optional[int] = None
     if "llm" in payload:
         _update_section_llm(payload["llm"] or {})
     if "whisper" in payload:
@@ -624,13 +638,21 @@ def update_combined(payload: Dict[str, Any]) -> Dict[str, Any]:
                     pass
                 if app_s.background_update_interval_minute is not None:
                     add_background_job(int(app_s.background_update_interval_minute))
-            if old_retention != app_s.post_cleanup_retention_days:
-                schedule_cleanup_job(app_s.post_cleanup_retention_days)
+            new_retention = app_s.post_cleanup_retention_days
+            retention_changed = (
+                "post_cleanup_retention_days" in (payload["app"] or {})
+                and old_retention != new_retention
+            )
 
     if "email" in payload:
         _update_section_email(payload["email"] or {})
 
-    return read_combined()
+    return ConfigUpdateResult(
+        config=read_combined(),
+        post_cleanup_retention_changed=retention_changed,
+        old_post_cleanup_retention_days=old_retention,
+        new_post_cleanup_retention_days=new_retention,
+    )
 
 
 def to_pydantic_config() -> PydanticConfig:

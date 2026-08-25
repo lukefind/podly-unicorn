@@ -7,11 +7,13 @@ from pathlib import Path
 import pytest
 from flask import Flask
 
+import app.routes.config_routes as config_routes
 from app.auth import AuthSettings
 from app.auth.middleware import SESSION_USER_KEY, init_auth_middleware
 from app.extensions import db
 from app.models import Feed, Identification, ModelCall, Post, TranscriptSegment, User
 from app.routes.admin_routes import admin_bp
+from app.routes.config_routes import config_bp
 
 
 @pytest.fixture
@@ -34,6 +36,7 @@ def app_with_admin_routes(tmp_path: Path) -> Flask:
 
     init_auth_middleware(app)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(config_bp)
     return app
 
 
@@ -142,6 +145,32 @@ def test_backup_database_requires_auth_when_auth_enabled(
     response = client.post("/api/admin/backup")
 
     assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "dispatch_status", ["queued", "coalesced", "scheduler_disabled"]
+)
+def test_manual_storage_cleanup_dispatches_server_wide_for_admin(
+    app_with_admin_routes: Flask,
+    monkeypatch: pytest.MonkeyPatch,
+    dispatch_status: str,
+) -> None:
+    admin_id = _create_user(app_with_admin_routes, "cleanup-admin", "admin")
+    client = app_with_admin_routes.test_client()
+    _login(client, admin_id)
+    calls: list[dict[str, str]] = []
+    monkeypatch.setattr(
+        config_routes,
+        "request_storage_cleanup",
+        lambda **kwargs: calls.append(kwargs) or dispatch_status,
+        raising=False,
+    )
+
+    response = client.post("/api/admin/storage-cleanup/run")
+
+    assert response.status_code == 202
+    assert response.get_json() == {"requested": True, "status": dispatch_status}
+    assert calls == [{"trigger": "manual_admin"}]
 
 
 def test_backup_database_downloads_file_when_sqlite_uri_has_query_params(

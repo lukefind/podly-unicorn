@@ -28,10 +28,12 @@ from flask import (
 from flask.typing import ResponseReturnValue
 
 from app.auth.feed_tokens import create_feed_access_token
+from app.background import request_storage_cleanup
 from app.extensions import db
 from app.feeds import add_or_refresh_feed, generate_feed_xml, generate_combined_feed_xml, refresh_feed
 from app.jobs_manager import get_jobs_manager
 from app.models import (
+    AppSettings,
     Feed,
     Identification,
     ModelCall,
@@ -42,6 +44,7 @@ from app.models import (
     User,
     UserDownload,
 )
+from app.runtime_config import config as runtime_config
 from podcast_processor.podcast_downloader import sanitize_title
 from shared.processing_paths import get_in_root, get_srv_root
 
@@ -49,6 +52,10 @@ logger = logging.getLogger("global_logger")
 
 
 feed_bp = Blueprint("feed", __name__)
+
+# A count larger than this is operationally indistinguishable from unlimited
+# for a single podcast while still being safe to validate and sort.
+MAX_PROCESSED_EPISODE_RETENTION_COUNT = 10_000
 
 
 def _record_rss_read(
@@ -94,6 +101,55 @@ def _require_admin() -> ResponseReturnValue | None:
         return jsonify({"error": "Admin privileges required."}), 403
 
     return None
+
+
+def _positive_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _global_cleanup_retention_days() -> int | None:
+    settings = db.session.get(AppSettings, 1)
+    value = (
+        settings.post_cleanup_retention_days
+        if settings is not None
+        else getattr(runtime_config, "post_cleanup_retention_days", None)
+    )
+    return value if _positive_int(value) else None
+
+
+def _effective_cleanup_policy(
+    feed: Feed, global_retention_days: int | None = None
+) -> dict[str, object]:
+    count = feed.processed_episode_retention_count
+    if _positive_int(count):
+        return {
+            "type": "count",
+            "source": "feed",
+            "retention_count": count,
+            "inherited": False,
+            "orphan_maintenance_active": True,
+        }
+
+    retention_days = (
+        _global_cleanup_retention_days()
+        if global_retention_days is None
+        else global_retention_days
+    )
+    if _positive_int(retention_days):
+        return {
+            "type": "age",
+            "source": "global",
+            "retention_days": retention_days,
+            "inherited": True,
+            "orphan_maintenance_active": True,
+        }
+    return {
+        "type": "disabled",
+        "source": "global",
+        "retention_days": None,
+        "inherited": True,
+        "orphan_maintenance_active": True,
+    }
 
 
 def fix_url(url: str) -> str:
@@ -928,6 +984,7 @@ def api_feeds() -> Response:
     if default_preset_ids:
         for preset in PromptPreset.query.filter(PromptPreset.id.in_(default_preset_ids)).all():
             presets_by_id[preset.id] = preset
+    global_retention_days = _global_cleanup_retention_days()
     
     feeds_data = [
         {
@@ -939,6 +996,12 @@ def api_feeds() -> Response:
             "image_url": feed.image_url,
             "posts_count": posts_count,
             "is_private": subscriptions_map.get(feed.id, False),
+            "processed_episode_retention_count": (
+                feed.processed_episode_retention_count
+            ),
+            "effective_cleanup_policy": _effective_cleanup_policy(
+                feed, global_retention_days
+            ),
             "default_prompt_preset": (
                 {
                     "id": presets_by_id.get(feed.default_prompt_preset_id).id,
@@ -974,6 +1037,60 @@ def api_feeds() -> Response:
         for feed, posts_count in results
     ]
     return jsonify(feeds_data)
+
+
+@feed_bp.route("/api/feeds/<int:feed_id>/cleanup-policy", methods=["POST"])
+def set_feed_cleanup_policy(feed_id: int) -> ResponseReturnValue:
+    """Persist and asynchronously enforce a shared per-feed cleanup policy."""
+    error_response = _require_admin()
+    if error_response:
+        return error_response
+
+    feed = db.session.get(Feed, feed_id)
+    if feed is None:
+        return jsonify({"error": "Feed not found."}), 404
+
+    payload = request.get_json(silent=True) if request.is_json else None
+    if not isinstance(payload, dict) or "retention_count" not in payload:
+        return jsonify({"error": "A JSON retention_count value is required."}), 400
+
+    retention_count = payload["retention_count"]
+    if retention_count is not None and (
+        not _positive_int(retention_count)
+        or retention_count > MAX_PROCESSED_EPISODE_RETENTION_COUNT
+    ):
+        return (
+            jsonify(
+                {
+                    "error": (
+                        "retention_count must be null or an integer between 1 "
+                        f"and {MAX_PROCESSED_EPISODE_RETENTION_COUNT}."
+                    )
+                }
+            ),
+            400,
+        )
+
+    feed.processed_episode_retention_count = retention_count
+    db.session.commit()
+    dispatch_status = request_storage_cleanup(
+        feed_id=feed.id, trigger="feed_policy_save"
+    )
+
+    return (
+        jsonify(
+            {
+                "feed_id": feed.id,
+                "processed_episode_retention_count": retention_count,
+                "effective_cleanup_policy": _effective_cleanup_policy(feed),
+                "cleanup_dispatch": {
+                    "requested": True,
+                    "status": dispatch_status,
+                },
+            }
+        ),
+        202,
+    )
 
 
 @feed_bp.route("/api/feeds/<int:feed_id>/default-preset", methods=["POST"])

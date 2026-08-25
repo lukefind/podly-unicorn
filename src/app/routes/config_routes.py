@@ -9,6 +9,7 @@ from flask import Blueprint, current_app, g, jsonify, request
 from groq import Groq
 from openai import OpenAI
 
+from app.background import request_storage_cleanup
 from app.config_store import read_combined, to_pydantic_config, update_combined
 from app.extensions import db
 from app.llm_key_profiles import (
@@ -32,6 +33,9 @@ logger = logging.getLogger("global_logger")
 
 config_bp = Blueprint("config", __name__)
 
+# Prevent nonsensical integer payloads while allowing policies up to 100 years.
+MAX_GLOBAL_CLEANUP_RETENTION_DAYS = 36_500
+
 
 def _require_admin() -> tuple[User | None, flask.Response | None]:
     settings = current_app.config.get("AUTH_SETTINGS")
@@ -53,6 +57,14 @@ def _require_admin() -> tuple[User | None, flask.Response | None]:
         )
 
     return user, None
+
+
+def _valid_global_retention_days(value: object) -> bool:
+    return (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 1 <= value <= MAX_GLOBAL_CLEANUP_RETENTION_DAYS
+    )
 
 
 def _mask_secret(value: Any | None) -> str | None:
@@ -440,7 +452,33 @@ def api_put_config() -> flask.Response:
     if error_response:
         return error_response
 
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True) if request.is_json else None
+    if not isinstance(payload, dict):
+        return flask.make_response(
+            jsonify({"error": "A JSON object is required."}), 400
+        )
+
+    app_payload = payload.get("app")
+    if app_payload is not None and not isinstance(app_payload, dict):
+        return flask.make_response(
+            jsonify({"error": "app must be a JSON object."}), 400
+        )
+    if isinstance(app_payload, dict) and "post_cleanup_retention_days" in app_payload:
+        retention_days = app_payload["post_cleanup_retention_days"]
+        if retention_days is not None and not _valid_global_retention_days(
+            retention_days
+        ):
+            return flask.make_response(
+                jsonify(
+                    {
+                        "error": (
+                            "post_cleanup_retention_days must be null or an integer "
+                            f"between 1 and {MAX_GLOBAL_CLEANUP_RETENTION_DAYS}."
+                        )
+                    }
+                ),
+                400,
+            )
 
     llm_payload = payload.get("llm")
     if isinstance(llm_payload, dict):
@@ -466,7 +504,8 @@ def api_put_config() -> flask.Response:
                 )
 
     try:
-        data = update_combined(payload)
+        update_result = update_combined(payload)
+        data = update_result.config
 
         try:
             # Track key-profile usage for analytics/UX if selected.
@@ -491,12 +530,43 @@ def api_put_config() -> flask.Response:
             setattr(runtime_config, field_name, getattr(db_cfg, field_name))
         ProcessorSingleton.reset_instance()
 
-        return flask.jsonify(_sanitize_config_for_client(data))
+        cleanup_dispatch = {"requested": False, "status": "not_requested"}
+        if (
+            update_result.post_cleanup_retention_changed
+            and _valid_global_retention_days(
+                update_result.new_post_cleanup_retention_days
+            )
+        ):
+            cleanup_dispatch = {
+                "requested": True,
+                "status": request_storage_cleanup(trigger="global_policy_save"),
+            }
+
+        return flask.jsonify(
+            {
+                "config": _sanitize_config_for_client(data),
+                "cleanup_dispatch": cleanup_dispatch,
+            }
+        )
     except Exception as e:  # pylint: disable=broad-except
         logger.error(f"Failed to update configuration: {e}")
         return flask.make_response(
             jsonify({"error": "Failed to update configuration."}), 400
         )
+
+
+@config_bp.route("/api/admin/storage-cleanup/run", methods=["POST"])
+def api_run_storage_cleanup() -> flask.Response:
+    """Queue a coalesced server-wide maintenance pass."""
+    _, error_response = _require_admin()
+    if error_response:
+        return error_response
+
+    status = request_storage_cleanup(trigger="manual_admin")
+    return flask.make_response(
+        jsonify({"requested": True, "status": status}),
+        202,
+    )
 
 
 @config_bp.route("/api/config/test-llm", methods=["POST"])
