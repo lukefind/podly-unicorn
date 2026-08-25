@@ -28,6 +28,7 @@ from app.models import (
     ProcessingStatistics,
     TranscriptSegment,
 )
+from app.storage_orphans import sweep_stale_processing_attempts
 from shared.processing_paths import get_in_root, get_srv_root
 
 logger = logging.getLogger("global_logger")
@@ -726,6 +727,30 @@ def run_storage_cleanup(
                 "database reconciliation failed; retry required after partial "
                 f"filesystem cleanup: {exc}"
             )
+    try:
+        orphan_result = sweep_stale_processing_attempts(feed_id=feed_id)
+    except Exception as exc:  # pylint: disable=broad-except
+        db.session.rollback()
+        result.failed_count += 1
+        result.errors.append(f"orphan attempt sweep failed; retry required: {exc}")
+    else:
+        for counter in (
+            "attempt_delete_attempts",
+            "attempts_removed",
+            "reclaimed_bytes",
+            "active_skips",
+            "ambiguous_skips",
+            "unsafe_skips",
+            "grace_skips",
+            "failed_count",
+        ):
+            setattr(
+                result,
+                counter,
+                getattr(result, counter) + getattr(orphan_result, counter),
+            )
+        result.warnings.extend(orphan_result.warnings)
+        result.errors.extend(orphan_result.errors)
     logger.info(
         "storage_cleanup_summary %s", json.dumps(result.to_dict(), sort_keys=True)
     )

@@ -11,11 +11,13 @@ import pytest
 import app.storage_cleanup as storage_cleanup_module
 from app.extensions import db, scheduler
 from app.jobs_manager_run_service import SINGLETON_RUN_ID
-from app.models import Feed, Post, ProcessingJob
 from app.models import (
+    Feed,
     Identification,
     JobsManagerRun,
     ModelCall,
+    Post,
+    ProcessingJob,
     ProcessingStatistics,
     PromptPreset,
     TranscriptSegment,
@@ -76,6 +78,22 @@ def _audio(path: Path, payload: bytes = b"audio") -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(payload)
     return path
+
+
+def _stale_attempt(
+    in_root: Path,
+    guid: str,
+    job_id: str,
+    *,
+    payload: bytes = b"attempt-audio",
+) -> tuple[Path, Path]:
+    attempt = in_root / "jobs" / guid / job_id
+    audio = _audio(attempt / "episode.mp3", payload)
+    old = datetime.utcnow() - timedelta(hours=25)
+    os.utime(audio, (old.timestamp(), old.timestamp()))
+    os.utime(attempt, (old.timestamp(), old.timestamp()))
+    os.utime(attempt.parent, (old.timestamp(), old.timestamp()))
+    return attempt, audio
 
 
 def _completed_job(
@@ -139,6 +157,541 @@ def test_count_policy_keeps_newest_valid_outputs_after_reconciliation(
         assert promoted_valid.processed_audio_path is not None
         assert old_valid.processed_audio_path is None
         assert not (srv_root / "old-valid.mp3").exists()
+
+
+def test_orphan_sweep_only_removes_stale_exact_attempt_layout_when_age_disabled(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, _ = data_roots
+    attempt, _ = _stale_attempt(in_root, "orphan-guid", "missing-job")
+    outside_layout = _audio(in_root / "legacy" / "old.mp3")
+    jobs_root_file = _audio(in_root / "jobs" / "unknown.bin")
+    guid_root_file = _audio(in_root / "jobs" / "malformed-guid" / "unknown.bin")
+
+    with app.app_context():
+        result = run_storage_cleanup(None, trigger="orphan-layout")
+
+    assert not attempt.exists()
+    assert not attempt.parent.exists()
+    assert outside_layout.exists()
+    assert jobs_root_file.exists()
+    assert guid_root_file.exists()
+    assert result.attempt_delete_attempts == 1
+    assert result.attempts_removed == 1
+    assert result.reclaimed_bytes == len(b"attempt-audio")
+    assert result.unsafe_skips == 2
+
+
+def test_orphan_sweep_preserves_all_attempts_for_active_same_guid_job(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, _ = data_roots
+    active_attempt, _ = _stale_attempt(in_root, "active-guid", "active-job")
+    retry_attempt, _ = _stale_attempt(in_root, "active-guid", "old-retry")
+
+    with app.app_context():
+        db.session.add(
+            ProcessingJob(
+                id="active-job",
+                post_guid="active-guid",
+                feed_id=None,
+                status="running",
+                created_at=datetime.utcnow() - timedelta(days=2),
+            )
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(None, trigger="orphan-active")
+
+    assert active_attempt.exists()
+    assert retry_attempt.exists()
+    assert result.active_skips == 2
+    assert result.attempt_delete_attempts == 0
+
+
+def test_orphan_sweep_removes_only_old_failed_or_cancelled_job_attempts(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, _ = data_roots
+    statuses = ("failed", "cancelled", "completed", "skipped", "mystery")
+    attempts = {
+        status: _stale_attempt(in_root, f"{status}-guid", f"{status}-job")[0]
+        for status in statuses
+    }
+
+    with app.app_context():
+        old = datetime.utcnow() - timedelta(days=2)
+        db.session.add_all(
+            [
+                ProcessingJob(
+                    id=f"{status}-job",
+                    post_guid=f"{status}-guid",
+                    feed_id=None,
+                    status=status,
+                    created_at=old,
+                    completed_at=old,
+                )
+                for status in statuses
+            ]
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(None, trigger="orphan-terminal")
+
+    assert not attempts["failed"].exists()
+    assert not attempts["cancelled"].exists()
+    assert attempts["completed"].exists()
+    assert attempts["skipped"].exists()
+    assert attempts["mystery"].exists()
+    assert result.attempts_removed == 2
+
+
+def test_orphan_sweep_preserves_recent_filesystem_and_recent_terminal_job(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, _ = data_roots
+    recent_filesystem = in_root / "jobs" / "recent-fs-guid" / "missing-job"
+    _audio(recent_filesystem / "episode.mp3")
+    recent_job_attempt, _ = _stale_attempt(
+        in_root, "recent-job-guid", "recent-failed-job"
+    )
+
+    with app.app_context():
+        db.session.add(
+            ProcessingJob(
+                id="recent-failed-job",
+                post_guid="recent-job-guid",
+                feed_id=None,
+                status="failed",
+                created_at=datetime.utcnow() - timedelta(hours=1),
+                completed_at=datetime.utcnow() - timedelta(hours=1),
+            )
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(None, trigger="orphan-grace")
+
+    assert recent_filesystem.exists()
+    assert recent_job_attempt.exists()
+    assert result.grace_skips == 2
+    assert result.attempt_delete_attempts == 0
+
+
+def test_orphan_sweep_preserves_referenced_input_for_valid_processed_output(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, srv_root = data_roots
+    attempt, input_path = _stale_attempt(
+        in_root, "retained-output-guid", "failed-final"
+    )
+
+    with app.app_context():
+        feed = _create_feed("orphan-retained-output")
+        post = _create_post(
+            feed,
+            "retained-output-guid",
+            release_date=datetime.utcnow(),
+            processed_path=_audio(srv_root / "retained-output.mp3"),
+            input_path=input_path,
+        )
+        db.session.add(
+            ProcessingJob(
+                id="failed-final",
+                post_guid=post.guid,
+                feed_id=feed.id,
+                status="failed",
+                created_at=datetime.utcnow() - timedelta(days=2),
+                completed_at=datetime.utcnow() - timedelta(days=2),
+            )
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(None, trigger="orphan-retained-output")
+
+        db.session.refresh(post)
+        assert post.unprocessed_audio_path == str(input_path)
+        assert post.processed_audio_path is not None
+
+    assert attempt.exists()
+    assert input_path.exists()
+    assert result.attempts_removed == 0
+
+
+def test_orphan_sweep_removes_stale_failed_referenced_input_and_clears_pointer(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, _ = data_roots
+    attempt, input_path = _stale_attempt(
+        in_root, "failed-reference-guid", "failed-reference-job"
+    )
+
+    with app.app_context():
+        feed = _create_feed("orphan-failed-reference")
+        post = _create_post(
+            feed,
+            "failed-reference-guid",
+            release_date=datetime.utcnow(),
+            input_path=input_path,
+        )
+        db.session.add(
+            ProcessingJob(
+                id="failed-reference-job",
+                post_guid=post.guid,
+                feed_id=feed.id,
+                status="failed",
+                created_at=datetime.utcnow() - timedelta(days=2),
+                completed_at=datetime.utcnow() - timedelta(days=2),
+            )
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(None, trigger="orphan-failed-reference")
+
+        db.session.refresh(post)
+        assert post.unprocessed_audio_path is None
+
+    assert not attempt.exists()
+    assert result.attempts_removed == 1
+
+
+def test_orphan_sweep_preserves_shared_guid_mapping_as_ambiguous(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, _ = data_roots
+    attempt, input_path = _stale_attempt(
+        in_root, "shared-orphan-guid", "shared-failed-job"
+    )
+
+    with app.app_context():
+        target_feed = _create_feed("orphan-shared-target")
+        other_feed = _create_feed("orphan-shared-other")
+        target = _create_post(
+            target_feed,
+            "shared-orphan-guid",
+            release_date=datetime.utcnow(),
+            input_path=input_path,
+        )
+        _create_post(
+            other_feed,
+            "shared-orphan-guid",
+            release_date=datetime.utcnow(),
+        )
+        db.session.add(
+            ProcessingJob(
+                id="shared-failed-job",
+                post_guid=target.guid,
+                feed_id=target_feed.id,
+                status="failed",
+                created_at=datetime.utcnow() - timedelta(days=2),
+                completed_at=datetime.utcnow() - timedelta(days=2),
+            )
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(None, trigger="orphan-shared-guid")
+
+        db.session.refresh(target)
+        assert target.unprocessed_audio_path == str(input_path)
+
+    assert attempt.exists()
+    assert result.ambiguous_skips == 1
+    assert any("ambiguous" in warning for warning in result.warnings)
+
+
+def test_orphan_sweep_preserves_mismatched_path_reference_as_ambiguous(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, _ = data_roots
+    attempt, input_path = _stale_attempt(
+        in_root, "filesystem-guid", "mismatched-reference-job"
+    )
+
+    with app.app_context():
+        feed = _create_feed("orphan-mismatched-reference")
+        post = _create_post(
+            feed,
+            "different-post-guid",
+            release_date=datetime.utcnow(),
+            input_path=input_path,
+        )
+        db.session.add(
+            ProcessingJob(
+                id="mismatched-reference-job",
+                post_guid="filesystem-guid",
+                feed_id=feed.id,
+                status="failed",
+                created_at=datetime.utcnow() - timedelta(days=2),
+                completed_at=datetime.utcnow() - timedelta(days=2),
+            )
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(None, trigger="orphan-mismatched-reference")
+
+        db.session.refresh(post)
+        assert post.unprocessed_audio_path == str(input_path)
+
+    assert attempt.exists()
+    assert result.ambiguous_skips == 1
+    assert any("ambiguous" in warning for warning in result.warnings)
+
+
+def test_orphan_sweep_rejects_guid_parent_swap_before_attempt_deletion(
+    app,
+    data_roots: tuple[Path, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    in_root, _ = data_roots
+    guid = "swapped-orphan-guid"
+    job_id = "swapped-orphan-job"
+    attempt, input_path = _stale_attempt(in_root, guid, job_id, payload=b"inside")
+    guid_parent = attempt.parent
+    parked_parent = in_root / "jobs" / f"{guid}-parked"
+    outside_parent = tmp_path / "outside-orphan-guid"
+    outside_file = _audio(outside_parent / job_id / "episode.mp3", b"outside")
+    original_stat = os.stat
+    guid_stats = 0
+
+    def swap_on_guid_revalidation(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        *args: object,
+        **kwargs: object,
+    ) -> os.stat_result:
+        nonlocal guid_stats
+        if path == guid and kwargs.get("dir_fd") is not None:
+            guid_stats += 1
+            if guid_stats == 2:
+                guid_parent.rename(parked_parent)
+                guid_parent.symlink_to(outside_parent, target_is_directory=True)
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", swap_on_guid_revalidation)
+
+    with app.app_context():
+        result = run_storage_cleanup(None, trigger="orphan-parent-swap")
+
+    assert guid_stats >= 2
+    assert (parked_parent / job_id / input_path.name).read_bytes() == b"inside"
+    assert outside_file.read_bytes() == b"outside"
+    assert result.attempts_removed == 0
+    assert result.unsafe_skips == 1
+
+
+def test_orphan_sweep_retries_pointer_clear_after_database_commit_failure(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    in_root, _ = data_roots
+    attempt, input_path = _stale_attempt(
+        in_root, "orphan-db-retry-guid", "orphan-db-retry-job"
+    )
+
+    with app.app_context():
+        feed = _create_feed("orphan-db-retry")
+        post = _create_post(
+            feed,
+            "orphan-db-retry-guid",
+            release_date=datetime.utcnow(),
+            input_path=input_path,
+        )
+        db.session.add(
+            ProcessingJob(
+                id="orphan-db-retry-job",
+                post_guid=post.guid,
+                feed_id=feed.id,
+                status="failed",
+                created_at=datetime.utcnow() - timedelta(days=2),
+                completed_at=datetime.utcnow() - timedelta(days=2),
+            )
+        )
+        db.session.commit()
+        session = db.session()
+        original_commit = session.commit
+
+        def fail_commit() -> None:
+            raise RuntimeError("synthetic orphan commit failure")
+
+        monkeypatch.setattr(session, "commit", fail_commit)
+        first = run_storage_cleanup(None, trigger="orphan-db-failure")
+
+        db.session.refresh(post)
+        assert post.unprocessed_audio_path == str(input_path)
+        assert not attempt.exists()
+        assert first.attempts_removed == 1
+        assert first.failed_count == 1
+        assert any("retry" in error for error in first.errors)
+
+        monkeypatch.setattr(session, "commit", original_commit)
+        second = run_storage_cleanup(None, trigger="orphan-db-retry")
+
+        db.session.refresh(post)
+        assert post.unprocessed_audio_path is None
+        assert second.failed_count == 0
+
+
+def test_orphan_sweep_feed_scope_removes_only_safely_attributable_attempts(
+    app, data_roots: tuple[Path, Path]
+) -> None:
+    in_root, _ = data_roots
+    target_attempt, _ = _stale_attempt(in_root, "target-scope-guid", "target-scope-job")
+    other_attempt, _ = _stale_attempt(in_root, "other-scope-guid", "other-scope-job")
+    unknown_attempt, _ = _stale_attempt(
+        in_root, "unknown-scope-guid", "unknown-scope-job"
+    )
+
+    with app.app_context():
+        target_feed = _create_feed("orphan-scope-target")
+        other_feed = _create_feed("orphan-scope-other")
+        target_post = _create_post(
+            target_feed, "target-scope-guid", release_date=datetime.utcnow()
+        )
+        other_post = _create_post(
+            other_feed, "other-scope-guid", release_date=datetime.utcnow()
+        )
+        old = datetime.utcnow() - timedelta(days=2)
+        db.session.add_all(
+            [
+                ProcessingJob(
+                    id="target-scope-job",
+                    post_guid=target_post.guid,
+                    feed_id=target_feed.id,
+                    status="failed",
+                    created_at=old,
+                    completed_at=old,
+                ),
+                ProcessingJob(
+                    id="other-scope-job",
+                    post_guid=other_post.guid,
+                    feed_id=other_feed.id,
+                    status="cancelled",
+                    created_at=old,
+                    completed_at=old,
+                ),
+            ]
+        )
+        db.session.commit()
+
+        result = run_storage_cleanup(
+            None, feed_id=target_feed.id, trigger="orphan-feed-scope"
+        )
+
+    assert not target_attempt.exists()
+    assert other_attempt.exists()
+    assert unknown_attempt.exists()
+    assert result.attempts_removed == 1
+    assert result.ambiguous_skips == 1
+    assert any("ambiguous" in warning for warning in result.warnings)
+
+
+def test_orphan_sweep_preserves_symlink_attempts_and_symlink_contents(
+    app, data_roots: tuple[Path, Path], tmp_path: Path
+) -> None:
+    in_root, _ = data_roots
+    jobs_root = in_root / "jobs"
+    outside_attempt = tmp_path / "outside-attempt"
+    outside_file = _audio(outside_attempt / "outside.mp3", b"outside")
+    linked_attempt = jobs_root / "linked-guid" / "linked-job"
+    linked_attempt.parent.mkdir(parents=True)
+    linked_attempt.symlink_to(outside_attempt, target_is_directory=True)
+
+    nested_attempt, _ = _stale_attempt(in_root, "nested-link-guid", "nested-link-job")
+    nested_link = nested_attempt / "escape.mp3"
+    nested_link.symlink_to(outside_file)
+
+    with app.app_context():
+        result = run_storage_cleanup(None, trigger="orphan-symlinks")
+
+    assert linked_attempt.is_symlink()
+    assert nested_link.is_symlink()
+    assert outside_file.read_bytes() == b"outside"
+    assert result.attempts_removed == 0
+    assert result.unsafe_skips == 2
+
+
+def test_orphan_sweep_unlink_failure_preserves_retryable_post_pointer(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    in_root, _ = data_roots
+    attempt, input_path = _stale_attempt(
+        in_root, "orphan-unlink-guid", "orphan-unlink-job"
+    )
+
+    with app.app_context():
+        feed = _create_feed("orphan-unlink")
+        post = _create_post(
+            feed,
+            "orphan-unlink-guid",
+            release_date=datetime.utcnow(),
+            input_path=input_path,
+        )
+        old = datetime.utcnow() - timedelta(days=2)
+        db.session.add(
+            ProcessingJob(
+                id="orphan-unlink-job",
+                post_guid=post.guid,
+                feed_id=feed.id,
+                status="cancelled",
+                created_at=old,
+                completed_at=old,
+            )
+        )
+        db.session.commit()
+        original_unlink = os.unlink
+
+        def fail_attempt_unlink(
+            path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+            *args: object,
+            **kwargs: object,
+        ) -> None:
+            if path == input_path.name and kwargs.get("dir_fd") is not None:
+                raise OSError("synthetic orphan unlink failure")
+            original_unlink(path, *args, **kwargs)
+
+        monkeypatch.setattr(os, "unlink", fail_attempt_unlink)
+        result = run_storage_cleanup(None, trigger="orphan-unlink-failure")
+
+        db.session.refresh(post)
+        assert post.unprocessed_audio_path == str(input_path)
+
+    assert attempt.exists()
+    assert input_path.exists()
+    assert result.attempt_delete_attempts == 1
+    assert result.attempts_removed == 0
+    assert result.failed_count == 1
+    assert result.reclaimed_bytes == 0
+
+
+def test_orphan_sweep_merges_one_summary_when_global_age_is_disabled(
+    app,
+    data_roots: tuple[Path, Path],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    in_root, _ = data_roots
+    _stale_attempt(in_root, "summary-stale-guid", "summary-stale-job", payload=b"1234")
+    recent_attempt = in_root / "jobs" / "summary-recent-guid" / "recent-job"
+    _audio(recent_attempt / "episode.mp3")
+    _audio(in_root / "jobs" / "summary-unknown.bin")
+
+    with app.app_context(), caplog.at_level(logging.INFO, logger="global_logger"):
+        result = run_storage_cleanup(None, trigger="orphan-summary")
+
+    summaries = [
+        json.loads(record.getMessage().removeprefix("storage_cleanup_summary "))
+        for record in caplog.records
+        if record.getMessage().startswith("storage_cleanup_summary ")
+    ]
+    assert len(summaries) == 1
+    payload = summaries[0]
+    assert payload["attempt_delete_attempts"] == 1
+    assert payload["attempts_removed"] == 1
+    assert payload["reclaimed_bytes"] == 4
+    assert payload["grace_skips"] == 1
+    assert payload["unsafe_skips"] == 1
+    assert result.to_dict() == payload
 
 
 def test_global_age_uses_newer_of_successful_job_and_processed_file_mtime(
