@@ -1,3 +1,33 @@
+# [1.3.0](https://github.com/lukefind/podly-unicorn/compare/v1.2.2...v1.3.0) (2026-08-25)
+
+
+### Bug Fixes
+
+* align effective cleanup policy with engine ([8e7e712](https://github.com/lukefind/podly-unicorn/commit/8e7e712c8fc670ea90dc456517a5c9f721151264))
+* close orphan cleanup retry and race gaps ([4a10e21](https://github.com/lukefind/podly-unicorn/commit/4a10e214e237b5f5754e21292971d67859b2fb6b))
+* harden cleanup production safety ([507fc16](https://github.com/lukefind/podly-unicorn/commit/507fc1695aac928c1696c72433efcc516e381f68))
+* harden feed cleanup modal access and state ([afb3b47](https://github.com/lukefind/podly-unicorn/commit/afb3b477e25fcfee14efa4dbf891d3cde9bc0631))
+* harden storage cleanup dispatch ([6817328](https://github.com/lukefind/podly-unicorn/commit/681732898a48df3fdbf84874bcff055b417198af))
+* harden storage cleanup settings state ([c054556](https://github.com/lukefind/podly-unicorn/commit/c054556b713c4a5a225d04c3a7fc32d5f8d97356))
+* include orphan skips in cleanup summary ([6026a04](https://github.com/lukefind/podly-unicorn/commit/6026a04b7369e811699afded9d623cd10f2d2eb7))
+* isolate cleanup candidate evaluation failures ([d88ae5b](https://github.com/lukefind/podly-unicorn/commit/d88ae5b2fb9b7f99989e9680c40288bca2347588))
+* make cleanup retries and counters reliable ([04f8ac8](https://github.com/lukefind/podly-unicorn/commit/04f8ac8d17872a9aa978467cdcd8f494905e12f1))
+* replace packaged pip cleanly in containers ([b5ad808](https://github.com/lukefind/podly-unicorn/commit/b5ad808b0d33dc57855194a5d7661d73aaec1d38))
+* require fresh feed cleanup policy ([365973d](https://github.com/lukefind/podly-unicorn/commit/365973d582d7f46c0efed8571b14cebda49f5231))
+* revalidate cleanup eligibility before deletion ([043d811](https://github.com/lukefind/podly-unicorn/commit/043d811da3786c33ee6b60f26f7053f63c131c8b))
+* surface feed policy refresh failures ([d907a46](https://github.com/lukefind/podly-unicorn/commit/d907a460d493d0c357e8e039cda3a5a2976d784c))
+
+
+### Features
+
+* add global storage cleanup settings ([77af070](https://github.com/lukefind/podly-unicorn/commit/77af0702973fa84ff7faf5b03536dacce5be84d4))
+* add per-feed processed episode retention policy ([4371ea6](https://github.com/lukefind/podly-unicorn/commit/4371ea61d2fc37999af7967c64fa731fd594a188))
+* add per-feed storage cleanup controls ([c2cceeb](https://github.com/lukefind/podly-unicorn/commit/c2cceebe79e4f42a4a1a27ed53b8d9c09f4316dc))
+* clean stale processing attempt artifacts ([d075e3f](https://github.com/lukefind/podly-unicorn/commit/d075e3ff537b4d25fc5ecd0fd837849b8f90421f))
+* expose admin storage cleanup controls ([f79b950](https://github.com/lukefind/podly-unicorn/commit/f79b950295710649f34fa1bedecd399fb240a307))
+* reconcile processed episode storage safely ([ad7d66f](https://github.com/lukefind/podly-unicorn/commit/ad7d66fa9978ee5d122b9b9798b80c36dcd67804))
+* schedule storage maintenance independently of age policy ([c359b5a](https://github.com/lukefind/podly-unicorn/commit/c359b5ab20956abcbc506d2c782fcd8c73f3049a))
+
 ## [1.2.2](https://github.com/lukefind/podly-unicorn/compare/v1.2.1...v1.2.2) (2026-07-23)
 
 
