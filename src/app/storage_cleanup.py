@@ -12,7 +12,7 @@ import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from sqlalchemy import or_
 
@@ -346,6 +346,95 @@ def _reconcile_missing_output_preserving_state(
         result.warnings.append(f"unsafe processed_audio_path for post {post.id}")
 
 
+def _run_isolated_post_operation(
+    post: Post,
+    result: StorageCleanupResult,
+    operation: Callable[[], None],
+    failure_label: str,
+) -> None:
+    """Roll back one post's failed evaluation without aborting the coordinator."""
+    post_id = post.id
+    counters_before = {
+        field_name: getattr(result, field_name)
+        for field_name in (
+            "requested_count",
+            "selected_count",
+            "cleaned_count",
+            "skipped_count",
+            "failed_count",
+            "active_skips",
+            "ambiguous_skips",
+            "unsafe_skips",
+            "grace_skips",
+        )
+    }
+    candidate_count = len(result.candidate_post_ids)
+    warning_count = len(result.warnings)
+    error_count = len(result.errors)
+    try:
+        operation()
+        session = db.session()
+        if session.new or session.dirty or session.deleted:
+            db.session.commit()
+    except Exception as exc:  # pylint: disable=broad-except
+        db.session.rollback()
+        for field_name, value in counters_before.items():
+            setattr(result, field_name, value)
+        result.failed_count += 1
+        del result.candidate_post_ids[candidate_count:]
+        del result.warnings[warning_count:]
+        del result.errors[error_count:]
+        result.errors.append(
+            f"{failure_label} failed for post {post_id}; retry required: {exc}"
+        )
+
+
+def _process_age_post(
+    post: Post,
+    age_cutoff: datetime,
+    srv_root: Path,
+    result: StorageCleanupResult,
+) -> None:
+    path, state = _contained_file(post.processed_audio_path, srv_root)
+    if state == "unsafe":
+        result.unsafe_skips += 1
+        result.skipped_count += 1
+        result.warnings.append(f"unsafe processed_audio_path for post {post.id}")
+        return
+    if state == "missing" and _record_active_skip(post, result):
+        return
+    timestamps = [
+        stamp
+        for stamp in (
+            _latest_successful_completion(post),
+            (
+                datetime.utcfromtimestamp(path.stat().st_mtime)
+                if path is not None and state == "file"
+                else None
+            ),
+        )
+        if stamp is not None
+    ]
+    if not timestamps:
+        result.skipped_count += 1
+        result.warnings.append(f"no trustworthy processed timestamp for post {post.id}")
+        if state == "missing":
+            _reconcile_missing_output_preserving_state(post, result)
+        return
+    if state == "missing" and max(timestamps) >= age_cutoff:
+        _reconcile_missing_output_preserving_state(post, result)
+        return
+    if state == "file" and max(timestamps) >= age_cutoff:
+        _reconcile_missing_input(post, result)
+        return
+    if path is None:
+        return
+    result.requested_count += 1
+    result.selected_count += 1
+    result.candidate_post_ids.append(post.id)
+    _cleanup_candidate_and_commit(post, result)
+
+
 def run_storage_cleanup(
     global_retention_days: Optional[int],
     *,
@@ -393,7 +482,12 @@ def run_storage_cleanup(
             }
             selected = [post for post in ranked if post.id in selected_ids]
             for post in valid_ranked[:count]:
-                _reconcile_missing_input(post, result)
+                _run_isolated_post_operation(
+                    post,
+                    result,
+                    lambda post=post: _reconcile_missing_input(post, result),
+                    "count reconciliation",
+                )
             result.requested_count += len(selected)
             result.selected_count += len(selected)
             result.candidate_post_ids.extend(post.id for post in selected)
@@ -401,7 +495,14 @@ def run_storage_cleanup(
             for post in ranked:
                 _, state = states[post.id]
                 if state == "missing" and post.id in provisional_retained:
-                    _reconcile_missing_output_preserving_state(post, result)
+                    _run_isolated_post_operation(
+                        post,
+                        result,
+                        lambda post=post: _reconcile_missing_output_preserving_state(
+                            post, result
+                        ),
+                        "count reconciliation",
+                    )
 
             for post in selected:
                 _cleanup_candidate_and_commit(post, result)
@@ -416,9 +517,21 @@ def run_storage_cleanup(
             for post in [item for item in feed.posts if item.processed_audio_path]:
                 path, state = _contained_file(post.processed_audio_path, srv_root)
                 if state == "missing":
-                    _reconcile_missing_output_preserving_state(post, result)
+                    _run_isolated_post_operation(
+                        post,
+                        result,
+                        lambda post=post: _reconcile_missing_output_preserving_state(
+                            post, result
+                        ),
+                        "disabled-policy reconciliation",
+                    )
                 elif state == "file" and path is not None:
-                    _reconcile_missing_input(post, result)
+                    _run_isolated_post_operation(
+                        post,
+                        result,
+                        lambda post=post: _reconcile_missing_input(post, result),
+                        "disabled-policy reconciliation",
+                    )
                 elif state == "unsafe":
                     result.unsafe_skips += 1
                     result.skipped_count += 1
@@ -434,48 +547,12 @@ def run_storage_cleanup(
             }
         )
         for post in [item for item in feed.posts if item.processed_audio_path]:
-            path, state = _contained_file(post.processed_audio_path, srv_root)
-            if state == "unsafe":
-                result.unsafe_skips += 1
-                result.skipped_count += 1
-                result.warnings.append(
-                    f"unsafe processed_audio_path for post {post.id}"
-                )
-                continue
-            if state == "missing" and _record_active_skip(post, result):
-                continue
-            timestamps = [
-                stamp
-                for stamp in (
-                    _latest_successful_completion(post),
-                    (
-                        datetime.utcfromtimestamp(path.stat().st_mtime)
-                        if path is not None and state == "file"
-                        else None
-                    ),
-                )
-                if stamp is not None
-            ]
-            if not timestamps:
-                result.skipped_count += 1
-                result.warnings.append(
-                    f"no trustworthy processed timestamp for post {post.id}"
-                )
-                if state == "missing":
-                    _reconcile_missing_output_preserving_state(post, result)
-                continue
-            if state == "missing" and max(timestamps) >= age_cutoff:
-                _reconcile_missing_output_preserving_state(post, result)
-                continue
-            if state == "file" and timestamps and max(timestamps) >= age_cutoff:
-                _reconcile_missing_input(post, result)
-                continue
-            if path is None:
-                continue
-            result.requested_count += 1
-            result.selected_count += 1
-            result.candidate_post_ids.append(post.id)
-            _cleanup_candidate_and_commit(post, result)
+            _run_isolated_post_operation(
+                post,
+                result,
+                lambda post=post: _process_age_post(post, age_cutoff, srv_root, result),
+                "age evaluation",
+            )
 
     session = db.session()
     if session.new or session.dirty or session.deleted:

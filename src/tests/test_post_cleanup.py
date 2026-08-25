@@ -1490,3 +1490,141 @@ def test_age_missing_output_with_active_work_records_one_skip(
         assert result.failed_count == 0
         assert result.skipped_count == 1
         assert result.active_skips == 1
+
+
+def test_age_evaluation_failure_does_not_abort_later_candidate_or_summary(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    _, srv_root = data_roots
+    with app.app_context():
+        feed = _create_feed("age-evaluation-failure")
+        old = datetime.utcnow() - timedelta(days=30)
+        first_output = _audio(srv_root / "age-evaluation-first.mp3")
+        second_output = _audio(srv_root / "age-evaluation-second.mp3")
+        os.utime(first_output, (old.timestamp(), old.timestamp()))
+        os.utime(second_output, (old.timestamp(), old.timestamp()))
+        first = _create_post(
+            feed,
+            "age-evaluation-first",
+            release_date=old,
+            processed_path=first_output,
+        )
+        second = _create_post(
+            feed,
+            "age-evaluation-second",
+            release_date=old,
+            processed_path=second_output,
+        )
+        first_id = first.id
+        second_id = second.id
+        db.session.commit()
+        original_latest = storage_cleanup_module._latest_successful_completion
+
+        def fail_first_evaluation(post: Post):
+            if post.id == first_id:
+                raise RuntimeError("synthetic age evaluation failure")
+            return original_latest(post)
+
+        monkeypatch.setattr(
+            storage_cleanup_module,
+            "_latest_successful_completion",
+            fail_first_evaluation,
+        )
+
+        with caplog.at_level(logging.INFO, logger="global_logger"):
+            result = run_storage_cleanup(5, trigger="age-evaluation-failure")
+
+        first_after = db.session.get(Post, first_id)
+        second_after = db.session.get(Post, second_id)
+        assert first_after is not None
+        assert second_after is not None
+        assert first_after.processed_audio_path == str(first_output)
+        assert first_output.exists()
+        assert second_after.processed_audio_path is None
+        assert not second_output.exists()
+        assert result.failed_count == 1
+        assert result.cleaned_count == 1
+        assert any(
+            "synthetic age evaluation failure" in error for error in result.errors
+        )
+        assert (
+            sum(
+                record.getMessage().startswith("storage_cleanup_summary ")
+                for record in caplog.records
+            )
+            == 1
+        )
+
+
+def test_count_reconciliation_failure_does_not_abort_later_feed_or_summary(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    in_root, srv_root = data_roots
+    with app.app_context():
+        first_feed = _create_feed("count-reconciliation-failure", retention_count=1)
+        now = datetime.utcnow()
+        missing_input = in_root / "count-reconciliation-missing-input.mp3"
+        first = _create_post(
+            first_feed,
+            "count-reconciliation-first",
+            release_date=now,
+            processed_path=_audio(srv_root / "count-reconciliation-first.mp3"),
+            input_path=missing_input,
+        )
+        later_feed = _create_feed("count-reconciliation-later", retention_count=1)
+        _create_post(
+            later_feed,
+            "count-reconciliation-retained",
+            release_date=now,
+            processed_path=_audio(srv_root / "count-reconciliation-retained.mp3"),
+        )
+        later_output = _audio(srv_root / "count-reconciliation-later.mp3")
+        later = _create_post(
+            later_feed,
+            "count-reconciliation-later",
+            release_date=now - timedelta(days=1),
+            processed_path=later_output,
+        )
+        first_id = first.id
+        later_id = later.id
+        db.session.commit()
+        original_active_skip = storage_cleanup_module._record_active_skip
+
+        def fail_first_query(post: Post, result: object) -> bool:
+            if post.id == first_id:
+                raise RuntimeError("synthetic count reconciliation query failure")
+            return original_active_skip(post, result)
+
+        monkeypatch.setattr(
+            storage_cleanup_module, "_record_active_skip", fail_first_query
+        )
+
+        with caplog.at_level(logging.INFO, logger="global_logger"):
+            result = run_storage_cleanup(None, trigger="count-reconciliation-failure")
+
+        first_after = db.session.get(Post, first_id)
+        later_after = db.session.get(Post, later_id)
+        assert first_after is not None
+        assert later_after is not None
+        assert first_after.unprocessed_audio_path == str(missing_input)
+        assert later_after.processed_audio_path is None
+        assert not later_output.exists()
+        assert result.failed_count == 1
+        assert result.cleaned_count == 1
+        assert any(
+            "synthetic count reconciliation query failure" in error
+            for error in result.errors
+        )
+        assert (
+            sum(
+                record.getMessage().startswith("storage_cleanup_summary ")
+                for record in caplog.records
+            )
+            == 1
+        )
