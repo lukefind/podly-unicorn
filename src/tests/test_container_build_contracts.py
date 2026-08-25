@@ -103,7 +103,8 @@ def test_release_documentation_matches_publication_and_deployment_contracts():
     assert workflow_image in runbook
     assert build["with"]["tags"] == "${{ env.IMAGE }}:sha-${{ github.sha }}"
     assert '--tag "${IMAGE}:latest"' in promotion["run"]
-    assert "r4s5t6u7v8w9" in agents
+    assert "s5t6u7v8w9x0" in agents
+    assert "s5t6u7v8w9x0" in runbook
 
     active_docs = "\n".join((readme, contributors, agents))
     for stale in (

@@ -215,6 +215,7 @@ The Podcasts page (`/podcasts`) displays subscribed feeds and their episodes.
 **Show Settings Dropdown:**
 Accessed via the "Settings" button. Opens a dropdown menu with:
 - **Auto-process** - Toggle for auto-processing new episodes (auth required)
+- **Storage cleanup** - Admin-only per-feed processed-episode retention policy
 - **Enable all episodes** - Whitelist all episodes in the feed
 - **Disable all episodes** - Remove all episodes from whitelist
 - **Refresh feed** - Fetch new episodes from upstream RSS
@@ -347,8 +348,28 @@ See `docs/TRIGGER_ARCHITECTURE.md` for full technical details.
 - **Process** (purple) - Start processing an enabled episode that hasn't been processed
 - **Reprocess** (orange) - Re-process an already-processed episode (clears existing data)
 
-### Auto-Cleanup
-Processed files are automatically deleted after 14 days (configurable in Settings → App Settings).
+### Storage Cleanup
+
+Administrators manage storage retention in two places:
+
+- **Settings → Storage & Cleanup** controls the global age policy. A positive
+  day count enables it; disabling it stores `NULL`.
+- **Podcasts → Show Settings → Storage cleanup** optionally keeps only the
+  newest `X` successfully processed episodes for that feed. A positive count
+  overrides the global policy; `NULL` means inherit the global age policy.
+
+Per-feed count retention orders episodes by podcast release date descending,
+with missing dates last and the post ID as a deterministic tie-breaker. Cleanup
+removes local input and processed audio plus processing-derived records, but
+preserves the post and feed metadata, source URL, subscriptions, whitelist
+state, and download/audit history so the episode remains visible and can be
+processed again.
+
+The daily storage-maintenance job always runs unless
+`PODLY_DISABLE_SCHEDULER=1`. Turning off global age cleanup does not turn off
+per-feed count policies or safe orphan maintenance. Abandoned job-attempt
+artifacts are eligible only after a 24-hour safety grace period; active or
+recent attempts are preserved.
 
 ---
 
@@ -519,12 +540,13 @@ docker restart <container-name>
 
 ### Current Migration Head
 
-**Revision:** `r4s5t6u7v8w9` (Add `feed.last_changed_at`)
+**Revision:** `s5t6u7v8w9x0` (Add per-feed processed-episode retention count)
 
 ### Migration History (recent)
 
 | Revision | Description |
 |----------|-------------|
+| `s5t6u7v8w9x0` | Add nullable `feed.processed_episode_retention_count` |
 | `r4s5t6u7v8w9` | Add `feed.last_changed_at` for RSS ETag and Last-Modified validators |
 | `q3r4s5t6u7v8` | Scope `post.guid` uniqueness per feed |
 | `r3s4t5u6v7w8` | Make `user_download.post_id` nullable for feed-level audit events |

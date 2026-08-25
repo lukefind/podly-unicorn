@@ -23,7 +23,7 @@ accepted into `main`.
 - Classify the release impact and use a Conventional Commit title.
 - If `src/app/models.py` changes, add the matching reversible migration under
   `src/migrations/versions/` in the same change. The current migration head is
-  `r4s5t6u7v8w9`; confirm that the new migration revises the actual head rather
+  `s5t6u7v8w9x0`; confirm that the new migration revises the actual head rather
   than trusting this sentence.
 - If Python dependencies change, update and commit both `Pipfile` and
   `Pipfile.lock`. If frontend dependencies change, update and commit
@@ -364,17 +364,39 @@ test "$(sha256sum "$ENV_FILE" | awk '{print $1}')" = "$ENV_FILE_CHECKSUM"
 curl --fail --show-error --silent http://127.0.0.1:5001/health
 docker inspect "$CONTAINER" \
   --format 'status={{.State.Status}} health={{.State.Health.Status}} image={{.Image}}'
+
+EXPECTED_MIGRATION_HEAD="s5t6u7v8w9x0"
+DEPLOYED_MIGRATION_HEAD="$(
+  docker exec "$CONTAINER" python3 -c '
+import sqlite3
+
+connection = sqlite3.connect("/app/src/instance/sqlite3.db")
+try:
+    row = connection.execute("SELECT version_num FROM alembic_version").fetchone()
+    print(row[0] if row else "")
+finally:
+    connection.close()
+'
+)"
+test "$DEPLOYED_MIGRATION_HEAD" = "$EXPECTED_MIGRATION_HEAD"
 ```
 
 Application startup applies **automatic migrations** before serving requests
 and refuses partial startup if migration fails. Check the logs for migration or
 startup errors; do not treat a merely running container as a successful
-deployment.
+deployment. The read-only SQLite check above avoids creating another Flask app
+inside the running container and proves that the production database reached
+`s5t6u7v8w9x0`, which adds the nullable
+`feed.processed_episode_retention_count` column. Existing feeds receive
+`NULL` and therefore continue to inherit the global policy.
 
 Finally, use the real authenticated UI to refresh one subscribed feed, process
 or reprocess a representative episode, and play or download the resulting
 audio. Confirm the episode reaches Ready and the audio is the expected
-ad-processed result.
+ad-processed result. As an administrator, also confirm that **Settings →
+Storage & Cleanup** shows the global age control and **Podcasts → Show Settings
+→ Storage cleanup** shows the feed override. Do not change a production cleanup
+policy merely to verify that the controls render.
 
 ## Rollback
 

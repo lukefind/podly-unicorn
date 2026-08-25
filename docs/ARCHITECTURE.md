@@ -53,7 +53,7 @@ podly_pure_podcasts/
 
 | Table | Purpose |
 |-------|---------|
-| `feed` | Podcast RSS feed subscriptions |
+| `feed` | Podcast RSS feeds, including nullable per-feed processed-episode retention count |
 | `post` | Individual podcast episodes |
 | `transcript_segment` | Whisper transcription segments |
 | `identification` | LLM ad/content classifications |
@@ -189,6 +189,43 @@ Episodes are **NOT** processed automatically when enabled. Processing occurs:
 
 This saves compute resources and API costs.
 
+## Storage Maintenance
+
+Storage maintenance resolves one episode-retention policy per feed:
+
+1. A positive `feed.processed_episode_retention_count` keeps the newest that
+   many processed episodes for the feed.
+2. A `NULL` feed count inherits the positive global
+   `app_settings.post_cleanup_retention_days` age policy.
+3. If both values are `NULL`, episode-retention cleanup is disabled for that
+   feed, while safe orphan-attempt maintenance remains active.
+
+Count retention ranks episodes by `Post.release_date DESC`, puts missing dates
+last, and uses `Post.id DESC` as the deterministic tie-breaker. Per-feed policy
+selection and deletion use feed and post IDs because GUIDs are not globally
+unique. Pending or running processing work is excluded and rechecked before
+any cleanup.
+
+Episode cleanup removes referenced input and processed audio, attempt-specific
+job files, and processing-derived rows. It retains the `Post` row, RSS
+metadata, release date, source download URL, whitelist state, feed and
+subscription records, and download/audit history. The episode therefore stays
+visible and can be explicitly processed again. Filesystem failures keep
+retryable database state, and later maintenance reconciles missing artifacts.
+
+The orphan sweep is separate from episode retention. It walks only the
+configured `data/in/jobs` root and preserves active attempts, unsafe paths, and
+attempts with files newer than the 24-hour grace period. Safe stale terminal or
+unreferenced attempts can then be removed.
+
+APScheduler owns distinct recurring and immediate jobs. Daily storage
+maintenance remains scheduled even when global age cleanup is disabled and
+reads the current policies when it runs. Feed-policy saves queue feed-scoped
+maintenance, global-policy saves and **Run cleanup now** queue server-wide
+maintenance, and overlapping requests are coalesced. Setting
+`PODLY_DISABLE_SCHEDULER=1` disables both scheduled and immediate dispatch, so
+maintenance must be run by an external process.
+
 ## API Routes
 
 ### Feeds & Episodes
@@ -205,6 +242,7 @@ This saves compute resources and API costs.
 - `POST /api/feeds/<id>/unsubscribe` - Unsubscribe from feed
 - `POST /api/feeds/<id>/auto-download` - Toggle auto-process
 - `POST /api/feeds/<id>/default-preset` - Set per-feed preset
+- `POST /api/feeds/<id>/cleanup-policy` - Set or clear per-feed storage retention (admin)
 - `POST /api/feeds/<id>/visibility` - Toggle feed hidden/visible
 - `POST /api/feeds/<id>/share-link` - Generate tokenized RSS link
 - `POST /api/feeds/combined/share-link` - Generate combined feed link
@@ -237,6 +275,7 @@ This saves compute resources and API costs.
 - `GET /api/config/llm-options` - Provider catalog, models, saved key profiles
 - `POST /api/config/llm-key-profiles` - Save encrypted API key profile
 - `DELETE /api/config/llm-key-profiles/<id>` - Delete key profile
+- `POST /api/admin/storage-cleanup/run` - Queue server-wide storage maintenance
 
 ### Auth & User Management
 - `GET /api/auth/status` - Auth system status
@@ -366,7 +405,8 @@ See `.env.local.example` for all options. Key variables:
 | `WHISPER_TYPE` | `local`, `remote`, or `groq` |
 | `WHISPER_API_KEY` | API key for Whisper (can be same as GROQ_API_KEY) |
 | `GROQ_API_KEY` | Required if using Groq for Whisper |
+| `PODLY_DISABLE_SCHEDULER` | Set to `1` to disable scheduled and immediate maintenance dispatch |
 
 ---
 
-*Last updated: March 2026*
+*Last updated: August 2026*

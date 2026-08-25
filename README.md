@@ -53,6 +53,12 @@ This is a fork of [Podly Pure Podcasts](https://github.com/jdrbc/podly_pure_podc
 - Reprocess episodes after changing prompts or settings
 - Recent episodes auto-enable when you add a show, and new releases auto-enable as they arrive
 
+### Storage Management
+- Global age retention in **Settings → Storage & Cleanup**
+- Optional per-show processed-episode limits in **Podcasts → Show Settings → Storage cleanup**
+- Daily cleanup preserves podcast metadata and keeps cleaned episodes available for reprocessing
+- Independent maintenance of abandoned job files after a 24-hour safety grace period
+
 ### Ad Detection and AI Configuration
 - Built-in Conservative, Balanced, and Aggressive presets
 - Custom presets and per-show default preset overrides
@@ -224,6 +230,28 @@ LLM_MODEL=xai/grok-3
 | **Groq** | `WHISPER_TYPE=groq` | Fast, recommended default |
 | **Local** | `WHISPER_TYPE=local` | Runs on your own machine, no transcription API cost |
 | **Remote** | `WHISPER_TYPE=remote` | Use an OpenAI-compatible remote Whisper endpoint |
+
+### Storage & Cleanup
+
+Administrators can enable the global age policy in **Settings → Storage &
+Cleanup** and choose how many days to keep processed episode files. Turning the
+toggle off stores a disabled global policy; it does not stop daily storage
+maintenance.
+
+For a show-specific limit, open **Podcasts → Show Settings → Storage cleanup**
+and choose **Keep newest processed episodes**. A positive count overrides the
+global age policy for that feed. Choosing **Inherit global policy** clears the
+override (`NULL` in the database). The retained set is ordered by podcast
+release date, newest first; missing or equal dates use a deterministic episode
+order.
+
+When an episode is outside its retention policy, Podly removes its local input
+and processed audio and processing-derived data. It keeps feed and episode
+metadata, source URLs, subscriptions, whitelist state, and audit history, so
+the episode stays visible and can be processed again. A separate orphan sweep
+removes safe abandoned job attempts only after a 24-hour grace period. Daily
+maintenance continues to enforce per-feed limits and orphan cleanup even when
+the global age policy is off.
 
 ---
 
