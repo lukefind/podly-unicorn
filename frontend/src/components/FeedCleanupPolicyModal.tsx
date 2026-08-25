@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import type { RefObject } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 
@@ -20,6 +21,7 @@ import type { Feed } from '../types';
 
 interface FeedCleanupPolicyModalProps {
   feed: Feed;
+  returnFocusRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
 }
 
@@ -41,6 +43,7 @@ function requestErrorMessage(error: unknown): string {
 
 export default function FeedCleanupPolicyModal({
   feed,
+  returnFocusRef,
   onClose,
 }: FeedCleanupPolicyModalProps) {
   const { theme } = useTheme();
@@ -109,9 +112,10 @@ export default function FeedCleanupPolicyModal({
 
   useEffect(() => {
     const previousFocus =
-      document.activeElement instanceof HTMLElement
+      returnFocusRef?.current ??
+      (document.activeElement instanceof HTMLElement
         ? document.activeElement
-        : null;
+        : null);
     const dialog = dialogRef.current;
     closeButtonRef.current?.focus();
 
@@ -145,7 +149,7 @@ export default function FeedCleanupPolicyModal({
       dialog?.removeEventListener('keydown', trapFocus);
       previousFocus?.focus();
     };
-  }, []);
+  }, [returnFocusRef]);
 
   const submitPolicy = () => {
     if (countError || saveMutation.isPending) {

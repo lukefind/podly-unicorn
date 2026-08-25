@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
@@ -26,6 +26,7 @@ export default function FeedDetailView() {
   const [showCleanupPolicyModal, setShowCleanupPolicyModal] = useState(false);
   const [processingPollTriggers, setProcessingPollTriggers] = useState<Record<string, number>>({});
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | null>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const { requireAuth, isAuthenticated, user } = useAuth();
   const { theme } = useTheme();
   const isOriginal = theme === 'original';
@@ -243,6 +244,7 @@ export default function FeedDetailView() {
               {/* Settings Menu */}
               <div className="relative settings-menu-container">
                 <button
+                  ref={settingsButtonRef}
                   onClick={(e) => { e.stopPropagation(); setShowSettingsMenu(!showSettingsMenu); }}
                   className="px-3 py-2 text-sm font-medium rounded-xl transition-colors"
                   style={{
@@ -309,8 +311,12 @@ export default function FeedDetailView() {
                           setShowSettingsMenu(false);
                           try {
                             await queryClient.refetchQueries({ queryKey: ['feeds'] });
-                          } finally {
                             setShowCleanupPolicyModal(true);
+                          } catch {
+                            toast.error(
+                              'Could not load the latest storage cleanup policy. Please try again.',
+                            );
+                            settingsButtonRef.current?.focus();
                           }
                         }}
                         className="w-full px-4 py-2 text-left text-sm flex items-center gap-3 hover:opacity-80"
@@ -615,6 +621,7 @@ export default function FeedDetailView() {
         <FeedCleanupPolicyModal
           key={selectedFeed.id}
           feed={selectedFeed}
+          returnFocusRef={settingsButtonRef}
           onClose={() => setShowCleanupPolicyModal(false)}
         />
       )}
