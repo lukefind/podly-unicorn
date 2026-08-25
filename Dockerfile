@@ -1,5 +1,5 @@
 # Multi-stage build for combined frontend and backend
-ARG BASE_IMAGE=cgr.dev/chainguard/python:latest-dev@sha256:967409cf4148210d7c1bb872ffdda42a8b73cfc738f95eae7413045d0d6c30ee
+ARG BASE_IMAGE=cgr.dev/chainguard/python:latest-dev@sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14
 FROM node:24-alpine AS frontend-build
 
 WORKDIR /app

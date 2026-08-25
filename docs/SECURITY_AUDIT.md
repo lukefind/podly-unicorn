@@ -503,7 +503,7 @@ soon as fixed wheels are released across all supported indices.
 
 The canonical container now uses the public multi-architecture Chainguard
 Python development image pinned to index digest
-`sha256:967409cf4148210d7c1bb872ffdda42a8b73cfc738f95eae7413045d0d6c30ee`.
+`sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14`.
 The digest provides Linux AMD64 and ARM64 manifests and can be pulled
 anonymously. Pinning the index makes the default build reproducible across both
 published base filesystems and architectures. APK packages come from

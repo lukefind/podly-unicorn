@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        - BASE_IMAGE=${BASE_IMAGE:-cgr.dev/chainguard/python:latest-dev@sha256:967409cf4148210d7c1bb872ffdda42a8b73cfc738f95eae7413045d0d6c30ee}
+        - BASE_IMAGE=${BASE_IMAGE:-cgr.dev/chainguard/python:latest-dev@sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14}
         - CUDA_VERSION=${CUDA_VERSION:-12.6}
         - ROCM_VERSION=${ROCM_VERSION:-7.0}
         - USE_GPU=${USE_GPU:-false}
