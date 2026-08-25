@@ -1965,3 +1965,159 @@ def test_parent_swap_before_unlink_cannot_delete_outside_file(
         assert result.cleaned_count == 0
         assert result.failed_count == 1
         assert result.unsafe_skips == 1
+
+
+def test_age_eligibility_is_revalidated_after_fresh_output_appears(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    in_root, srv_root = data_roots
+    with app.app_context(), caplog.at_level(logging.INFO, logger="global_logger"):
+        feed = _create_feed("fresh-age-revalidation")
+        now = datetime.utcnow()
+        old = now - timedelta(days=30)
+        input_path = _audio(in_root / "fresh-age-revalidation-input.mp3")
+        output_path = _audio(srv_root / "fresh-age-revalidation-output.mp3", b"old")
+        os.utime(output_path, (old.timestamp(), old.timestamp()))
+        target = _create_post(
+            feed,
+            "fresh-age-revalidation",
+            release_date=old,
+            processed_path=output_path,
+            input_path=input_path,
+        )
+        model_call = ModelCall(
+            post_id=target.id,
+            first_segment_sequence_num=0,
+            last_segment_sequence_num=0,
+            model_name="test",
+            prompt="prompt",
+            status="completed",
+        )
+        _completed_job(target, old)
+        db.session.add(model_call)
+        db.session.flush()
+        target_id = target.id
+        model_call_id = model_call.id
+        db.session.commit()
+        original_cleanup = storage_cleanup_module._cleanup_candidate_and_commit
+        refreshed = False
+
+        def refresh_before_cleanup(
+            post: Post, result: object, global_retention_days: int | None
+        ) -> None:
+            nonlocal refreshed
+            if post.id == target_id and not refreshed:
+                refreshed = True
+                output_path.write_bytes(b"fresh")
+                os.utime(output_path, (now.timestamp(), now.timestamp()))
+                _completed_job(post, now)
+                db.session.commit()
+            original_cleanup(post, result, global_retention_days)
+
+        monkeypatch.setattr(
+            storage_cleanup_module,
+            "_cleanup_candidate_and_commit",
+            refresh_before_cleanup,
+        )
+
+        result = run_storage_cleanup(5, trigger="fresh-age-revalidation")
+
+        after = db.session.get(Post, target_id)
+        summaries = [
+            record
+            for record in caplog.records
+            if record.getMessage().startswith("storage_cleanup_summary ")
+        ]
+        assert refreshed is True
+        assert after is not None
+        assert after.processed_audio_path == str(output_path)
+        assert after.unprocessed_audio_path == str(input_path)
+        assert output_path.read_bytes() == b"fresh"
+        assert input_path.exists()
+        assert db.session.get(ModelCall, model_call_id) is not None
+        assert result.cleaned_count == 0
+        assert result.skipped_count == 1
+        assert len(summaries) == 1
+
+
+def test_count_revalidation_preserves_missing_provisionally_retained_post(
+    app,
+    data_roots: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    in_root, srv_root = data_roots
+    with app.app_context(), caplog.at_level(logging.INFO, logger="global_logger"):
+        feed = _create_feed("count-revalidation", retention_count=1)
+        now = datetime.utcnow()
+        _create_post(
+            feed,
+            "count-revalidation-newest",
+            release_date=now,
+            processed_path=_audio(srv_root / "count-revalidation-newest.mp3"),
+        )
+        input_path = _audio(in_root / "count-revalidation-input.mp3")
+        output_path = _audio(srv_root / "count-revalidation-target.mp3")
+        target = _create_post(
+            feed,
+            "count-revalidation-target",
+            release_date=now - timedelta(days=1),
+            processed_path=output_path,
+            input_path=input_path,
+        )
+        model_call = ModelCall(
+            post_id=target.id,
+            first_segment_sequence_num=0,
+            last_segment_sequence_num=0,
+            model_name="test",
+            prompt="prompt",
+            status="completed",
+        )
+        db.session.add(model_call)
+        db.session.flush()
+        target_id = target.id
+        feed_id = feed.id
+        model_call_id = model_call.id
+        db.session.commit()
+        original_cleanup = storage_cleanup_module._cleanup_candidate_and_commit
+        policy_changed = False
+
+        def increase_count_before_cleanup(
+            post: Post, result: object, global_retention_days: int | None
+        ) -> None:
+            nonlocal policy_changed
+            if post.id == target_id and not policy_changed:
+                policy_changed = True
+                db.session.query(Feed).filter(Feed.id == feed_id).update(
+                    {Feed.processed_episode_retention_count: 2}
+                )
+                output_path.unlink()
+                db.session.commit()
+            original_cleanup(post, result, global_retention_days)
+
+        monkeypatch.setattr(
+            storage_cleanup_module,
+            "_cleanup_candidate_and_commit",
+            increase_count_before_cleanup,
+        )
+
+        result = run_storage_cleanup(None, trigger="count-revalidation")
+
+        after = db.session.get(Post, target_id)
+        summaries = [
+            record
+            for record in caplog.records
+            if record.getMessage().startswith("storage_cleanup_summary ")
+        ]
+        assert policy_changed is True
+        assert after is not None
+        assert after.processed_audio_path is None
+        assert after.unprocessed_audio_path == str(input_path)
+        assert input_path.exists()
+        assert db.session.get(ModelCall, model_call_id) is not None
+        assert result.cleaned_count == 0
+        assert result.skipped_count == 1
+        assert len(summaries) == 1

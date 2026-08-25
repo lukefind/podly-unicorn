@@ -354,26 +354,23 @@ def _current_policy_allows_cleanup(
             key=_release_sort_key,
             reverse=True,
         )
-        valid_ranked = [
-            item
+        states = {
+            item.id: _contained_file(item.processed_audio_path, get_srv_root())
             for item in ranked
-            if _contained_file(item.processed_audio_path, get_srv_root())[1] == "file"
-        ]
+        }
+        provisional_retained_ids = {item.id for item in ranked[:current_count]}
+        if post.id in provisional_retained_ids and states[post.id][1] == "missing":
+            post.processed_audio_path = None
+            result.warnings.append(
+                f"missing processed output reconciled for post {post.id}"
+            )
+            return False
+        valid_ranked = [item for item in ranked if states[item.id][1] == "file"]
         retained_ids = {item.id for item in valid_ranked[:current_count]}
         return post.id not in retained_ids
     if current_count is not None:
         return False
 
-    original_policy = next(
-        (
-            policy.get("policy")
-            for policy in result.evaluated_policies
-            if policy.get("feed_id") == post.feed_id
-        ),
-        None,
-    )
-    if original_policy == "age":
-        return True
     cutoff = _global_age_cutoff(global_retention_days)
     if cutoff is None:
         return False
