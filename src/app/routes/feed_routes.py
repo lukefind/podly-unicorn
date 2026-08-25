@@ -45,6 +45,7 @@ from app.models import (
     UserDownload,
 )
 from app.runtime_config import config as runtime_config
+from app.storage_cleanup import is_valid_retention_count
 from podcast_processor.podcast_downloader import sanitize_title
 from shared.processing_paths import get_in_root, get_srv_root
 
@@ -121,12 +122,21 @@ def _effective_cleanup_policy(
     feed: Feed, global_retention_days: int | None = None
 ) -> dict[str, object]:
     count = feed.processed_episode_retention_count
-    if _positive_int(count):
+    if is_valid_retention_count(count):
         return {
             "type": "count",
             "source": "feed",
             "retention_count": count,
             "inherited": False,
+            "orphan_maintenance_active": True,
+        }
+    if count is not None:
+        return {
+            "type": "disabled",
+            "source": "feed",
+            "retention_count": count,
+            "inherited": False,
+            "invalid_configured_value": True,
             "orphan_maintenance_active": True,
         }
 

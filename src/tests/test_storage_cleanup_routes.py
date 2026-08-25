@@ -16,6 +16,7 @@ from app.models import AppSettings, Feed, User, UserFeedSubscription
 from app.routes import config_routes, feed_routes
 from app.routes.config_routes import config_bp
 from app.routes.feed_routes import feed_bp
+from app.storage_cleanup import MAX_RETENTION_COUNT
 
 
 @pytest.fixture
@@ -294,6 +295,31 @@ def test_feeds_response_serializes_configured_and_effective_cleanup_policy(
         "source": "feed",
         "retention_count": 4,
         "inherited": False,
+        "orphan_maintenance_active": True,
+    }
+
+
+@pytest.mark.parametrize("stored_value", [0, -1, MAX_RETENTION_COUNT + 1])
+def test_feeds_response_reports_invalid_non_null_count_as_disabled_feed_policy(
+    storage_routes_app: Flask, stored_value: int
+) -> None:
+    with storage_routes_app.app_context():
+        feed = db.session.get(Feed, _feed_id(storage_routes_app))
+        assert feed is not None
+        feed.processed_episode_retention_count = stored_value
+        db.session.commit()
+    client = storage_routes_app.test_client()
+    _login(storage_routes_app, client, "listener")
+
+    response = client.get("/feeds")
+
+    assert response.status_code == 200
+    assert response.get_json()[0]["effective_cleanup_policy"] == {
+        "type": "disabled",
+        "source": "feed",
+        "retention_count": stored_value,
+        "inherited": False,
+        "invalid_configured_value": True,
         "orphan_maintenance_active": True,
     }
 
