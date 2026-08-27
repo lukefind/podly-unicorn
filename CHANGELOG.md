@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/lukefind/podly-unicorn/compare/v1.3.1...v1.3.2) (2026-08-27)
+
+
+### Bug Fixes
+
+* restore tokenized downloads for URL GUIDs ([f6d90ad](https://github.com/lukefind/podly-unicorn/commit/f6d90ad35a0c70d230a3721a422a908b2095af80))
+
 ## [1.3.1](https://github.com/lukefind/podly-unicorn/compare/v1.3.0...v1.3.1) (2026-08-25)
 
 
