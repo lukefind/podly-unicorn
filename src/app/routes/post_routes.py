@@ -14,13 +14,32 @@ from flask.typing import ResponseReturnValue
 
 from app.extensions import db
 from app.jobs_manager import get_jobs_manager
-from app.models import Feed, Identification, ModelCall, Post, ProcessingJob, TranscriptSegment, UserDownload, UserFeedSubscription
+from app.models import (
+    Feed,
+    Identification,
+    ModelCall,
+    Post,
+    ProcessingJob,
+    TranscriptSegment,
+    UserDownload,
+    UserFeedSubscription,
+)
 from app.posts import clear_post_processing_data
 
 logger = logging.getLogger("global_logger")
 
 
 post_bp = Blueprint("post", __name__)
+
+
+def _find_post_for_audio_request(guid: str) -> Optional[Post]:
+    """Resolve duplicate GUIDs using the feed selected during token auth."""
+    query = Post.query.filter_by(guid=guid)
+    feed_token = getattr(g, "feed_token", None)
+    resolved_feed_id = getattr(feed_token, "resolved_feed_id", None)
+    if resolved_feed_id is not None:
+        query = query.filter_by(feed_id=resolved_feed_id)
+    return query.first()
 
 
 def _increment_download_count(post: Post) -> None:
@@ -48,18 +67,20 @@ def _track_user_download(post: Post, is_processed: bool = True) -> None:
             return  # No user to track
         feed_token = getattr(g, "feed_token", None)
         download_source = "rss" if feed_token is not None else "web"
-        
+
         # Determine auth_type
         auth_type = "session"
         if feed_token is not None:
             auth_type = "combined" if feed_token.feed_id is None else "feed_scoped"
-        
+
         # Get file size if available
         file_size = None
-        audio_path = post.processed_audio_path if is_processed else post.unprocessed_audio_path
+        audio_path = (
+            post.processed_audio_path if is_processed else post.unprocessed_audio_path
+        )
         if audio_path and Path(audio_path).exists():
             file_size = Path(audio_path).stat().st_size
-        
+
         download = UserDownload(
             user_id=current_user.id,
             post_id=post.id,
@@ -91,7 +112,7 @@ def _record_user_event(
     download_source: str = "web",
 ) -> None:
     """Record a user activity event for audit trail.
-    
+
     Event types:
     - AUDIO_DOWNLOAD: Actual media file served
     - TRIGGER_OPEN: User opened /trigger page
@@ -129,10 +150,12 @@ def api_feed_posts(feed_id: int) -> flask.Response:
 
     # Verify feed exists
     feed = Feed.query.get_or_404(feed_id)
-    
+
     # Use optimized direct query with only needed columns
-    posts_query = Post.query.filter_by(feed_id=feed_id).order_by(Post.release_date.desc())
-    
+    posts_query = Post.query.filter_by(feed_id=feed_id).order_by(
+        Post.release_date.desc()
+    )
+
     posts = [
         {
             "id": post.id,
@@ -466,6 +489,7 @@ def api_post_stats(p_guid: str) -> flask.Response:
     preset_info = None
     if post.processed_with_preset_id:
         from app.models import PromptPreset
+
         preset = PromptPreset.query.get(post.processed_with_preset_id)
         if preset:
             preset_info = {
@@ -477,6 +501,7 @@ def api_post_stats(p_guid: str) -> flask.Response:
 
     # Get the most recent completed processing job for this post
     from app.models import ProcessingJob, User
+
     last_job = (
         ProcessingJob.query.filter_by(post_guid=post.guid, status="completed")
         .order_by(ProcessingJob.completed_at.desc())
@@ -484,14 +509,24 @@ def api_post_stats(p_guid: str) -> flask.Response:
     )
     job_info = None
     if last_job:
-        triggered_by_user = User.query.get(last_job.triggered_by_user_id) if last_job.triggered_by_user_id else None
+        triggered_by_user = (
+            User.query.get(last_job.triggered_by_user_id)
+            if last_job.triggered_by_user_id
+            else None
+        )
         job_info = {
             "job_id": last_job.id,
             "trigger_source": last_job.trigger_source,
             "triggered_by_user_id": last_job.triggered_by_user_id,
-            "triggered_by_username": triggered_by_user.username if triggered_by_user else None,
-            "started_at": last_job.started_at.isoformat() if last_job.started_at else None,
-            "completed_at": last_job.completed_at.isoformat() if last_job.completed_at else None,
+            "triggered_by_username": (
+                triggered_by_user.username if triggered_by_user else None
+            ),
+            "started_at": (
+                last_job.started_at.isoformat() if last_job.started_at else None
+            ),
+            "completed_at": (
+                last_job.completed_at.isoformat() if last_job.completed_at else None
+            ),
         }
 
     stats_data = {
@@ -630,10 +665,12 @@ def api_process_post(p_guid: str) -> ResponseReturnValue:
         # Get current user ID if authenticated
         current_user = getattr(g, "current_user", None)
         user_id = current_user.id if current_user else None
-        
+
         result = get_jobs_manager().start_post_processing(
-            p_guid, priority="interactive", triggered_by_user_id=user_id,
-            trigger_source="manual_ui"
+            p_guid,
+            priority="interactive",
+            triggered_by_user_id=user_id,
+            trigger_source="manual_ui",
         )
         status_code = 200 if result.get("status") in ("started", "completed") else 400
         return flask.jsonify(result), status_code
@@ -683,12 +720,14 @@ def api_reprocess_post(p_guid: str) -> ResponseReturnValue:
         # Get current user ID if authenticated
         current_user = getattr(g, "current_user", None)
         user_id = current_user.id if current_user else None
-        
+
         get_jobs_manager().cancel_post_jobs(p_guid)
         clear_post_processing_data(post)
         result = get_jobs_manager().start_post_processing(
-            p_guid, priority="interactive", triggered_by_user_id=user_id,
-            trigger_source="manual_reprocess"
+            p_guid,
+            priority="interactive",
+            triggered_by_user_id=user_id,
+            trigger_source="manual_reprocess",
         )
         status_code = 200 if result.get("status") in ("started", "completed") else 400
         if result.get("status") == "started":
@@ -725,7 +764,7 @@ def api_get_post_audio(p_guid: str) -> ResponseReturnValue:
     """API endpoint to serve processed audio files with proper CORS headers."""
     logger.info(f"API request for audio file with GUID: {p_guid}")
 
-    post = Post.query.filter_by(guid=p_guid).first()
+    post = _find_post_for_audio_request(p_guid)
     if post is None:
         logger.warning(f"Post with GUID: {p_guid} not found")
         return flask.make_response(
@@ -780,12 +819,12 @@ _PROBE_MAX_BYTES = 1048576  # 1 MB
 
 def _is_probe_request(range_header: str | None) -> bool:
     """Determine if a Range request is a probe (small prefetch) vs real download.
-    
+
     Probes are:
     - bytes=0-0
     - bytes=0-1023
     - bytes=0-<end> where end < _PROBE_MAX_BYTES (1MB)
-    
+
     Real downloads are:
     - No Range header
     - bytes=<start>-<end> where start > 0
@@ -794,41 +833,41 @@ def _is_probe_request(range_header: str | None) -> bool:
     """
     if not range_header:
         return False  # No Range = real download attempt
-    
+
     # Parse Range header: "bytes=0-1023" or "bytes=0-" or "bytes=1024-2047"
     if not range_header.startswith("bytes="):
         return False
-    
+
     range_spec = range_header[6:]  # Remove "bytes="
-    
+
     # Handle multiple ranges (rare, treat as real download)
     if "," in range_spec:
         return False
-    
+
     parts = range_spec.split("-")
     if len(parts) != 2:
         return False
-    
+
     start_str, end_str = parts
-    
+
     try:
         start = int(start_str) if start_str else 0
     except ValueError:
         return False
-    
+
     # If start > 0, this is seeking into the file = real download
     if start > 0:
         return False
-    
+
     # If end is empty (open-ended range like "bytes=0-"), it's a real download
     if not end_str:
         return False
-    
+
     try:
         end = int(end_str)
     except ValueError:
         return False
-    
+
     # If end < _PROBE_MAX_BYTES, it's a probe
     return end < _PROBE_MAX_BYTES
 
@@ -836,9 +875,9 @@ def _is_probe_request(range_header: str | None) -> bool:
 @post_bp.route("/api/posts/<path:p_guid>/download", methods=["GET", "HEAD"])
 def api_download_post(p_guid: str) -> flask.Response:
     """API endpoint to download processed audio files.
-    
+
     On-demand processing flow for podcast apps (Overcast, Pocket Casts, Apple Podcasts):
-    
+
     1. HEAD requests: Never trigger processing, return 204 No Content
     2. Small Range requests (bytes=0-<1MB>): Probe, never trigger, return 204
     3. GET requests for unprocessed episodes:
@@ -846,7 +885,7 @@ def api_download_post(p_guid: str) -> flask.Response:
        - If within cooldown window: Return 503 with Retry-After (no new job)
        - Otherwise: Start job, return 503 with Retry-After
     4. GET requests for processed episodes: Return audio file
-    
+
     Key design decisions:
     - HEAD = probe, never triggers (return 204)
     - Small Range (bytes=0-<1MB>) = probe, never triggers (return 204)
@@ -856,19 +895,31 @@ def api_download_post(p_guid: str) -> flask.Response:
     - Authorization via feed token in URL (podcast apps don't send cookies)
     """
     # DEBUG: Force print to stderr to verify route is hit (bypasses logging config)
-    range_hdr = flask.request.headers.get('Range')
-    ua_hdr = flask.request.headers.get('User-Agent', '')
-    print(f"[DOWNLOAD_HIT] guid={p_guid} method={flask.request.method} range={range_hdr} ua={ua_hdr[:50]}", file=sys.stderr, flush=True)
-    
-    post = Post.query.filter_by(guid=p_guid).first()
+    range_hdr = flask.request.headers.get("Range")
+    ua_hdr = flask.request.headers.get("User-Agent", "")
+    print(
+        f"[DOWNLOAD_HIT] guid={p_guid} method={flask.request.method} range={range_hdr} ua={ua_hdr[:50]}",
+        file=sys.stderr,
+        flush=True,
+    )
+
+    post = _find_post_for_audio_request(p_guid)
     if post is None:
         logger.warning(f"Download request for non-existent post: {p_guid}")
-        print(f"[DOWNLOAD_RETURN] guid={p_guid} status=404 reason=post_not_found", file=sys.stderr, flush=True)
+        print(
+            f"[DOWNLOAD_RETURN] guid={p_guid} status=404 reason=post_not_found",
+            file=sys.stderr,
+            flush=True,
+        )
         return flask.make_response(("Post not found", 404))
 
     if not post.whitelisted:
         logger.warning(f"Download request for non-whitelisted post: {post.title}")
-        print(f"[DOWNLOAD_RETURN] guid={p_guid} status=403 reason=not_whitelisted", file=sys.stderr, flush=True)
+        print(
+            f"[DOWNLOAD_RETURN] guid={p_guid} status=403 reason=not_whitelisted",
+            file=sys.stderr,
+            flush=True,
+        )
         return flask.make_response(("Post not whitelisted", 403))
 
     # Gather request metadata for logging and decisions
@@ -877,11 +928,15 @@ def api_download_post(p_guid: str) -> flask.Response:
     range_header = flask.request.headers.get("Range")
     user_agent = flask.request.headers.get("User-Agent", "")
     request_method = flask.request.method
-    
+
     # Detect if this is a probe request
     is_probe = request_method == "HEAD" or _is_probe_request(range_header)
-    print(f"[DOWNLOAD_CLASSIFY] guid={post.guid} is_probe={is_probe} method={request_method} range={range_header}", file=sys.stderr, flush=True)
-    
+    print(
+        f"[DOWNLOAD_CLASSIFY] guid={post.guid} is_probe={is_probe} method={request_method} range={range_header}",
+        file=sys.stderr,
+        flush=True,
+    )
+
     # --- DETERMINE AUTH TYPE ---
     # Auth types:
     # - "session": User logged in via web session (can trigger processing if subscribed)
@@ -891,7 +946,7 @@ def api_download_post(p_guid: str) -> flask.Response:
     auth_type = "none"
     is_authorized_to_read = False
     can_trigger_processing = False
-    
+
     if feed_token is not None:
         # Authenticated via feed token
         if feed_token.feed_id is None:
@@ -919,50 +974,76 @@ def api_download_post(p_guid: str) -> flask.Response:
             auth_type = "session"
             is_authorized_to_read = True
             can_trigger_processing = True
-    
+
     # Log auth classification
     token_feed_id = feed_token.feed_id if feed_token else None
     user_id_for_log = current_user.id if current_user else None
-    print(f"[DOWNLOAD_AUTH] guid={post.guid} auth={auth_type} token_feed_id={token_feed_id} post_feed_id={post.feed_id} user_id={user_id_for_log} can_trigger={can_trigger_processing}", file=sys.stderr, flush=True)
-    
+    print(
+        f"[DOWNLOAD_AUTH] guid={post.guid} auth={auth_type} token_feed_id={token_feed_id} post_feed_id={post.feed_id} user_id={user_id_for_log} can_trigger={can_trigger_processing}",
+        file=sys.stderr,
+        flush=True,
+    )
+
     # Check if episode is already processed and available
-    is_processed = post.processed_audio_path and Path(post.processed_audio_path).exists()
-    
+    is_processed = (
+        post.processed_audio_path and Path(post.processed_audio_path).exists()
+    )
+
     # DEBUG: Log the processed state
-    print(f"[POST_STATE] guid={post.guid[:16]} processed_audio_path={post.processed_audio_path or 'None'} is_processed={is_processed} auth={auth_type} can_trigger={can_trigger_processing}", file=sys.stderr, flush=True)
-    
+    print(
+        f"[POST_STATE] guid={post.guid[:16]} processed_audio_path={post.processed_audio_path or 'None'} is_processed={is_processed} auth={auth_type} can_trigger={can_trigger_processing}",
+        file=sys.stderr,
+        flush=True,
+    )
+
     # Helper to log decision with consistent format
     def _log_decision(decision: str, status: int, extra: str = "") -> None:
         msg = f"DOWNLOAD_DECISION post={post.guid[:16]} method={request_method} range={range_header or 'none'} ua={user_agent[:40] if user_agent else 'none'} auth={auth_type} decision={decision} status={status}{f' {extra}' if extra else ''}"
         logger.info(msg)
         # Also print to stderr to ensure visibility in docker logs
         print(f"[DECISION] {msg}", file=sys.stderr, flush=True)
-    
+
     if is_processed:
         # Episode is ready - serve it (read access is sufficient)
         if not is_authorized_to_read:
             _log_decision("NOT_AUTHORIZED_READ", 401)
-            print(f"[DOWNLOAD_RETURN] guid={post.guid} status=401 reason=not_authorized_read", file=sys.stderr, flush=True)
+            print(
+                f"[DOWNLOAD_RETURN] guid={post.guid} status=401 reason=not_authorized_read",
+                file=sys.stderr,
+                flush=True,
+            )
             return flask.make_response(("Authentication required", 401))
         # Fall through to file serving below
         _log_decision("SERVED_AUDIO", 200)
-        print(f"[DOWNLOAD_RETURN] guid={post.guid} status=200 reason=served_audio", file=sys.stderr, flush=True)
+        print(
+            f"[DOWNLOAD_RETURN] guid={post.guid} status=200 reason=served_audio",
+            file=sys.stderr,
+            flush=True,
+        )
     else:
         # Episode not yet processed - determine response
-        
+
         # --- TIER 1: Probes (HEAD or small Range) = never trigger ---
         if is_probe:
             _log_decision("PROBE", 204)
-            print(f"[DOWNLOAD_RETURN] guid={post.guid} status=204 reason=probe", file=sys.stderr, flush=True)
+            print(
+                f"[DOWNLOAD_RETURN] guid={post.guid} status=204 reason=probe",
+                file=sys.stderr,
+                flush=True,
+            )
             # 204 No Content - tells client "nothing here yet" without implying retry
             return flask.make_response(("", 204))
-        
+
         # --- AUTHORIZATION CHECK FOR READ ---
         if not is_authorized_to_read:
             _log_decision("NOT_AUTHORIZED", 401)
-            print(f"[DOWNLOAD_RETURN] guid={post.guid} status=401 reason=not_authorized", file=sys.stderr, flush=True)
+            print(
+                f"[DOWNLOAD_RETURN] guid={post.guid} status=401 reason=not_authorized",
+                file=sys.stderr,
+                flush=True,
+            )
             return flask.make_response(("Authentication required", 401))
-        
+
         # --- COMBINED TOKEN: READ-ONLY, NO PROCESSING TRIGGER ---
         # Combined feed tokens can read processed audio but CANNOT trigger processing
         # This prevents the unified feed from causing expensive processing jobs
@@ -974,33 +1055,50 @@ def api_download_post(p_guid: str) -> flask.Response:
             )
             # Return 503 Service Unavailable (NOT 202 which confuses podcast apps)
             # The episode must be processed via per-feed access or manual UI
-            print(f"[DOWNLOAD_RETURN] guid={post.guid} status=503 reason=no_trigger_combined", file=sys.stderr, flush=True)
+            print(
+                f"[DOWNLOAD_RETURN] guid={post.guid} status=503 reason=no_trigger_combined",
+                file=sys.stderr,
+                flush=True,
+            )
             response = flask.make_response(("Episode not yet processed", 503))
             response.headers["Retry-After"] = "300"  # 5 minutes
             return response
-        
+
         # --- DOWNLOAD ENDPOINT DOES NOT CREATE JOBS ---
         # Per design: only /trigger can create jobs. Download endpoint is non-mutating.
         # This prevents processing storms from podcast app probes/prefetches.
-        
+
         # Check if there's an existing job in progress
         existing_job = ProcessingJob.query.filter(
             ProcessingJob.post_guid == post.guid,
-            ProcessingJob.status.in_(["pending", "running"])
+            ProcessingJob.status.in_(["pending", "running"]),
         ).first()
-        
+
         if existing_job:
             _log_decision("JOB_EXISTS", 503, f"job_id={existing_job.id}")
-            print(f"[DOWNLOAD_RETURN] guid={post.guid} status=503 reason=job_exists job_id={existing_job.id}", file=sys.stderr, flush=True)
+            print(
+                f"[DOWNLOAD_RETURN] guid={post.guid} status=503 reason=job_exists job_id={existing_job.id}",
+                file=sys.stderr,
+                flush=True,
+            )
             response = flask.make_response(("Processing in progress", 503))
             response.headers["Retry-After"] = "120"
             return response
-        
+
         # Episode not processed, no job in progress
         # Return 503 with hint to use trigger link
         _log_decision("NOT_PROCESSED", 503)
-        print(f"[DOWNLOAD_RETURN] guid={post.guid} status=503 reason=not_processed", file=sys.stderr, flush=True)
-        response = flask.make_response(("Episode not yet processed. Click the episode link in your podcast app to start processing.", 503))
+        print(
+            f"[DOWNLOAD_RETURN] guid={post.guid} status=503 reason=not_processed",
+            file=sys.stderr,
+            flush=True,
+        )
+        response = flask.make_response(
+            (
+                "Episode not yet processed. Click the episode link in your podcast app to start processing.",
+                503,
+            )
+        )
         response.headers["Retry-After"] = "300"
         return response
 
@@ -1024,7 +1122,7 @@ def api_download_post(p_guid: str) -> flask.Response:
 def api_download_original_post(p_guid: str) -> flask.Response:
     """API endpoint to download original (unprocessed) audio files."""
     logger.info(f"Request to download original post with GUID: {p_guid}")
-    post = Post.query.filter_by(guid=p_guid).first()
+    post = _find_post_for_audio_request(p_guid)
     if post is None:
         logger.warning(f"Post with GUID: {p_guid} not found")
         return flask.make_response(("Post not found", 404))
@@ -1071,69 +1169,74 @@ def download_original_post_legacy(p_guid: str) -> flask.Response:
 # TRIGGER ENDPOINTS - User-initiated processing via capability URLs
 # =============================================================================
 
+
 @post_bp.route("/api/posts/<path:guid>/trigger_link", methods=["GET"])
 def get_trigger_link(guid: str) -> flask.Response:
     """Get the public trigger URL for an episode.
-    
+
     Requires logged-in session auth. Returns a feed-scoped trigger URL
     that can be used without login to trigger processing.
-    
+
     Returns JSON: { "trigger_url": "https://..." }
     """
     from app.auth.feed_tokens import get_or_create_feed_token
     from app.feeds import _get_base_url
-    
+
     # Require session auth
     current_user = getattr(g, "current_user", None)
     if not current_user:
         return jsonify({"error": "Authentication required"}), 401
-    
+
     # Look up the post
     post = Post.query.filter_by(guid=guid).first()
     if not post:
         return jsonify({"error": "Episode not found"}), 404
-    
+
     # Get the feed for this post
     feed = Feed.query.get(post.feed_id)
     if not feed:
         return jsonify({"error": "Feed not found"}), 404
-    
+
     # Get or create a feed-scoped token for this user
     token = get_or_create_feed_token(current_user.id, feed.id)
     if not token:
         return jsonify({"error": "Failed to create token"}), 500
-    
+
     # Build the public trigger URL
     base_url = _get_base_url()
     # Force HTTPS for non-localhost
-    if not base_url.startswith("http://localhost") and not base_url.startswith("http://127.0.0.1"):
+    if not base_url.startswith("http://localhost") and not base_url.startswith(
+        "http://127.0.0.1"
+    ):
         base_url = base_url.replace("http://", "https://")
-    
+
     trigger_url = f"{base_url}/trigger?guid={post.guid}&feed_token={token.id}&feed_secret={token.secret}"
-    
-    return jsonify({
-        "trigger_url": trigger_url,
-        "guid": post.guid,
-        "feed_id": feed.id,
-        "feed_title": feed.title,
-    })
+
+    return jsonify(
+        {
+            "trigger_url": trigger_url,
+            "guid": post.guid,
+            "feed_id": feed.id,
+            "feed_title": feed.title,
+        }
+    )
 
 
 @post_bp.route("/trigger", methods=["GET"])
 def trigger_processing() -> flask.Response:
     """Trigger processing for an episode via a capability URL.
-    
+
     This endpoint is linked from RSS <item><link> elements. When a user clicks
     the link in their podcast app, it queues the episode for processing.
-    
+
     Required query params:
     - guid: The episode GUID
     - feed_token: The feed-scoped token ID
     - feed_secret: The feed-scoped token secret
-    
+
     Combined tokens (feed_id=NULL) are NOT allowed to trigger processing.
     Only feed-scoped tokens can trigger.
-    
+
     Error handling:
     - 400: Missing parameters
     - 401/403: Invalid token or unauthorized
@@ -1151,32 +1254,40 @@ def trigger_processing() -> flask.Response:
         return _render_trigger_error_page(
             title="Something Went Wrong",
             message="An unexpected error occurred. Please try again later.",
-            status_code=500
+            status_code=500,
         )
 
 
 def _handle_trigger_processing() -> flask.Response:
     """Internal handler for trigger processing - separated for cleaner error handling."""
     from app.auth.feed_tokens import authenticate_feed_token
-    
+
     guid = flask.request.args.get("guid")
     token_id = flask.request.args.get("feed_token")
     secret = flask.request.args.get("feed_secret")
-    
+
     # Safe logging - never log secrets
     token_prefix = token_id[:6] if token_id and len(token_id) >= 6 else token_id
     token_suffix = token_id[-4:] if token_id and len(token_id) >= 4 else ""
-    print(f"[TRIGGER_HIT] guid={guid} token={token_prefix}...{token_suffix}", file=sys.stderr, flush=True)
-    
+    print(
+        f"[TRIGGER_HIT] guid={guid} token={token_prefix}...{token_suffix}",
+        file=sys.stderr,
+        flush=True,
+    )
+
     # Validate required parameters
     if not guid or not token_id or not secret:
-        print(f"[TRIGGER_RETURN] status=400 reason=missing_params", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_RETURN] status=400 reason=missing_params",
+            file=sys.stderr,
+            flush=True,
+        )
         return _render_trigger_error_page(
             title="Missing Parameters",
             message="Required parameters: guid, feed_token, feed_secret",
-            status_code=400
+            status_code=400,
         )
-    
+
     # Authenticate the token - use actual request path so _resolve_feed_id can extract guid
     try:
         auth_result = authenticate_feed_token(
@@ -1184,73 +1295,109 @@ def _handle_trigger_processing() -> flask.Response:
         )
     except Exception as e:
         logger.error(f"Token authentication failed for guid={guid}: {e}", exc_info=True)
-        print(f"[TRIGGER_RETURN] status=401 reason=auth_exception error={e}", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_RETURN] status=401 reason=auth_exception error={e}",
+            file=sys.stderr,
+            flush=True,
+        )
         return _render_trigger_error_page(
             title="Authentication Error",
             message="Failed to verify your access token. Please try getting a fresh link.",
-            status_code=401
+            status_code=401,
         )
-    
+
     if not auth_result:
-        print(f"[TRIGGER_RETURN] status=403 reason=invalid_token", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_RETURN] status=403 reason=invalid_token",
+            file=sys.stderr,
+            flush=True,
+        )
         return _render_trigger_error_page(
             title="Invalid Token",
             message="The link has expired or is invalid. Please get a fresh link from your podcast app.",
-            status_code=403
+            status_code=403,
         )
-    
-    print(f"[TRIGGER_AUTH] guid={guid} feed_id={auth_result.feed_id} user_id={auth_result.user.id}", file=sys.stderr, flush=True)
-    
+
+    print(
+        f"[TRIGGER_AUTH] guid={guid} feed_id={auth_result.feed_id} user_id={auth_result.user.id}",
+        file=sys.stderr,
+        flush=True,
+    )
+
     # Combined tokens (feed_id=None) cannot trigger processing
     if auth_result.feed_id is None:
-        print(f"[TRIGGER_RETURN] status=403 reason=combined_token_no_trigger", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_RETURN] status=403 reason=combined_token_no_trigger",
+            file=sys.stderr,
+            flush=True,
+        )
         return _render_trigger_error_page(
             title="Cannot Trigger from Combined Feed",
             message="Combined feed tokens cannot trigger processing. Please use the per-show feed URL instead.",
-            status_code=403
+            status_code=403,
         )
-    
+
     # Look up the post
     post = Post.query.filter_by(guid=guid).first()
     if not post:
-        print(f"[TRIGGER_RETURN] status=404 reason=post_not_found", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_RETURN] status=404 reason=post_not_found",
+            file=sys.stderr,
+            flush=True,
+        )
         return _render_trigger_error_page(
             title="Episode Not Found",
             message="This episode could not be found. It may have been removed.",
-            status_code=404
+            status_code=404,
         )
-    
+
     # Verify the token's feed_id matches the post's feed_id
     if post.feed_id != auth_result.feed_id:
-        print(f"[TRIGGER_RETURN] status=403 reason=feed_mismatch token_feed={auth_result.feed_id} post_feed={post.feed_id}", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_RETURN] status=403 reason=feed_mismatch token_feed={auth_result.feed_id} post_feed={post.feed_id}",
+            file=sys.stderr,
+            flush=True,
+        )
         return _render_trigger_error_page(
             title="Access Denied",
             message="This token is not authorized for this episode.",
-            status_code=403
+            status_code=403,
         )
-    
+
     # Check if episode is eligible (whitelisted)
     if not post.whitelisted:
-        print(f"[TRIGGER_RETURN] status=409 reason=not_whitelisted", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_RETURN] status=409 reason=not_whitelisted",
+            file=sys.stderr,
+            flush=True,
+        )
         return _render_trigger_error_page(
             title="Episode Not Enabled",
             message="This episode is not enabled for processing. Enable it in the Podly web interface first.",
-            status_code=409
+            status_code=409,
         )
-    
+
     # Get feed info for display
     feed = Feed.query.get(post.feed_id)
     feed_title = feed.title if feed else "Unknown Show"
-    
+
     # Build download URL for when ready
-    download_url = f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
-    
+    download_url = (
+        f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+    )
+
     # Record trigger page open event
-    _record_user_event(post, auth_result.user, "TRIGGER_OPEN", "feed_scoped", "", "trigger")
-    
+    _record_user_event(
+        post, auth_result.user, "TRIGGER_OPEN", "feed_scoped", "", "trigger"
+    )
+
     # Check if already processed
     if post.processed_audio_path and Path(post.processed_audio_path).exists():
-        print(f"[TRIGGER_RETURN] status=200 reason=already_processed", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_RETURN] status=200 reason=already_processed",
+            file=sys.stderr,
+            flush=True,
+        )
         return _render_trigger_page(
             title="Episode Ready",
             message=f"'{post.title}' is ready to play!",
@@ -1259,17 +1406,21 @@ def _handle_trigger_processing() -> flask.Response:
             feed_title=feed_title,
             download_url=download_url,
             token_id=token_id,
-            secret=secret
+            secret=secret,
         )
-    
+
     # Check for existing pending/running job
     existing_job = ProcessingJob.query.filter(
         ProcessingJob.post_guid == post.guid,
-        ProcessingJob.status.in_(["pending", "running"])
+        ProcessingJob.status.in_(["pending", "running"]),
     ).first()
-    
+
     if existing_job:
-        print(f"[TRIGGER_JOB] guid={guid} action=existing job_id={existing_job.id} status={existing_job.status}", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_JOB] guid={guid} action=existing job_id={existing_job.id} status={existing_job.status}",
+            file=sys.stderr,
+            flush=True,
+        )
         return _render_trigger_page(
             title="Processing In Progress",
             message=f"'{post.title}' is being processed.",
@@ -1279,33 +1430,46 @@ def _handle_trigger_processing() -> flask.Response:
             download_url=download_url,
             token_id=token_id,
             secret=secret,
-            job=existing_job
+            job=existing_job,
         )
-    
+
     # Check cooldown (10 minutes)
     _TRIGGER_COOLDOWN_SECONDS = 600
-    last_job = ProcessingJob.query.filter(
-        ProcessingJob.post_guid == post.guid
-    ).order_by(ProcessingJob.created_at.desc()).first()
-    
+    last_job = (
+        ProcessingJob.query.filter(ProcessingJob.post_guid == post.guid)
+        .order_by(ProcessingJob.created_at.desc())
+        .first()
+    )
+
     if last_job and last_job.created_at:
-        job_age = (datetime.now(timezone.utc) - last_job.created_at.replace(tzinfo=timezone.utc)).total_seconds()
+        job_age = (
+            datetime.now(timezone.utc)
+            - last_job.created_at.replace(tzinfo=timezone.utc)
+        ).total_seconds()
         if job_age < _TRIGGER_COOLDOWN_SECONDS:
             remaining = int(_TRIGGER_COOLDOWN_SECONDS - job_age)
-            print(f"[TRIGGER_RETURN] status=200 reason=cooldown remaining={remaining}s", file=sys.stderr, flush=True)
+            print(
+                f"[TRIGGER_RETURN] status=200 reason=cooldown remaining={remaining}s",
+                file=sys.stderr,
+                flush=True,
+            )
             return _render_trigger_page(
                 title="Please Wait",
                 message=f"Processing was recently attempted. Please wait {remaining // 60 + 1} minutes.",
                 state="cooldown",
                 post=post,
                 feed_title=feed_title,
-                cooldown_remaining=remaining
+                cooldown_remaining=remaining,
             )
-    
+
     # Trigger processing
     try:
         user_id = auth_result.user.id
-        print(f"[TRIGGER_JOB] guid={guid} action=create user_id={user_id}", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_JOB] guid={guid} action=create user_id={user_id}",
+            file=sys.stderr,
+            flush=True,
+        )
         result = get_jobs_manager().start_post_processing(
             post.guid,
             priority="interactive",
@@ -1313,14 +1477,25 @@ def _handle_trigger_processing() -> flask.Response:
             trigger_source="trigger_link",
         )
         job_id = result.get("job_id")
-        print(f"[TRIGGER_JOB] guid={guid} action=created job_id={job_id}", file=sys.stderr, flush=True)
-        
+        print(
+            f"[TRIGGER_JOB] guid={guid} action=created job_id={job_id}",
+            file=sys.stderr,
+            flush=True,
+        )
+
         # Record process started event
-        _record_user_event(post, auth_result.user, "PROCESS_STARTED", "feed_scoped", "TRIGGERED", "trigger")
-        
+        _record_user_event(
+            post,
+            auth_result.user,
+            "PROCESS_STARTED",
+            "feed_scoped",
+            "TRIGGERED",
+            "trigger",
+        )
+
         # Fetch the job we just created
         job = ProcessingJob.query.get(job_id) if job_id else None
-        
+
         return _render_trigger_page(
             title="Processing Started",
             message=f"'{post.title}' has been queued for ad removal.",
@@ -1330,15 +1505,19 @@ def _handle_trigger_processing() -> flask.Response:
             download_url=download_url,
             token_id=token_id,
             secret=secret,
-            job=job
+            job=job,
         )
     except Exception as e:
         logger.error(f"Failed to trigger processing for {guid}: {e}", exc_info=True)
-        print(f"[TRIGGER_JOB] guid={guid} action=error error={e}", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_JOB] guid={guid} action=error error={e}",
+            file=sys.stderr,
+            flush=True,
+        )
         return _render_trigger_error_page(
             title="Processing Error",
             message="Failed to start processing. Please try again in a few minutes.",
-            status_code=500
+            status_code=500,
         )
 
 
@@ -1352,17 +1531,21 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": "An unknown error occurred.",
             "technical": None,
-            "retry_suggested": True
+            "retry_suggested": True,
         }
 
     error_lower = raw_error.lower()
 
     # Groq/Whisper API errors (500, internal server error)
-    if "500" in raw_error or "internal server error" in error_lower or "internal_server_error" in error_lower:
+    if (
+        "500" in raw_error
+        or "internal server error" in error_lower
+        or "internal_server_error" in error_lower
+    ):
         return {
             "friendly": "The transcription service is temporarily unavailable.",
             "technical": raw_error,
-            "retry_suggested": True
+            "retry_suggested": True,
         }
 
     # Rate limiting errors
@@ -1370,7 +1553,7 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": "The service is busy. Please wait a few minutes and try again.",
             "technical": raw_error,
-            "retry_suggested": True
+            "retry_suggested": True,
         }
 
     # Timeout errors
@@ -1378,7 +1561,7 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": "The request timed out. The episode may be too long or the service is slow.",
             "technical": raw_error,
-            "retry_suggested": True
+            "retry_suggested": True,
         }
 
     # Service unavailable (503)
@@ -1386,7 +1569,7 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": "The service is temporarily unavailable for maintenance.",
             "technical": raw_error,
-            "retry_suggested": True
+            "retry_suggested": True,
         }
 
     # Podtrac/datacenter IP blocking (403)
@@ -1394,7 +1577,7 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": "Download blocked by the podcast host. Podtrac blocks datacenter IPs.",
             "technical": raw_error,
-            "retry_suggested": False
+            "retry_suggested": False,
         }
 
     # Generic download failures
@@ -1402,31 +1585,44 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": "Failed to download the podcast episode from the source.",
             "technical": raw_error,
-            "retry_suggested": True
+            "retry_suggested": True,
         }
 
     # Authentication errors (401, 403)
-    if "401" in raw_error or "403" in raw_error or "unauthorized" in error_lower or "forbidden" in error_lower:
+    if (
+        "401" in raw_error
+        or "403" in raw_error
+        or "unauthorized" in error_lower
+        or "forbidden" in error_lower
+    ):
         return {
             "friendly": "Access denied. The API key may be invalid or expired.",
             "technical": raw_error,
-            "retry_suggested": False
+            "retry_suggested": False,
         }
 
     # Invalid API key
-    if "api key" in error_lower or "api_key" in error_lower or "authentication" in error_lower:
+    if (
+        "api key" in error_lower
+        or "api_key" in error_lower
+        or "authentication" in error_lower
+    ):
         return {
             "friendly": "API authentication failed. Check the API key configuration.",
             "technical": raw_error,
-            "retry_suggested": False
+            "retry_suggested": False,
         }
 
     # Token limit exceeded
-    if "token limit" in error_lower or "exceeds" in error_lower and "token" in error_lower:
+    if (
+        "token limit" in error_lower
+        or "exceeds" in error_lower
+        and "token" in error_lower
+    ):
         return {
             "friendly": "The episode is too long to process with current settings.",
             "technical": raw_error,
-            "retry_suggested": False
+            "retry_suggested": False,
         }
 
     # FFmpeg/audio processing errors
@@ -1434,7 +1630,7 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": "Failed to process the audio file. The file may be corrupted.",
             "technical": raw_error,
-            "retry_suggested": True
+            "retry_suggested": True,
         }
 
     # No audio segments to keep
@@ -1442,7 +1638,7 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": "All audio was detected as ads. This may be a detection error.",
             "technical": raw_error,
-            "retry_suggested": False
+            "retry_suggested": False,
         }
 
     # Processing job in progress (lock contention)
@@ -1450,7 +1646,7 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": "Another processing job is already running for this episode.",
             "technical": raw_error,
-            "retry_suggested": True
+            "retry_suggested": True,
         }
 
     # Post not found
@@ -1458,7 +1654,7 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": "The episode could not be found. It may have been removed.",
             "technical": raw_error,
-            "retry_suggested": False
+            "retry_suggested": False,
         }
 
     # Whisper library not available
@@ -1466,7 +1662,7 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": "Local transcription is not available. Configure cloud transcription instead.",
             "technical": raw_error,
-            "retry_suggested": False
+            "retry_suggested": False,
         }
 
     # Generic "Unexpected error" wrapper - try to extract the inner message
@@ -1477,14 +1673,14 @@ def _format_error_for_user(raw_error: str | None) -> dict:
         return {
             "friendly": inner_result["friendly"],
             "technical": raw_error,  # Keep full error for technical
-            "retry_suggested": inner_result["retry_suggested"]
+            "retry_suggested": inner_result["retry_suggested"],
         }
 
     # Default fallback - unknown error
     return {
         "friendly": "Processing failed due to an unexpected error.",
         "technical": raw_error,
-        "retry_suggested": True
+        "retry_suggested": True,
     }
 
 
@@ -1497,16 +1693,16 @@ def _normalize_job(job: ProcessingJob, download_url: str | None = None) -> dict:
     STEP_NAMES = {
         0: "Initializing",
         1: "Downloading",
-        2: "Transcribing", 
+        2: "Transcribing",
         3: "Detecting Ads",
         4: "Processing Audio",
     }
-    
+
     # Safe defaults for potentially NULL fields
     current_step = job.current_step if job.current_step is not None else 0
     total_steps = job.total_steps if job.total_steps and job.total_steps > 0 else 4
     step_name = job.step_name or STEP_NAMES.get(current_step, "Processing")
-    
+
     # Calculate progress percentage with guards
     if job.progress_percentage is not None:
         progress = max(0, min(100, int(job.progress_percentage)))
@@ -1514,7 +1710,7 @@ def _normalize_job(job: ProcessingJob, download_url: str | None = None) -> dict:
         progress = min(100, int((current_step / total_steps) * 100))
     else:
         progress = 0
-    
+
     # Determine state from job status
     if job.status == "running":
         state = "processing"
@@ -1526,7 +1722,7 @@ def _normalize_job(job: ProcessingJob, download_url: str | None = None) -> dict:
         state = "failed"
     else:
         state = "processing"  # Default for unknown status
-    
+
     return {
         "state": state,
         "processed": job.status == "completed",
@@ -1541,20 +1737,20 @@ def _normalize_job(job: ProcessingJob, download_url: str | None = None) -> dict:
             "progress_percentage": progress,
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "started_at": job.started_at.isoformat() if job.started_at else None,
-            "error_message": getattr(job, 'error_message', None),
-        }
+            "error_message": getattr(job, "error_message", None),
+        },
     }
 
 
 @post_bp.route("/api/trigger/status", methods=["GET", "OPTIONS"])
 def trigger_status() -> flask.Response:
     """Get processing status for an episode (JSON endpoint for polling).
-    
+
     Required query params:
     - guid: The episode GUID
     - feed_token: The feed-scoped token ID
     - feed_secret: The feed-scoped token secret
-    
+
     Supports OPTIONS for CORS preflight from podcast app webviews.
     """
     # Handle CORS preflight
@@ -1564,7 +1760,7 @@ def trigger_status() -> flask.Response:
         return response
     guid = flask.request.args.get("guid")
     token_id = flask.request.args.get("feed_token")
-    
+
     try:
         return _handle_trigger_status()
     except Exception:
@@ -1575,15 +1771,17 @@ def trigger_status() -> flask.Response:
             flask.request.path,
             {k: v for k, v in flask.request.args.items() if k != "feed_secret"},
         )
-        
+
         # Return 503 for temporary server errors - UI will show banner and retry
-        response = flask.jsonify({
-            "state": "error",
-            "message": "Temporarily unavailable",
-            "processed": False,
-            "download_url": None,
-            "job": None
-        })
+        response = flask.jsonify(
+            {
+                "state": "error",
+                "message": "Temporarily unavailable",
+                "processed": False,
+                "download_url": None,
+                "job": None,
+            }
+        )
         response.headers["Cache-Control"] = "no-store"
         return response, 503
 
@@ -1591,22 +1789,32 @@ def trigger_status() -> flask.Response:
 def _handle_trigger_status() -> flask.Response:
     """Internal handler for trigger status - separated for cleaner error handling."""
     from app.auth.feed_tokens import authenticate_feed_token
-    
+
     guid = flask.request.args.get("guid")
     token_id = flask.request.args.get("feed_token")
     secret = flask.request.args.get("feed_secret")
-    
+
     # Safe logging - never log secrets
     token_prefix = token_id[:6] if token_id and len(token_id) >= 6 else token_id
     token_suffix = token_id[-4:] if token_id and len(token_id) >= 4 else ""
-    print(f"[TRIGGER_STATUS] guid={guid} token={token_prefix}...{token_suffix}", file=sys.stderr, flush=True)
-    
+    print(
+        f"[TRIGGER_STATUS] guid={guid} token={token_prefix}...{token_suffix}",
+        file=sys.stderr,
+        flush=True,
+    )
+
     if not guid or not token_id or not secret:
-        print(f"[TRIGGER_STATUS_RETURN] status=400 reason=missing_params", file=sys.stderr, flush=True)
-        response = flask.jsonify({"state": "error", "message": "Missing required parameters"})
+        print(
+            f"[TRIGGER_STATUS_RETURN] status=400 reason=missing_params",
+            file=sys.stderr,
+            flush=True,
+        )
+        response = flask.jsonify(
+            {"state": "error", "message": "Missing required parameters"}
+        )
         response.headers["Cache-Control"] = "no-store"
         return response, 400
-    
+
     # Authenticate the token - use actual request path so _resolve_feed_id can extract guid
     try:
         auth_result = authenticate_feed_token(
@@ -1614,74 +1822,108 @@ def _handle_trigger_status() -> flask.Response:
         )
     except Exception as auth_err:
         logger.error(f"Token auth exception for guid={guid}: {auth_err}", exc_info=True)
-        print(f"[TRIGGER_STATUS_RETURN] status=401 reason=auth_exception", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_STATUS_RETURN] status=401 reason=auth_exception",
+            file=sys.stderr,
+            flush=True,
+        )
         response = flask.jsonify({"state": "error", "message": "Authentication failed"})
         response.headers["Cache-Control"] = "no-store"
         return response, 401
-    
+
     if not auth_result:
-        print(f"[TRIGGER_STATUS_RETURN] status=401 reason=invalid_token", file=sys.stderr, flush=True)
-        response = flask.jsonify({"state": "error", "message": "Invalid or expired token"})
+        print(
+            f"[TRIGGER_STATUS_RETURN] status=401 reason=invalid_token",
+            file=sys.stderr,
+            flush=True,
+        )
+        response = flask.jsonify(
+            {"state": "error", "message": "Invalid or expired token"}
+        )
         response.headers["Cache-Control"] = "no-store"
         return response, 401
-    
+
     # Combined tokens cannot access status
     if auth_result.feed_id is None:
-        print(f"[TRIGGER_STATUS_RETURN] status=403 reason=combined_token", file=sys.stderr, flush=True)
-        response = flask.jsonify({"state": "error", "message": "Combined tokens not allowed"})
+        print(
+            f"[TRIGGER_STATUS_RETURN] status=403 reason=combined_token",
+            file=sys.stderr,
+            flush=True,
+        )
+        response = flask.jsonify(
+            {"state": "error", "message": "Combined tokens not allowed"}
+        )
         response.headers["Cache-Control"] = "no-store"
         return response, 403
-    
+
     # Look up the post
     post = Post.query.filter_by(guid=guid).first()
     if not post:
-        print(f"[TRIGGER_STATUS_RETURN] status=404 reason=post_not_found", file=sys.stderr, flush=True)
+        print(
+            f"[TRIGGER_STATUS_RETURN] status=404 reason=post_not_found",
+            file=sys.stderr,
+            flush=True,
+        )
         response = flask.jsonify({"state": "not_found", "message": "Episode not found"})
         response.headers["Cache-Control"] = "no-store"
         return response, 404
-    
+
     # Verify feed match
     if post.feed_id != auth_result.feed_id:
-        print(f"[TRIGGER_STATUS_RETURN] status=403 reason=feed_mismatch", file=sys.stderr, flush=True)
-        response = flask.jsonify({"state": "error", "message": "Token not authorized for this episode"})
+        print(
+            f"[TRIGGER_STATUS_RETURN] status=403 reason=feed_mismatch",
+            file=sys.stderr,
+            flush=True,
+        )
+        response = flask.jsonify(
+            {"state": "error", "message": "Token not authorized for this episode"}
+        )
         response.headers["Cache-Control"] = "no-store"
         return response, 403
-    
+
     # Build download URL
-    download_url = f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
-    
+    download_url = (
+        f"/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
+    )
+
     # Check if processed
-    is_processed = post.processed_audio_path and Path(post.processed_audio_path).exists()
-    
+    is_processed = (
+        post.processed_audio_path and Path(post.processed_audio_path).exists()
+    )
+
     if is_processed:
-        response = flask.jsonify({
-            "state": "ready",
-            "processed": True,
-            "download_url": download_url,
-            "message": "Episode is ready to download",
-            "job": None
-        })
+        response = flask.jsonify(
+            {
+                "state": "ready",
+                "processed": True,
+                "download_url": download_url,
+                "message": "Episode is ready to download",
+                "job": None,
+            }
+        )
         response.headers["Cache-Control"] = "no-store"
         return response
-    
+
     # Check for active job
     job = ProcessingJob.query.filter(
         ProcessingJob.post_guid == post.guid,
-        ProcessingJob.status.in_(["pending", "running"])
+        ProcessingJob.status.in_(["pending", "running"]),
     ).first()
-    
+
     if job:
         # Use normalize_job for safe defaults on potentially NULL fields
         normalized = _normalize_job(job, download_url)
         response = flask.jsonify(normalized)
         response.headers["Cache-Control"] = "no-store"
         return response
-    
+
     # Check for failed job
-    last_job = ProcessingJob.query.filter(
-        ProcessingJob.post_guid == post.guid
-    ).order_by(ProcessingJob.created_at.desc()).first()
-    
+    last_job = (
+        ProcessingJob.query.filter(ProcessingJob.post_guid == post.guid)
+        .order_by(ProcessingJob.created_at.desc())
+        .first()
+    )
+
     if last_job and last_job.status == "failed":
         # Use normalize_job for consistent response structure
         normalized = _normalize_job(last_job, None)
@@ -1696,26 +1938,26 @@ def _handle_trigger_status() -> flask.Response:
         response = flask.jsonify(normalized)
         response.headers["Cache-Control"] = "no-store"
         return response
-    
+
     # Not processed, no active job
-    response = flask.jsonify({
-        "state": "not_started",
-        "processed": False,
-        "download_url": None,
-        "message": "Episode has not been processed yet",
-        "job": None
-    })
+    response = flask.jsonify(
+        {
+            "state": "not_started",
+            "processed": False,
+            "download_url": None,
+            "message": "Episode has not been processed yet",
+            "job": None,
+        }
+    )
     response.headers["Cache-Control"] = "no-store"
     return response
 
 
 def _render_trigger_error_page(
-    title: str,
-    message: str,
-    status_code: int = 400
+    title: str, message: str, status_code: int = 400
 ) -> flask.Response:
     """Render a themed error page for trigger failures with proper HTTP status code."""
-    html = f'''<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1792,8 +2034,8 @@ def _render_trigger_error_page(
         </div>
     </div>
 </body>
-</html>'''
-    
+</html>"""
+
     response = flask.make_response(html, status_code)
     response.headers["Content-Type"] = "text/html"
     return response
@@ -1809,26 +2051,35 @@ def _render_trigger_page(
     token_id: str = "",
     secret: str = "",
     job: Optional[ProcessingJob] = None,
-    cooldown_remaining: int = 0
+    cooldown_remaining: int = 0,
 ) -> flask.Response:
     """Serve the React app for the trigger page.
-    
+
     The React TriggerPage component will handle:
     - Polling /api/trigger/status for updates
     - Displaying the canonical ProcessingProgressUI component
     - Reactive state updates without page refresh
     """
     import os
+
     from flask import current_app, send_from_directory
-    
+
     static_folder = current_app.static_folder
     if static_folder and os.path.exists(os.path.join(static_folder, "index.html")):
         return send_from_directory(static_folder, "index.html")
-    
+
     # Fallback to simple HTML if React app not built
     return _render_trigger_page_fallback(
-        title, message, state, post, feed_title, 
-        download_url, token_id, secret, job, cooldown_remaining
+        title,
+        message,
+        state,
+        post,
+        feed_title,
+        download_url,
+        token_id,
+        secret,
+        job,
+        cooldown_remaining,
     )
 
 
@@ -1842,23 +2093,23 @@ def _render_trigger_page_fallback(
     token_id: str = "",
     secret: str = "",
     job: Optional[ProcessingJob] = None,
-    cooldown_remaining: int = 0
+    cooldown_remaining: int = 0,
 ) -> flask.Response:
     """Fallback server-rendered trigger page when React app is not available."""
-    
+
     # Build status endpoint URL for polling
     status_url = ""
     if post and token_id and secret:
         status_url = f"/api/trigger/status?guid={post.guid}&feed_token={token_id}&feed_secret={secret}"
-    
+
     # Progress info
     progress_percent = 0
     step_name = "Queued"
     if job:
         progress_percent = int(job.progress_percentage or 0)
         step_name = job.step_name or f"Step {job.current_step}/{job.total_steps}"
-    
-    html = f'''<!DOCTYPE html>
+
+    html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1976,8 +2227,8 @@ def _render_trigger_page_fallback(
     </div>
     {"<script>" + _get_trigger_polling_script(status_url, download_url) + "</script>" if state == "processing" and status_url else ""}
 </body>
-</html>'''
-    
+</html>"""
+
     response = flask.make_response(html)
     response.headers["Content-Type"] = "text/html"
     return response
@@ -1985,7 +2236,7 @@ def _render_trigger_page_fallback(
 
 def _get_trigger_polling_script(status_url: str, download_url: str) -> str:
     """Generate JavaScript for polling the status endpoint."""
-    return f'''
+    return f"""
         const statusUrl = "{status_url}";
         const downloadUrl = "{download_url}";
         
@@ -2030,4 +2281,4 @@ def _get_trigger_polling_script(status_url: str, download_url: str) -> str:
             }}
         }}
         setTimeout(checkStatus, 2000);
-    '''
+    """

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 import pytest
 from flask import Flask, Response, g, jsonify
@@ -61,7 +61,7 @@ def auth_app() -> Flask:
             return Response("missing user", status=500)
         return Response("ok", mimetype="text/plain")
 
-    @app.route("/api/posts/<string:guid>/download", methods=["GET"])
+    @app.route("/api/posts/<path:guid>/download", methods=["GET"])
     def download(guid: str) -> Response:
         del guid
         current = getattr(g, "current_user", None)
@@ -189,6 +189,42 @@ def test_share_link_generates_token_and_allows_query_access(auth_app: Flask) -> 
         query_string={"feed_token": token_id, "feed_secret": secret},
     )
     assert download_response.status_code == 200
+
+
+def test_feed_token_allows_download_for_url_shaped_guid(auth_app: Flask) -> None:
+    client = auth_app.test_client()
+    guid = "https://latenightlinux.com/?p=4503"
+
+    with auth_app.app_context():
+        feed = Feed(title="Late Night Linux", rss_url="https://latenightlinux.com/feed")
+        db.session.add(feed)
+        db.session.commit()
+        feed_id = feed.id
+
+        db.session.add(
+            Post(
+                feed_id=feed_id,
+                guid=guid,
+                download_url="https://traffic.libsyn.com/latenightlinux/LNL400.mp3",
+                title="Late Night Linux - Episode 400",
+                whitelisted=True,
+            )
+        )
+        db.session.commit()
+
+    client.post("/api/auth/login", json={"username": "admin", "password": "password"})
+    token = client.post(f"/api/feeds/{feed_id}/share-link").get_json()
+
+    response = auth_app.test_client().get(
+        f"/api/posts/{quote(guid, safe='')}/download",
+        query_string={
+            "feed_token": token["feed_token"],
+            "feed_secret": token["feed_secret"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.data == b"download"
 
 
 def test_share_link_returns_same_token_for_user_and_feed(auth_app: Flask) -> None:

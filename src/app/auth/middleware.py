@@ -63,7 +63,7 @@ _PUBLIC_EXTENSIONS: tuple[str, ...] = (
 
 _TOKEN_PROTECTED_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"^/feed/[^/]+$"),
-    re.compile(r"^/api/posts/[^/]+/(audio|download(?:/original)?)$"),
+    re.compile(r"^/api/posts/.+/(audio|download(?:/original)?)$"),
     re.compile(r"^/post/[^/]+(?:\\.mp3|/original\\.mp3)$"),
     re.compile(r"^/trigger$"),  # Trigger page authenticates via feed token
     re.compile(r"^/api/trigger/status$"),  # Trigger status polling endpoint
@@ -100,7 +100,9 @@ def init_auth_middleware(app: Any) -> None:
             if retry_after:
                 logger.info(
                     "TRIGGER_AUTH_RATELIMIT path=%s client=%s retry_after=%d",
-                    request.path, client_identifier, retry_after
+                    request.path,
+                    client_identifier,
+                    retry_after,
                 )
                 return _too_many_requests(retry_after)
 
@@ -113,7 +115,10 @@ def init_auth_middleware(app: Any) -> None:
                 guid = request.args.get("guid") or ""
                 logger.info(
                     "TRIGGER_AUTH_FAIL path=%s guid=%s token=%s...%s",
-                    request.path, guid, token_prefix, token_suffix
+                    request.path,
+                    guid,
+                    token_prefix,
+                    token_suffix,
                 )
                 backoff = failure_rate_limiter.register_failure(client_identifier)
                 response = _token_unauthorized()
@@ -188,7 +193,9 @@ def _token_unauthorized() -> Response:
 
 def _too_many_requests(retry_after: int) -> Response:
     """Return JSON 429 for rate limiting (not HTML/text)."""
-    response = jsonify({"state": "error", "message": "Too many authentication attempts"})
+    response = jsonify(
+        {"state": "error", "message": "Too many authentication attempts"}
+    )
     response.status_code = 429
     response.headers["Retry-After"] = str(retry_after)
     response.headers["Cache-Control"] = "no-store"

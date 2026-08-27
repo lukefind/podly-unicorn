@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-import logging
 import hashlib
 import hmac
+import logging
 import os
 import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
-if TYPE_CHECKING:
-    from flask import Request
-
-from flask import current_app, has_app_context
+from flask import Request, current_app, has_app_context
 
 from app.auth.service import AuthenticatedUser
 from app.extensions import db
@@ -26,6 +23,7 @@ logger = logging.getLogger("global_logger")
 class FeedTokenAuthResult:
     user: AuthenticatedUser
     feed_id: Optional[int]  # None for combined feed tokens
+    resolved_feed_id: Optional[int]  # Feed selected for the current request
     token: FeedAccessToken
 
 
@@ -62,15 +60,17 @@ def _lookup_existing_token_secret(token: FeedAccessToken) -> Optional[str]:
     return None
 
 
-def create_feed_access_token(user: User, feed: Optional[Feed] = None) -> tuple[str, str]:
+def create_feed_access_token(
+    user: User, feed: Optional[Feed] = None
+) -> tuple[str, str]:
     """Create or retrieve a feed access token.
-    
+
     Args:
         user: The user to create the token for
         feed: The specific feed, or None for combined feed access
     """
     feed_id = feed.id if feed else None
-    
+
     existing_tokens = (
         FeedAccessToken.query.filter_by(user_id=user.id, feed_id=feed_id, revoked=False)
         .order_by(FeedAccessToken.created_at.desc(), FeedAccessToken.id.desc())
@@ -128,7 +128,8 @@ def authenticate_feed_token(
 
     # Check if this is a combined feed token (feed_id is None)
     is_combined_feed_token = token.feed_id is None
-    
+    resolved_feed_id: Optional[int] = None
+
     if is_combined_feed_token:
         # Combined feed tokens can access:
         # 1. The combined feed itself
@@ -137,22 +138,32 @@ def authenticate_feed_token(
             pass  # Allow access to combined feed
         elif path.startswith("/api/posts/") or path.startswith("/post/"):
             # Check if the post belongs to a feed the user is subscribed to
-            from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
-            post_feed_id = _resolve_feed_id(path, req=req)
-            if post_feed_id is None:
-                return None
-            # Verify user is subscribed to this feed
-            subscription = UserFeedSubscription.query.filter_by(
-                user_id=token.user_id, feed_id=post_feed_id
-            ).first()
-            if subscription is None:
+            from app.models import (  # pylint: disable=import-outside-toplevel
+                UserFeedSubscription,
+            )
+
+            subscribed_feed_ids = {
+                feed_id
+                for (feed_id,) in UserFeedSubscription.query.with_entities(
+                    UserFeedSubscription.feed_id
+                )
+                .filter_by(user_id=token.user_id)
+                .all()
+            }
+            resolved_feed_id = _resolve_feed_id(
+                path, req=req, allowed_feed_ids=subscribed_feed_ids
+            )
+            if resolved_feed_id is None:
                 return None
         else:
             return None
     else:
         # Regular feed token - verify feed_id matches exactly
-        feed_id = _resolve_feed_id(path, req=req)
-        if feed_id is None or feed_id != token.feed_id:
+        assert token.feed_id is not None
+        resolved_feed_id = _resolve_feed_id(
+            path, req=req, allowed_feed_ids={token.feed_id}
+        )
+        if resolved_feed_id is None or resolved_feed_id != token.feed_id:
             return None
 
     user = User.query.get(token.user_id)
@@ -170,11 +181,17 @@ def authenticate_feed_token(
     return FeedTokenAuthResult(
         user=AuthenticatedUser(id=user.id, username=user.username, role=user.role),
         feed_id=token.feed_id,
+        resolved_feed_id=resolved_feed_id,
         token=token,
     )
 
 
-def _resolve_feed_id(path: str, *, req: Optional[Request] = None) -> Optional[int]:
+def _resolve_feed_id(
+    path: str,
+    *,
+    req: Optional[Request] = None,
+    allowed_feed_ids: Optional[set[int]] = None,
+) -> Optional[int]:
     if path.startswith("/feed/"):
         remainder = path[len("/feed/") :]
         try:
@@ -183,12 +200,18 @@ def _resolve_feed_id(path: str, *, req: Optional[Request] = None) -> Optional[in
             return None
 
     if path.startswith("/api/posts/"):
-        parts = path.split("/")
-        if len(parts) < 4:
+        remainder = path[len("/api/posts/") :]
+        guid = next(
+            (
+                remainder[: -len(suffix)]
+                for suffix in ("/download/original", "/download", "/audio")
+                if remainder.endswith(suffix)
+            ),
+            None,
+        )
+        if not guid:
             return None
-        guid = parts[3]
-        post = Post.query.filter_by(guid=guid).first()
-        return post.feed_id if post else None
+        return _find_post_feed_id(guid, allowed_feed_ids)
 
     # Trigger endpoints are feed-scoped via guid query param
     if path == "/api/trigger/status" or path == "/trigger":
@@ -197,14 +220,24 @@ def _resolve_feed_id(path: str, *, req: Optional[Request] = None) -> Optional[in
         guid = req.args.get("guid")
         if not guid:
             return None
-        post = Post.query.filter_by(guid=guid).first()
-        return post.feed_id if post else None
+        return _find_post_feed_id(guid, allowed_feed_ids)
 
     if path.startswith("/post/"):
         remainder = path[len("/post/") :]
         guid = remainder.split("/", 1)[0]
         guid = guid.split(".", 1)[0]
-        post = Post.query.filter_by(guid=guid).first()
-        return post.feed_id if post else None
+        return _find_post_feed_id(guid, allowed_feed_ids)
 
     return None
+
+
+def _find_post_feed_id(
+    guid: str, allowed_feed_ids: Optional[set[int]]
+) -> Optional[int]:
+    query = Post.query.filter_by(guid=guid)
+    if allowed_feed_ids is not None:
+        if not allowed_feed_ids:
+            return None
+        query = query.filter(Post.feed_id.in_(allowed_feed_ids))
+    post = query.first()
+    return post.feed_id if post else None
