@@ -11,6 +11,7 @@ import requests
 import validators
 from flask import abort
 
+from shared.http_client import UnsafeURLError, public_get
 from shared.interfaces import Post
 from shared.processing_paths import get_in_root
 
@@ -75,7 +76,7 @@ class PodcastDownloader:
             abort(404)
             return None
 
-        self.logger.info(f"Downloading {audio_link} into {download_path}...")
+        self.logger.info("Downloading episode into %s...", download_path)
         referer = "https://open.acast.com/" if "acast.com" in audio_link else None
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -92,7 +93,7 @@ class PodcastDownloader:
         for attempt in range(3):
             remove_partial()
             try:
-                with requests.get(
+                with public_get(
                     audio_link,
                     stream=True,
                     timeout=(10, 60),
@@ -136,6 +137,9 @@ class PodcastDownloader:
                 os.replace(partial_path, download_path)
                 self.logger.info("Download complete.")
                 return download_path
+            except UnsafeURLError as error:
+                remove_partial()
+                raise DownloadError(str(error)) from error
             except (requests.Timeout, requests.ConnectionError) as error:
                 remove_partial()
                 if attempt < 2:

@@ -1,9 +1,9 @@
 name: Validation
 
 env:
-  PINNED_PIPENV_VERSION: "2026.0.3"
-  TORCH_VERSION: "2.10.0"
-  TRITON_VERSION: "3.6.0"
+  PINNED_PIPENV_VERSION: "2026.10.2"
+  TORCH_VERSION: "2.14.1"
+  TRITON_VERSION: "3.8.0"
   TORCH_CPU_INDEX_URL: "https://download.pytorch.org/whl/cpu"
 
 on:

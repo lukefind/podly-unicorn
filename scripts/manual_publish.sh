@@ -8,7 +8,7 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD | tr '/' '_')
 # Allow overriding image/owner/builder via env vars
 IMAGE=${IMAGE:-ghcr.io/lukefind/podly-unicorn}
 BUILDER=${BUILDER:-podly_builder}
-BASE_IMAGE=${BASE_IMAGE:-cgr.dev/chainguard/python:latest-dev@sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14}
+BASE_IMAGE=${BASE_IMAGE:-cgr.dev/chainguard/python:latest-dev@sha256:c179c7d8e23caed59a51ff74d4742f8f8d3f16af4c33c40acaf8d3ee07234592}
 
 # Ensure a docker-container buildx builder for multi-arch builds
 docker buildx create --name "${BUILDER}" --driver docker-container --use >/dev/null 2>&1 || docker buildx use "${BUILDER}"

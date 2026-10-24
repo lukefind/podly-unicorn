@@ -9,6 +9,7 @@ __pycache__/
 .git/
 .github/
 .gitignore
+.worktrees/
 
 # Editor files
 .vscode/
@@ -61,4 +62,4 @@ frontend/.eslintcache
 # Documentation
 docs/
 *.md
-!README.md 
+!README.md

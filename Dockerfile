@@ -1,5 +1,5 @@
 # Multi-stage build for combined frontend and backend
-ARG BASE_IMAGE=cgr.dev/chainguard/python:latest-dev@sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14
+ARG BASE_IMAGE=cgr.dev/chainguard/python:latest-dev@sha256:c179c7d8e23caed59a51ff74d4742f8f8d3f16af4c33c40acaf8d3ee07234592
 FROM node:24-alpine AS frontend-build
 
 WORKDIR /app
@@ -28,30 +28,30 @@ USER root
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ARG CUDA_VERSION=12.6
-ARG ROCM_VERSION=7.0
+ARG ROCM_VERSION=7.2
 ARG USE_GPU=false
 ARG USE_GPU_NVIDIA=${USE_GPU}
 ARG USE_GPU_AMD=false
-ARG LITE_BUILD=false
-ARG PINNED_PIP_VERSION=26.1.2
-ARG PINNED_PIPENV_VERSION=2026.0.3
-ARG TORCH_VERSION=2.10.0
-ARG TRITON_VERSION=3.6.0
+ARG PINNED_PIP_VERSION=26.2.2
+ARG PINNED_PIPENV_VERSION=2026.10.2
+ARG TORCH_VERSION=2.14.1
+ARG TRITON_VERSION=3.8.0
 ARG TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu
 ARG TORCH_NVIDIA_INDEX_URL=https://download.pytorch.org/whl/cu126
-ARG TORCH_ROCM_INDEX_URL=https://download.pytorch.org/whl/rocm7.0
+ARG TORCH_ROCM_INDEX_URL=https://download.pytorch.org/whl/rocm7.2
 
 WORKDIR /app
 
 # Install runtime and build dependencies based on the selected base image.
-# The Chainguard dev image currently ships Python 3.14, so replace its generic
+# The Chainguard dev image currently ships Python 3.15, so replace its generic
 # Python packages with the repository's supported Python 3.12 packages first.
 RUN set -e && \
     if command -v apk >/dev/null 2>&1; then \
+    apk upgrade --no-cache && \
     apk del \
-    python-3.14-dev python-3.14-base-dev \
-    py3.14-pip py3.14-pip-base py3.14-setuptools \
-    python-3.14 python-3.14-base && \
+    python-3.15-dev python-3.15-base-dev \
+    py3.15-pip py3.15-pip-base py3.15-setuptools \
+    python-3.15 python-3.15-runtime python-3.15-base && \
     apk add --no-cache \
     ca-certificates \
     ffmpeg \
@@ -94,17 +94,21 @@ RUN if [ -f /etc/debian_version ]; then \
 # Copy all Pipfiles/lock files
 COPY Pipfile Pipfile.lock Pipfile.lite Pipfile.lite.lock ./
 
-# Upgrade pip before it installs any application dependencies, then pin Pipenv
-# so lockfile verification stays deterministic across builds.
-# Ubuntu GPU bases mark their distro Python as externally managed. Podly builds
-# an isolated container filesystem, so allow the intentional system install.
+# Bootstrap pinned installers outside the distribution's Python packages.
+# Ubuntu's apt-managed pip has no RECORD and cannot be force-reinstalled.
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 RUN set -e && \
-    python3 -m pip install --no-cache-dir --upgrade --force-reinstall "pip==${PINNED_PIP_VERSION}" && \
-    PINNED_PIP_VERSION="${PINNED_PIP_VERSION}" python3 -c 'import os, pip; assert pip.__version__ == os.environ["PINNED_PIP_VERSION"]' && \
-    python3 -m pip --version | grep -F "pip ${PINNED_PIP_VERSION}" && \
-    pip --version | grep -F "pip ${PINNED_PIP_VERSION}" && \
-    python3 -m pip install --no-cache-dir "pipenv==${PINNED_PIPENV_VERSION}"
+    python3 -m venv --without-pip /opt/pipenv && \
+    python3 -m pip --python /opt/pipenv/bin/python install --no-cache-dir "pip==${PINNED_PIP_VERSION}" && \
+    PINNED_PIP_VERSION="${PINNED_PIP_VERSION}" /opt/pipenv/bin/python -c 'import os, pip; assert pip.__version__ == os.environ["PINNED_PIP_VERSION"]' && \
+    /opt/pipenv/bin/python -m pip install --no-cache-dir "pipenv==${PINNED_PIPENV_VERSION}"
+
+# Keep application dependencies separate from Pipenv's resolver dependencies.
+# LiteLLM's supported filelock 3.x must not constrain virtualenv's filelock 4.x.
+RUN python3 -m venv --without-pip /opt/venv && \
+    /opt/pipenv/bin/python -m pip --python /opt/venv/bin/python install --no-cache-dir "pip==${PINNED_PIP_VERSION}"
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:/opt/pipenv/bin:${PATH}"
 
 # Set pip timeout and retries for better reliability
 ENV PIP_DEFAULT_TIMEOUT=1000
@@ -117,15 +121,16 @@ ENV PIPENV_VENV_IN_PROJECT=1
 ENV PIPENV_TIMEOUT=1200
 
 # Install dependencies conditionally based on LITE_BUILD
+ARG LITE_BUILD=false
 RUN set -e && \
     if [ "${LITE_BUILD}" = "true" ]; then \
     echo "Installing lite dependencies (without Whisper)"; \
     echo "Using lite Pipfile:" && \
-    PIPENV_PIPFILE=Pipfile.lite pipenv install --deploy --system; \
+    PIPENV_PIPFILE=Pipfile.lite pipenv install --deploy; \
     else \
     echo "Installing full dependencies (including Whisper)"; \
     echo "Using full Pipfile:" && \
-    PIPENV_PIPFILE=Pipfile pipenv install --deploy --system; \
+    PIPENV_PIPFILE=Pipfile pipenv install --deploy; \
     fi
 
 # Replace the lock-installed generic PyTorch wheel with the selected official
@@ -158,6 +163,28 @@ RUN set -e && \
     fi && \
     python3 -m pip check
 
+# Installers are build tools. Even the latest pip/Pipenv releases bundle older
+# urllib3/msgpack copies, so remove them and virtualenv's seed wheels rather
+# than shipping vulnerable vendored code beside the patched application.
+RUN set -e && \
+    base_python="$(python3 -c 'import sys; print(sys._base_executable)')" && \
+    python3 -m pip uninstall --yes pip && \
+    rm -rf /opt/pipenv && \
+    if command -v apk >/dev/null 2>&1; then \
+    apk del py3.12-pip py3-pip-wheel; \
+    elif [ -f /etc/debian_version ]; then \
+    for package in python3-pip python3-setuptools python3-wheel; do \
+    if dpkg-query -W -f='${db:Status-Status}' "${package}" 2>/dev/null | grep -qx installed; then \
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y "${package}"; \
+    fi; \
+    done; \
+    fi && \
+    if "${base_python}" -c 'import pip' 2>/dev/null; then \
+    "${base_python}" -m pip uninstall --yes pip; \
+    fi && \
+    "${base_python}" -c 'import importlib.util; assert importlib.util.find_spec("pip") is None' && \
+    python3 -c 'import importlib.util; assert importlib.util.find_spec("pip") is None; assert importlib.util.find_spec("pipenv") is None'
+
 # The canonical Chainguard base is a development image so dependencies can be
 # compiled. Remove its build-only toolchain after all Python wheels are ready.
 RUN if command -v apk >/dev/null 2>&1; then \
@@ -165,7 +192,7 @@ RUN if command -v apk >/dev/null 2>&1; then \
     build-base \
     binutils \
     gcc \
-    glibc-dev \
+    glibc-2.44-dev \
     git \
     libstdc++-dev \
     libxcrypt-dev \

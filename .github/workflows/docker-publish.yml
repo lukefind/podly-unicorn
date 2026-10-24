@@ -32,7 +32,7 @@ jobs:
           push: false
           platforms: linux/amd64
           build-args: |
-            BASE_IMAGE=cgr.dev/chainguard/python:latest-dev@sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14
+            BASE_IMAGE=cgr.dev/chainguard/python:latest-dev@sha256:c179c7d8e23caed59a51ff74d4742f8f8d3f16af4c33c40acaf8d3ee07234592
             LITE_BUILD=true
             USE_GPU=false
             USE_GPU_NVIDIA=false
@@ -47,11 +47,11 @@ jobs:
     permissions:
       contents: read
     env:
-      PINNED_PIPENV_VERSION: "2026.0.3"
+      PINNED_PIPENV_VERSION: "2026.10.2"
       PIPENV_VENV_IN_PROJECT: "1"
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
-      TORCH_VERSION: "2.10.0"
-      TRITON_VERSION: "3.6.0"
+      TORCH_VERSION: "2.14.1"
+      TRITON_VERSION: "3.8.0"
       TORCH_CPU_INDEX_URL: "https://download.pytorch.org/whl/cpu"
     steps:
       - name: Checkout repository
@@ -86,6 +86,9 @@ jobs:
       - name: Check backend dependency consistency
         run: pipenv run python -m pip check
 
+      - name: Audit full and lite Python locks
+        run: pipenv run python scripts/audit_dependencies.py
+
       - name: Run backend test suite
         run: pipenv run pytest --disable-warnings
 
@@ -117,7 +120,7 @@ jobs:
 
       - name: Audit frontend dependencies
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=low
 
   publish:
     name: Publish verified multi-architecture image
@@ -193,7 +196,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ env.IMAGE }}:sha-${{ github.sha }}
           build-args: |
-            BASE_IMAGE=cgr.dev/chainguard/python:latest-dev@sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14
+            BASE_IMAGE=cgr.dev/chainguard/python:latest-dev@sha256:c179c7d8e23caed59a51ff74d4742f8f8d3f16af4c33c40acaf8d3ee07234592
             LITE_BUILD=false
             USE_GPU=false
             USE_GPU_NVIDIA=false
@@ -233,7 +236,7 @@ jobs:
       - name: Install Trivy
         uses: aquasecurity/setup-trivy@v0.3.1
         with:
-          version: v0.72.0
+          version: v0.76.1
           cache: true
 
       - name: Scan AMD64 candidate

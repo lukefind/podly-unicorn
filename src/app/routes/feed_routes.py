@@ -8,8 +8,6 @@ from threading import Lock, Thread
 from typing import Any, Optional, cast
 from urllib.parse import urlencode, urlparse, urlunparse
 
-from werkzeug.http import http_date
-
 import requests
 import validators
 from flask import (
@@ -26,11 +24,17 @@ from flask import (
     url_for,
 )
 from flask.typing import ResponseReturnValue
+from werkzeug.http import http_date
 
 from app.auth.feed_tokens import create_feed_access_token
 from app.background import request_storage_cleanup
 from app.extensions import db
-from app.feeds import add_or_refresh_feed, generate_feed_xml, generate_combined_feed_xml, refresh_feed
+from app.feeds import (
+    add_or_refresh_feed,
+    generate_combined_feed_xml,
+    generate_feed_xml,
+    refresh_feed,
+)
 from app.jobs_manager import get_jobs_manager
 from app.models import (
     AppSettings,
@@ -47,6 +51,7 @@ from app.models import (
 from app.runtime_config import config as runtime_config
 from app.storage_cleanup import is_valid_retention_count
 from podcast_processor.podcast_downloader import sanitize_title
+from shared.http_client import UnsafeURLError, validate_public_url
 from shared.processing_paths import get_in_root, get_srv_root
 
 logger = logging.getLogger("global_logger")
@@ -65,7 +70,7 @@ def _record_rss_read(
     auth_type: str = "feed_scoped",
 ) -> None:
     """Record an RSS feed read event (podcast app polling for updates).
-    
+
     This is separate from audio downloads - RSS reads are when the podcast app
     fetches the feed XML to check for new episodes.
     """
@@ -171,20 +176,22 @@ def fix_url(url: str) -> str:
 
 @feed_bp.route("/feed", methods=["POST"])
 def add_feed() -> ResponseReturnValue:
-    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
-    
+    from app.models import (
+        UserFeedSubscription,  # pylint: disable=import-outside-toplevel
+    )
+
     url = request.form.get("url")
     if not url:
         return make_response(("URL is required", 400))
 
     url = fix_url(url)
 
-    if not validators.url(url):
-        return make_response(("Invalid URL", 400))
-
     try:
+        validate_public_url(url)
+        if not validators.url(url):
+            return make_response(("Invalid URL", 400))
         feed = add_or_refresh_feed(url)
-        
+
         # Auto-subscribe the user who added the feed
         settings = current_app.config.get("AUTH_SETTINGS")
         current = getattr(g, "current_user", None)
@@ -197,7 +204,7 @@ def add_feed() -> ResponseReturnValue:
                 db.session.add(subscription)
                 db.session.commit()
                 logger.info(f"Auto-subscribed user {current.id} to feed {feed.id}")
-        
+
         app = cast(Any, current_app)._get_current_object()
         Thread(
             target=_enqueue_pending_jobs_async,
@@ -205,15 +212,31 @@ def add_feed() -> ResponseReturnValue:
             daemon=True,
             name="enqueue-jobs-after-add",
         ).start()
-        
+
         # Return JSON for API calls, redirect for form submissions
-        if request.headers.get('Accept', '').startswith('application/json') or request.is_json:
-            return jsonify({"status": "success", "feed_id": feed.id, "title": feed.title})
+        if (
+            request.headers.get("Accept", "").startswith("application/json")
+            or request.is_json
+        ):
+            return jsonify(
+                {"status": "success", "feed_id": feed.id, "title": feed.title}
+            )
         return redirect(url_for("main.index"))
+    except UnsafeURLError as exc:
+        if (
+            request.headers.get("Accept", "").startswith("application/json")
+            or request.is_json
+        ):
+            return jsonify({"error": str(exc)}), 400
+        return make_response((str(exc), 400))
     except Exception as e:  # pylint: disable=broad-except
         import traceback
+
         logger.error(f"Error adding feed: {e}\n{traceback.format_exc()}")
-        if request.headers.get('Accept', '').startswith('application/json') or request.is_json:
+        if (
+            request.headers.get("Accept", "").startswith("application/json")
+            or request.is_json
+        ):
             return jsonify({"error": str(e)}), 500
         return make_response((f"Error adding feed: {e}", 500))
 
@@ -360,29 +383,31 @@ def search_feeds() -> ResponseReturnValue:
 @feed_bp.route("/api/feeds/combined/episodes", methods=["GET"])
 def get_combined_episodes() -> Response:
     """Get combined episodes from all subscribed feeds with status info.
-    
+
     Query params:
     - limit: Max episodes to return (default 100)
     - offset: Pagination offset (default 0)
     - unprocessed_only: If true, only return unprocessed episodes
     - queued_only: If true, only return episodes with pending/running jobs
     """
-    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
     from app.auth.feed_tokens import create_feed_access_token
-    
+    from app.models import (
+        UserFeedSubscription,  # pylint: disable=import-outside-toplevel
+    )
+
     settings = current_app.config.get("AUTH_SETTINGS")
     current = getattr(g, "current_user", None)
-    
+
     if not settings or not settings.require_auth:
         return jsonify({"error": "Combined episodes requires authentication"}), 400
-    
+
     if not current:
         return jsonify({"error": "Authentication required"}), 401
-    
+
     user = User.query.get(current.id)
     if not user:
         return jsonify({"error": "User not found"}), 404
-    
+
     # Parse query params (safe defaults on bad input)
     try:
         limit = min(max(int(request.args.get("limit", 100)), 1), 200)
@@ -394,44 +419,40 @@ def get_combined_episodes() -> Response:
         offset = 0
     unprocessed_only = request.args.get("unprocessed_only", "").lower() == "true"
     queued_only = request.args.get("queued_only", "").lower() == "true"
-    
+
     # Get subscribed feed IDs
     subscriptions = UserFeedSubscription.query.filter_by(user_id=current.id).all()
     feed_ids = [sub.feed_id for sub in subscriptions]
-    
+
     if not feed_ids:
-        return jsonify({
-            "episodes": [],
-            "total": 0,
-            "subscribed_feeds": 0
-        })
-    
+        return jsonify({"episodes": [], "total": 0, "subscribed_feeds": 0})
+
     # Build query for posts
     query = Post.query.filter(Post.feed_id.in_(feed_ids))
-    
+
     # Apply filters
     if unprocessed_only:
         query = query.filter(
             (Post.processed_audio_path == None) | (Post.processed_audio_path == "")
         )
-    
+
     # Get total count before pagination
     total = query.count()
-    
+
     # Get posts with pagination
     posts = query.order_by(Post.release_date.desc()).offset(offset).limit(limit).all()
-    
+
     # Get all feeds for display
     feeds_by_id = {f.id: f for f in Feed.query.filter(Feed.id.in_(feed_ids)).all()}
-    
+
     # Get active jobs for these posts
     post_guids = [p.guid for p in posts]
     active_jobs = ProcessingJob.query.filter(
         ProcessingJob.post_guid.in_(post_guids),
-        ProcessingJob.status.in_(["pending", "running"])
+        ProcessingJob.status.in_(["pending", "running"]),
     ).all()
     jobs_by_guid = {j.post_guid: j for j in active_jobs}
-    
+
     # Create feed-scoped tokens for each feed
     feed_tokens = {}
     for feed_id in feed_ids:
@@ -439,101 +460,118 @@ def get_combined_episodes() -> Response:
         if feed:
             token_id, secret = create_feed_access_token(user, feed)
             feed_tokens[feed_id] = (token_id, secret)
-    
+
     # Filter for queued_only if requested
     if queued_only:
         posts = [p for p in posts if p.guid in jobs_by_guid]
         total = len(posts)
-    
+
     # Build response
     episodes = []
     for post in posts:
         feed = feeds_by_id.get(post.feed_id)
         job = jobs_by_guid.get(post.guid)
         token_pair = feed_tokens.get(post.feed_id)
-        
+
         # Determine status
-        has_processed = bool(post.processed_audio_path and Path(post.processed_audio_path).exists())
+        has_processed = bool(
+            post.processed_audio_path and Path(post.processed_audio_path).exists()
+        )
         if has_processed:
             status = "ready"
         elif job:
             status = "processing" if job.status == "running" else "queued"
         else:
             status = "not_processed"
-        
+
         # Build trigger URL (fully-qualified)
         trigger_url = None
         enclosure_url = None
         if token_pair:
             from app.feeds import _get_base_url
+
             base_url = _get_base_url()
             token_id, secret = token_pair
             trigger_url = f"{base_url}/trigger?guid={post.guid}&feed_token={token_id}&feed_secret={secret}"
             enclosure_url = f"{base_url}/api/posts/{post.guid}/download?feed_token={token_id}&feed_secret={secret}"
-        
-        episodes.append({
-            "id": post.id,
-            "guid": post.guid,
-            "title": post.title,
-            "description": post.description,
-            "release_date": post.release_date.isoformat() if post.release_date else None,
-            "duration": post.duration,
-            "feed_id": post.feed_id,
-            "feed_title": feed.title if feed else "Unknown",
-            "feed_image": feed.image_url if feed else None,
-            "image_url": post.image_url,
-            "whitelisted": post.whitelisted,
-            "has_processed_audio": has_processed,
-            "status": status,
-            "job": {
-                "id": job.id,
-                "status": job.status,
-                "current_step": job.current_step,
-                "total_steps": job.total_steps,
-                "step_name": job.step_name,
-                "progress_percentage": job.progress_percentage,
-            } if job else None,
-            "trigger_url": trigger_url,
-            "enclosure_url": enclosure_url,
-        })
-    
-    return jsonify({
-        "episodes": episodes,
-        "total": total,
-        "subscribed_feeds": len(feed_ids),
-        "limit": limit,
-        "offset": offset,
-    })
+
+        episodes.append(
+            {
+                "id": post.id,
+                "guid": post.guid,
+                "title": post.title,
+                "description": post.description,
+                "release_date": (
+                    post.release_date.isoformat() if post.release_date else None
+                ),
+                "duration": post.duration,
+                "feed_id": post.feed_id,
+                "feed_title": feed.title if feed else "Unknown",
+                "feed_image": feed.image_url if feed else None,
+                "image_url": post.image_url,
+                "whitelisted": post.whitelisted,
+                "has_processed_audio": has_processed,
+                "status": status,
+                "job": (
+                    {
+                        "id": job.id,
+                        "status": job.status,
+                        "current_step": job.current_step,
+                        "total_steps": job.total_steps,
+                        "step_name": job.step_name,
+                        "progress_percentage": job.progress_percentage,
+                    }
+                    if job
+                    else None
+                ),
+                "trigger_url": trigger_url,
+                "enclosure_url": enclosure_url,
+            }
+        )
+
+    return jsonify(
+        {
+            "episodes": episodes,
+            "total": total,
+            "subscribed_feeds": len(feed_ids),
+            "limit": limit,
+            "offset": offset,
+        }
+    )
 
 
 @feed_bp.route("/feed/combined", methods=["GET"])
 def get_combined_feed() -> Response:
     """Get a combined RSS feed with all episodes from user's subscribed podcasts.
-    
+
     The feed uses the Podly logo as the show image, but each episode
     retains its original podcast's artwork.
     """
-    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
-    
+    from app.models import (
+        UserFeedSubscription,  # pylint: disable=import-outside-toplevel
+    )
+
     settings = current_app.config.get("AUTH_SETTINGS")
     current = getattr(g, "current_user", None)
-    
+
     if not settings or not settings.require_auth:
-        return make_response(("Combined feed requires authentication to be enabled", 400))
-    
+        return make_response(
+            ("Combined feed requires authentication to be enabled", 400)
+        )
+
     if not current:
         return make_response(("Authentication required", 401))
-    
+
     user = User.query.get(current.id)
     if not user:
         return make_response(("User not found", 404))
-    
+
     # Record RSS_READ event for combined feed (feed_id=None for combined)
     _record_rss_read(feed_id=None, user_id=user.id, auth_type="combined")
-    
+
     # Generate the combined XML
     xml_content = generate_combined_feed_xml(user.id, user.username)
-    
+
     response = make_response(xml_content)
     response.headers["Content-Type"] = "application/rss+xml"
     return response
@@ -590,9 +628,7 @@ def _client_has_current_version(
         last_modified = last_modified_aware.replace(microsecond=0)
         if_modified_since = request.if_modified_since
         if if_modified_since.tzinfo is None:
-            if_modified_since = if_modified_since.replace(
-                tzinfo=datetime.timezone.utc
-            )
+            if_modified_since = if_modified_since.replace(tzinfo=datetime.timezone.utc)
         if last_modified <= if_modified_since:
             return True
     return False
@@ -643,7 +679,9 @@ def get_feed(f_id: int) -> Response:
     user_id = current.id if current else None
 
     # Record RSS_READ event
-    _record_rss_read(feed_id=f_id, user_id=user_id, auth_type="feed_scoped" if current else "none")
+    _record_rss_read(
+        feed_id=f_id, user_id=user_id, auth_type="feed_scoped" if current else "none"
+    )
 
     # Fast path: if the reader already has the current version, answer 304
     # before any upstream fetch or XML build. The scheduled refresh job and
@@ -678,17 +716,19 @@ def get_feed(f_id: int) -> Response:
 def delete_feed(f_id: int) -> Response:
     """Delete a feed. For non-admin users, this unsubscribes them from the feed.
     The feed is only fully deleted if no other subscribers remain."""
-    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
-    
+    from app.models import (
+        UserFeedSubscription,  # pylint: disable=import-outside-toplevel
+    )
+
     feed = Feed.query.get_or_404(f_id)
-    
+
     settings = current_app.config.get("AUTH_SETTINGS")
     current = getattr(g, "current_user", None)
-    
+
     # If auth is enabled, handle subscription-based deletion
     if settings and settings.require_auth and current:
         user = User.query.get(current.id)
-        
+
         # Remove user's subscription to this feed
         subscription = UserFeedSubscription.query.filter_by(
             user_id=current.id, feed_id=f_id
@@ -696,25 +736,33 @@ def delete_feed(f_id: int) -> Response:
         if subscription:
             db.session.delete(subscription)
             db.session.commit()
-        
+
         # Count remaining subscribers
-        remaining_subscribers = UserFeedSubscription.query.filter_by(feed_id=f_id).count()
-        
+        remaining_subscribers = UserFeedSubscription.query.filter_by(
+            feed_id=f_id
+        ).count()
+
         # If there are still other subscribers, just unsubscribe (don't delete feed)
         if remaining_subscribers > 0:
-            logger.info(f"User {current.id} unsubscribed from feed {f_id}. {remaining_subscribers} subscribers remain.")
+            logger.info(
+                f"User {current.id} unsubscribed from feed {f_id}. {remaining_subscribers} subscribers remain."
+            )
             return make_response("", 204)
-        
+
         # No remaining subscribers - proceed to full deletion
-        logger.info(f"Feed {f_id} has no remaining subscribers. Proceeding with full deletion.")
-    
+        logger.info(
+            f"Feed {f_id} has no remaining subscribers. Proceeding with full deletion."
+        )
+
     # Full deletion (admin or no auth)
     feed_id_to_delete = feed.id
     feed_title = feed.title
-    
+
     # Get post info for file cleanup (before we touch the session)
-    posts_info = [(post.id, post.guid, post.unprocessed_audio_path, post.processed_audio_path) 
-                  for post in feed.posts]
+    posts_info = [
+        (post.id, post.guid, post.unprocessed_audio_path, post.processed_audio_path)
+        for post in feed.posts
+    ]
     post_ids = [p[0] for p in posts_info]
     post_guids = [p[1] for p in posts_info]
 
@@ -725,7 +773,9 @@ def delete_feed(f_id: int) -> Response:
                 Path(unprocessed_path).unlink()
                 logger.info(f"Deleted unprocessed audio: {unprocessed_path}")
             except Exception as e:  # pylint: disable=broad-except
-                logger.error(f"Error deleting unprocessed audio {unprocessed_path}: {e}")
+                logger.error(
+                    f"Error deleting unprocessed audio {unprocessed_path}: {e}"
+                )
 
         if processed_path and Path(processed_path).exists():
             try:
@@ -736,13 +786,15 @@ def delete_feed(f_id: int) -> Response:
 
     # Clean up directory structures
     _cleanup_feed_directories(feed)
-    
+
     # Rollback any pending changes and use parameterized SQL to avoid ORM cascade issues
     db.session.rollback()
     _delete_feed_records(feed_id_to_delete, post_ids, post_guids)
     db.session.commit()
 
-    logger.info(f"Deleted feed: {feed_title} (ID: {feed_id_to_delete}) with {len(post_ids)} posts")
+    logger.info(
+        f"Deleted feed: {feed_title} (ID: {feed_id_to_delete}) with {len(post_ids)} posts"
+    )
     return make_response("", 204)
 
 
@@ -787,8 +839,9 @@ def _refresh_feed_background(app: Flask, feed_id: int) -> None:
                 manager = get_jobs_manager()
                 for post_guid in auto_process_post_guids:
                     manager.start_post_processing(
-                        post_guid, priority="background",
-                        trigger_source="auto_feed_refresh"
+                        post_guid,
+                        priority="background",
+                        trigger_source="auto_feed_refresh",
                     )
 
             get_jobs_manager().enqueue_pending_jobs(
@@ -820,7 +873,9 @@ def _enqueue_pending_jobs_async(app: Flask) -> None:
             logger.error("Failed to enqueue pending jobs asynchronously: %s", exc)
 
 
-def _delete_feed_records(feed_id: int, post_ids: list[int], post_guids: list[str]) -> None:
+def _delete_feed_records(
+    feed_id: int, post_ids: list[int], post_guids: list[str]
+) -> None:
     """Delete all database records associated with a feed using parameterized queries.
 
     Must be called after db.session.rollback() to avoid ORM cascade issues.
@@ -835,43 +890,64 @@ def _delete_feed_records(feed_id: int, post_ids: list[int], post_guids: list[str
 
         # Get transcript segment IDs for this feed's posts
         segment_ids_result = db.session.execute(
-            text(f"SELECT id FROM transcript_segment WHERE post_id IN ({id_placeholders})"),
+            text(
+                f"SELECT id FROM transcript_segment WHERE post_id IN ({id_placeholders})"
+            ),
             id_params,
         ).fetchall()
         segment_ids = [r[0] for r in segment_ids_result]
 
         if segment_ids:
-            seg_placeholders = ",".join([":sid_%d" % i for i in range(len(segment_ids))])
+            seg_placeholders = ",".join(
+                [":sid_%d" % i for i in range(len(segment_ids))]
+            )
             seg_params = {"sid_%d" % i: sid for i, sid in enumerate(segment_ids)}
             db.session.execute(
-                text(f"DELETE FROM identification WHERE transcript_segment_id IN ({seg_placeholders})"),
+                text(
+                    f"DELETE FROM identification WHERE transcript_segment_id IN ({seg_placeholders})"
+                ),
                 seg_params,
             )
 
         db.session.execute(
-            text(f"DELETE FROM transcript_segment WHERE post_id IN ({id_placeholders})"), id_params
+            text(
+                f"DELETE FROM transcript_segment WHERE post_id IN ({id_placeholders})"
+            ),
+            id_params,
         )
         db.session.execute(
-            text(f"DELETE FROM model_call WHERE post_id IN ({id_placeholders})"), id_params
+            text(f"DELETE FROM model_call WHERE post_id IN ({id_placeholders})"),
+            id_params,
         )
         db.session.execute(
-            text(f"DELETE FROM processing_statistics WHERE post_id IN ({id_placeholders})"), id_params
+            text(
+                f"DELETE FROM processing_statistics WHERE post_id IN ({id_placeholders})"
+            ),
+            id_params,
         )
         db.session.execute(
-            text(f"DELETE FROM user_download WHERE post_id IN ({id_placeholders})"), id_params
+            text(f"DELETE FROM user_download WHERE post_id IN ({id_placeholders})"),
+            id_params,
         )
 
     if post_guids:
         guid_placeholders = ",".join([":guid_%d" % i for i in range(len(post_guids))])
         guid_params = {"guid_%d" % i: g for i, g in enumerate(post_guids)}
         db.session.execute(
-            text(f"DELETE FROM processing_job WHERE post_guid IN ({guid_placeholders})"),
+            text(
+                f"DELETE FROM processing_job WHERE post_guid IN ({guid_placeholders})"
+            ),
             guid_params,
         )
 
     db.session.execute(text("DELETE FROM post WHERE feed_id = :fid"), {"fid": feed_id})
-    db.session.execute(text("DELETE FROM user_feed_subscription WHERE feed_id = :fid"), {"fid": feed_id})
-    db.session.execute(text("DELETE FROM feed_access_token WHERE feed_id = :fid"), {"fid": feed_id})
+    db.session.execute(
+        text("DELETE FROM user_feed_subscription WHERE feed_id = :fid"),
+        {"fid": feed_id},
+    )
+    db.session.execute(
+        text("DELETE FROM feed_access_token WHERE feed_id = :fid"), {"fid": feed_id}
+    )
     db.session.execute(text("DELETE FROM feed WHERE id = :fid"), {"fid": feed_id})
 
 
@@ -932,7 +1008,7 @@ def _cleanup_feed_directories(feed: Feed) -> None:
 @feed_bp.route("/rss/<path:rss_url>", methods=["GET"])
 def get_feed_by_rss_url(rss_url: str) -> Response:
     """Legacy endpoint: Look up a feed by its RSS URL.
-    
+
     This route was previously a catch-all that intercepted ALL paths,
     breaking SPA routing. Now it only matches /rss/<url> paths.
     """
@@ -950,17 +1026,21 @@ def get_feed_by_rss_url(rss_url: str) -> Response:
 def api_feeds() -> Response:
     """Get feeds list. All users (including admins) only see feeds they've subscribed to."""
     from sqlalchemy import func  # pylint: disable=import-outside-toplevel
-    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
-    
+
+    from app.models import (
+        UserFeedSubscription,  # pylint: disable=import-outside-toplevel
+    )
+
     settings = current_app.config.get("AUTH_SETTINGS")
     current = getattr(g, "current_user", None)
-    
+
     # Build base query with posts count (efficient single query)
-    base_query = db.session.query(
-        Feed,
-        func.count(Post.id).label('posts_count')
-    ).outerjoin(Post, Feed.id == Post.feed_id).group_by(Feed.id)
-    
+    base_query = (
+        db.session.query(Feed, func.count(Post.id).label("posts_count"))
+        .outerjoin(Post, Feed.id == Post.feed_id)
+        .group_by(Feed.id)
+    )
+
     # Get user's subscription privacy status
     subscriptions_map: dict = {}  # feed_id -> is_private
     subscriptions_auto_download_map: dict = {}  # feed_id -> auto_download_new_episodes
@@ -981,7 +1061,7 @@ def api_feeds() -> Response:
         .distinct()
         .all()
     )
-    
+
     results = base_query.all()
 
     active_preset = PromptPreset.query.filter_by(is_active=True).first()
@@ -992,10 +1072,12 @@ def api_feeds() -> Response:
     }
     presets_by_id = {}
     if default_preset_ids:
-        for preset in PromptPreset.query.filter(PromptPreset.id.in_(default_preset_ids)).all():
+        for preset in PromptPreset.query.filter(
+            PromptPreset.id.in_(default_preset_ids)
+        ).all():
             presets_by_id[preset.id] = preset
     global_retention_days = _global_cleanup_retention_days()
-    
+
     feeds_data = [
         {
             "id": feed.id,
@@ -1160,99 +1242,127 @@ def set_feed_visibility(feed_id: int) -> ResponseReturnValue:
     feed.is_hidden = bool(is_hidden)
     db.session.commit()
 
-    return jsonify({
-        "status": "ok",
-        "feed_id": feed.id,
-        "is_hidden": feed.is_hidden,
-    })
+    return jsonify(
+        {
+            "status": "ok",
+            "feed_id": feed.id,
+            "is_hidden": feed.is_hidden,
+        }
+    )
 
 
 @feed_bp.route("/api/feeds/<int:feed_id>/disable-auto-process", methods=["POST"])
 def disable_auto_process_all(feed_id: int) -> ResponseReturnValue:
     """Admin-only: Disable auto-process for all users on this feed."""
-    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
-    
+    from app.models import (
+        UserFeedSubscription,  # pylint: disable=import-outside-toplevel
+    )
+
     error_response = _require_admin()
     if error_response:
         return error_response
 
     feed = Feed.query.get_or_404(feed_id)
-    
+
     # Disable auto_download_new_episodes for all subscriptions to this feed
     updated = UserFeedSubscription.query.filter_by(feed_id=feed_id).update(
         {"auto_download_new_episodes": False}
     )
     db.session.commit()
 
-    return jsonify({
-        "status": "ok",
-        "feed_id": feed.id,
-        "subscriptions_updated": updated,
-    })
+    return jsonify(
+        {
+            "status": "ok",
+            "feed_id": feed.id,
+            "subscriptions_updated": updated,
+        }
+    )
 
 
 @feed_bp.route("/api/feeds/<int:feed_id>/subscribe", methods=["POST"])
 def subscribe_to_feed(feed_id: int) -> ResponseReturnValue:
     """Subscribe the current user to a feed. Optionally mark as private."""
-    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
-    
+    from app.models import (
+        UserFeedSubscription,  # pylint: disable=import-outside-toplevel
+    )
+
     settings = current_app.config.get("AUTH_SETTINGS")
     if not settings or not settings.require_auth:
         return jsonify({"error": "Authentication is disabled."}), 404
-    
+
     current = getattr(g, "current_user", None)
     if current is None:
         return jsonify({"error": "Authentication required."}), 401
-    
+
     feed = Feed.query.get_or_404(feed_id)
-    
+
     # Get private flag from request
     is_private = request.json.get("private", False) if request.is_json else False
-    
+
     # Check if already subscribed
     existing = UserFeedSubscription.query.filter_by(
         user_id=current.id, feed_id=feed_id
     ).first()
-    
+
     if existing:
         # Update privacy setting if changed
         if existing.is_private != is_private:
             existing.is_private = is_private
             db.session.commit()
-            return jsonify({"message": "Subscription updated", "subscribed": True, "is_private": is_private})
-        return jsonify({"message": "Already subscribed", "subscribed": True, "is_private": existing.is_private})
-    
+            return jsonify(
+                {
+                    "message": "Subscription updated",
+                    "subscribed": True,
+                    "is_private": is_private,
+                }
+            )
+        return jsonify(
+            {
+                "message": "Already subscribed",
+                "subscribed": True,
+                "is_private": existing.is_private,
+            }
+        )
+
     subscription = UserFeedSubscription(
         user_id=current.id, feed_id=feed_id, is_private=is_private
     )
     db.session.add(subscription)
     db.session.commit()
-    
-    return jsonify({"message": f"Subscribed to {feed.title}", "subscribed": True, "is_private": is_private})
+
+    return jsonify(
+        {
+            "message": f"Subscribed to {feed.title}",
+            "subscribed": True,
+            "is_private": is_private,
+        }
+    )
 
 
 @feed_bp.route("/api/feeds/<int:feed_id>/unsubscribe", methods=["POST"])
 def unsubscribe_from_feed(feed_id: int) -> ResponseReturnValue:
     """Unsubscribe the current user from a feed."""
-    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
-    
+    from app.models import (
+        UserFeedSubscription,  # pylint: disable=import-outside-toplevel
+    )
+
     settings = current_app.config.get("AUTH_SETTINGS")
     if not settings or not settings.require_auth:
         return jsonify({"error": "Authentication is disabled."}), 404
-    
+
     current = getattr(g, "current_user", None)
     if current is None:
         return jsonify({"error": "Authentication required."}), 401
-    
+
     subscription = UserFeedSubscription.query.filter_by(
         user_id=current.id, feed_id=feed_id
     ).first()
-    
+
     if subscription:
         db.session.delete(subscription)
         db.session.commit()
         return jsonify({"message": "Unsubscribed", "subscribed": False})
-    
+
     return jsonify({"message": "Not subscribed", "subscribed": False})
 
 
@@ -1264,7 +1374,9 @@ def set_feed_auto_download(feed_id: int) -> ResponseReturnValue:
     auto-processed for everyone.
     """
 
-    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
+    from app.models import (
+        UserFeedSubscription,  # pylint: disable=import-outside-toplevel
+    )
 
     settings = current_app.config.get("AUTH_SETTINGS")
     if not settings or not settings.require_auth:
@@ -1307,36 +1419,41 @@ def set_feed_auto_download(feed_id: int) -> ResponseReturnValue:
 @feed_bp.route("/api/feeds/all", methods=["GET"])
 def api_all_feeds() -> Response:
     """Get all feeds with subscription status - for subscription management.
-    
+
     Only shows feeds that have at least one PUBLIC subscriber, OR feeds the current user is subscribed to.
     This ensures privately-subscribed-only feeds remain hidden from other users.
     """
     from sqlalchemy import func  # pylint: disable=import-outside-toplevel
-    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
-    
+
+    from app.models import (
+        UserFeedSubscription,  # pylint: disable=import-outside-toplevel
+    )
+
     current = getattr(g, "current_user", None)
-    
+
     # Get user's subscriptions with privacy status
     user_subscriptions: dict = {}  # feed_id -> is_private
     if current:
         for sub in UserFeedSubscription.query.filter_by(user_id=current.id).all():
             user_subscriptions[sub.feed_id] = sub.is_private
-    
+
     # Get feeds that have at least one PUBLIC subscription
     feeds_with_public_subs = set(
-        row[0] for row in 
-        db.session.query(UserFeedSubscription.feed_id)
+        row[0]
+        for row in db.session.query(UserFeedSubscription.feed_id)
         .filter_by(is_private=False)
         .distinct()
         .all()
     )
-    
+
     # Efficient query with posts count
-    results = db.session.query(
-        Feed,
-        func.count(Post.id).label('posts_count')
-    ).outerjoin(Post, Feed.id == Post.feed_id).group_by(Feed.id).all()
-    
+    results = (
+        db.session.query(Feed, func.count(Post.id).label("posts_count"))
+        .outerjoin(Post, Feed.id == Post.feed_id)
+        .group_by(Feed.id)
+        .all()
+    )
+
     # Check if current user is admin
     is_admin = False
     if current:
@@ -1351,26 +1468,28 @@ def api_all_feeds() -> Response:
         # 3. AND feed is not hidden (unless user is admin or already subscribed)
         is_user_subscribed = feed.id in user_subscriptions
         has_public_subscriber = feed.id in feeds_with_public_subs
-        feed_is_hidden = getattr(feed, 'is_hidden', False)
+        feed_is_hidden = getattr(feed, "is_hidden", False)
 
         # Hidden feeds are only visible to admins or users already subscribed
         if feed_is_hidden and not is_admin and not is_user_subscribed:
             continue
 
         if is_user_subscribed or has_public_subscriber:
-            feeds_data.append({
-                "id": feed.id,
-                "title": feed.title,
-                "rss_url": feed.rss_url,
-                "description": feed.description,
-                "author": feed.author,
-                "image_url": feed.image_url,
-                "posts_count": posts_count,
-                "is_subscribed": is_user_subscribed,
-                "is_private": user_subscriptions.get(feed.id, False),
-                "is_hidden": feed_is_hidden,
-            })
-    
+            feeds_data.append(
+                {
+                    "id": feed.id,
+                    "title": feed.title,
+                    "rss_url": feed.rss_url,
+                    "description": feed.description,
+                    "author": feed.author,
+                    "image_url": feed.image_url,
+                    "posts_count": posts_count,
+                    "is_subscribed": is_user_subscribed,
+                    "is_private": user_subscriptions.get(feed.id, False),
+                    "is_hidden": feed_is_hidden,
+                }
+            )
+
     return jsonify(feeds_data)
 
 
@@ -1378,26 +1497,32 @@ def api_all_feeds() -> Response:
 def api_admin_feed_subscriptions() -> ResponseReturnValue:
     """Admin endpoint: Get all feeds with subscriber details and stats."""
     from sqlalchemy import func  # pylint: disable=import-outside-toplevel
-    from app.models import UserFeedSubscription, ProcessingStatistics  # pylint: disable=import-outside-toplevel
-    
+
+    from app.models import (  # pylint: disable=import-outside-toplevel
+        ProcessingStatistics,
+        UserFeedSubscription,
+    )
+
     settings = current_app.config.get("AUTH_SETTINGS")
     if not settings or not settings.require_auth:
         return jsonify({"error": "Authentication is disabled."}), 404
-    
+
     current = getattr(g, "current_user", None)
     if current is None:
         return jsonify({"error": "Authentication required."}), 401
-    
+
     user = User.query.get(current.id)
     if not user or user.role != "admin":
         return jsonify({"error": "Admin privileges required."}), 403
-    
+
     # Get all feeds with posts count
-    feeds_with_counts = db.session.query(
-        Feed,
-        func.count(Post.id).label('posts_count')
-    ).outerjoin(Post, Feed.id == Post.feed_id).group_by(Feed.id).all()
-    
+    feeds_with_counts = (
+        db.session.query(Feed, func.count(Post.id).label("posts_count"))
+        .outerjoin(Post, Feed.id == Post.feed_id)
+        .group_by(Feed.id)
+        .all()
+    )
+
     # Get all subscriptions grouped by feed (including private - admin sees all for usage tracking)
     all_subscriptions = UserFeedSubscription.query.all()
     subscriptions_by_feed: dict = {}
@@ -1408,46 +1533,48 @@ def api_admin_feed_subscriptions() -> ResponseReturnValue:
             subscriptions_by_feed[sub.feed_id] = []
             auto_process_by_feed[sub.feed_id] = False
             has_public_subscriber[sub.feed_id] = False
-        subscriptions_by_feed[sub.feed_id].append({
-            "user_id": sub.user_id,
-            "username": sub.user.username if sub.user else "Unknown",
-            "subscribed_at": sub.subscribed_at.isoformat() if sub.subscribed_at else None,
-            "is_private": sub.is_private,
-            "auto_download": getattr(sub, 'auto_download_new_episodes', False),
-        })
-        if getattr(sub, 'auto_download_new_episodes', False):
+        subscriptions_by_feed[sub.feed_id].append(
+            {
+                "user_id": sub.user_id,
+                "username": sub.user.username if sub.user else "Unknown",
+                "subscribed_at": (
+                    sub.subscribed_at.isoformat() if sub.subscribed_at else None
+                ),
+                "is_private": sub.is_private,
+                "auto_download": getattr(sub, "auto_download_new_episodes", False),
+            }
+        )
+        if getattr(sub, "auto_download_new_episodes", False):
             auto_process_by_feed[sub.feed_id] = True
         if not sub.is_private:
             has_public_subscriber[sub.feed_id] = True
-    
+
     # Get processing stats per feed - use efficient batch queries
     # Get processed counts for all feeds in one query
     processed_counts = dict(
-        db.session.query(
-            Post.feed_id,
-            func.count(Post.id)
-        ).filter(
-            Post.processed_audio_path.isnot(None),
-            Post.processed_audio_path != ""
-        ).group_by(Post.feed_id).all()
+        db.session.query(Post.feed_id, func.count(Post.id))
+        .filter(Post.processed_audio_path.isnot(None), Post.processed_audio_path != "")
+        .group_by(Post.feed_id)
+        .all()
     )
-    
+
     # Get total ad time removed for all feeds in one query
     ad_time_by_feed = dict(
         db.session.query(
-            Post.feed_id,
-            func.sum(ProcessingStatistics.total_duration_removed_seconds)
-        ).join(Post, ProcessingStatistics.post_id == Post.id
-        ).group_by(Post.feed_id).all()
+            Post.feed_id, func.sum(ProcessingStatistics.total_duration_removed_seconds)
+        )
+        .join(Post, ProcessingStatistics.post_id == Post.id)
+        .group_by(Post.feed_id)
+        .all()
     )
-    
+
     feed_stats: dict = {}
     for feed, _ in feeds_with_counts:
         feed_stats[feed.id] = {
             "processed_count": processed_counts.get(feed.id, 0),
             "total_ad_time_removed": round(ad_time_by_feed.get(feed.id) or 0.0, 1),
         }
-    
+
     feeds_data = [
         {
             "id": feed.id,
@@ -1459,30 +1586,32 @@ def api_admin_feed_subscriptions() -> ResponseReturnValue:
             "posts_count": posts_count,
             "subscribers": subscriptions_by_feed.get(feed.id, []),
             "subscriber_count": len(subscriptions_by_feed.get(feed.id, [])),
-            "stats": feed_stats.get(feed.id, {"processed_count": 0, "total_ad_time_removed": 0}),
-            "is_hidden": getattr(feed, 'is_hidden', False),
+            "stats": feed_stats.get(
+                feed.id, {"processed_count": 0, "total_ad_time_removed": 0}
+            ),
+            "is_hidden": getattr(feed, "is_hidden", False),
             "auto_process_enabled": auto_process_by_feed.get(feed.id, False),
             "has_public_subscriber": has_public_subscriber.get(feed.id, False),
         }
         for feed, posts_count in feeds_with_counts
-        if feed.id in subscriptions_by_feed  # Only include feeds with at least one subscriber
+        if feed.id
+        in subscriptions_by_feed  # Only include feeds with at least one subscriber
     ]
-    
+
     # Sort by subscriber count descending
     feeds_data.sort(key=lambda x: x["subscriber_count"], reverse=True)
-    
+
     # Calculate total processed episodes and storage size (server-wide, not just subscribed feeds)
     from pathlib import Path
+
     total_processed_episodes = Post.query.filter(
-        Post.processed_audio_path.isnot(None),
-        Post.processed_audio_path != ""
+        Post.processed_audio_path.isnot(None), Post.processed_audio_path != ""
     ).count()
-    
+
     # Calculate total storage used by processed files
     total_storage_bytes = 0
     for post in Post.query.filter(
-        Post.processed_audio_path.isnot(None),
-        Post.processed_audio_path != ""
+        Post.processed_audio_path.isnot(None), Post.processed_audio_path != ""
     ).all():
         try:
             path = Path(post.processed_audio_path)
@@ -1490,14 +1619,16 @@ def api_admin_feed_subscriptions() -> ResponseReturnValue:
                 total_storage_bytes += path.stat().st_size
         except Exception:
             pass
-    
-    return jsonify({
-        "feeds": feeds_data,
-        "total_feeds": len(feeds_data),
-        "total_subscriptions": len(all_subscriptions),
-        "total_processed_episodes": total_processed_episodes,
-        "total_storage_bytes": total_storage_bytes,
-    })
+
+    return jsonify(
+        {
+            "feeds": feeds_data,
+            "total_feeds": len(feeds_data),
+            "total_subscriptions": len(all_subscriptions),
+            "total_processed_episodes": total_processed_episodes,
+            "total_storage_bytes": total_storage_bytes,
+        }
+    )
 
 
 @feed_bp.route("/api/admin/diagnose-processed-paths", methods=["GET"])
@@ -1505,47 +1636,55 @@ def api_admin_diagnose_processed_paths() -> ResponseReturnValue:
     """Admin endpoint: Diagnose processed audio path issues."""
     import re
     from pathlib import Path
+
     from shared.processing_paths import get_srv_root
-    
+
     settings = current_app.config.get("AUTH_SETTINGS")
     if not settings or not settings.require_auth:
         return jsonify({"error": "Authentication is disabled."}), 404
-    
+
     current = getattr(g, "current_user", None)
     if current is None:
         return jsonify({"error": "Authentication required."}), 401
-    
+
     user = User.query.get(current.id)
     if not user or user.role != "admin":
         return jsonify({"error": "Admin privileges required."}), 403
-    
+
     srv_root = get_srv_root()
-    
+
     # Get stats
     total_posts = Post.query.count()
     posts_with_path = Post.query.filter(
-        Post.processed_audio_path.isnot(None),
-        Post.processed_audio_path != ""
+        Post.processed_audio_path.isnot(None), Post.processed_audio_path != ""
     ).count()
     posts_without_path = total_posts - posts_with_path
-    
+
     # Check which paths actually exist on disk
     posts_with_valid_path = 0
     posts_with_invalid_path = 0
     invalid_paths = []
-    
-    for post in Post.query.filter(Post.processed_audio_path.isnot(None), Post.processed_audio_path != "").limit(100).all():
+
+    for post in (
+        Post.query.filter(
+            Post.processed_audio_path.isnot(None), Post.processed_audio_path != ""
+        )
+        .limit(100)
+        .all()
+    ):
         if Path(post.processed_audio_path).exists():
             posts_with_valid_path += 1
         else:
             posts_with_invalid_path += 1
             if len(invalid_paths) < 5:
-                invalid_paths.append({
-                    "post_id": post.id,
-                    "title": post.title[:50],
-                    "path": post.processed_audio_path
-                })
-    
+                invalid_paths.append(
+                    {
+                        "post_id": post.id,
+                        "title": post.title[:50],
+                        "path": post.processed_audio_path,
+                    }
+                )
+
     # List directories in srv_root
     srv_dirs = []
     if srv_root.exists():
@@ -1553,53 +1692,54 @@ def api_admin_diagnose_processed_paths() -> ResponseReturnValue:
             if d.is_dir():
                 file_count = len(list(d.glob("*.mp3")))
                 srv_dirs.append({"name": d.name, "mp3_count": file_count})
-    
-    return jsonify({
-        "srv_root": str(srv_root),
-        "srv_root_exists": srv_root.exists(),
-        "total_posts": total_posts,
-        "posts_with_path_in_db": posts_with_path,
-        "posts_without_path_in_db": posts_without_path,
-        "posts_with_valid_path_on_disk": posts_with_valid_path,
-        "posts_with_invalid_path": posts_with_invalid_path,
-        "sample_invalid_paths": invalid_paths,
-        "srv_directories": srv_dirs[:20],
-    })
+
+    return jsonify(
+        {
+            "srv_root": str(srv_root),
+            "srv_root_exists": srv_root.exists(),
+            "total_posts": total_posts,
+            "posts_with_path_in_db": posts_with_path,
+            "posts_without_path_in_db": posts_without_path,
+            "posts_with_valid_path_on_disk": posts_with_valid_path,
+            "posts_with_invalid_path": posts_with_invalid_path,
+            "sample_invalid_paths": invalid_paths,
+            "srv_directories": srv_dirs[:20],
+        }
+    )
 
 
 @feed_bp.route("/api/admin/fix-invalid-paths", methods=["POST"])
 def api_admin_fix_invalid_paths() -> ResponseReturnValue:
     """Admin endpoint: Fix posts with invalid processed_audio_path by finding similar files on disk."""
-    from pathlib import Path
     from difflib import SequenceMatcher
-    
+    from pathlib import Path
+
     settings = current_app.config.get("AUTH_SETTINGS")
     if not settings or not settings.require_auth:
         return jsonify({"error": "Authentication is disabled."}), 404
-    
+
     current = getattr(g, "current_user", None)
     if current is None:
         return jsonify({"error": "Authentication required."}), 401
-    
+
     user = User.query.get(current.id)
     if not user or user.role != "admin":
         return jsonify({"error": "Admin privileges required."}), 403
-    
+
     fixed_count = 0
     cleared_count = 0
     details = []
-    
+
     # Get posts with paths that don't exist on disk
     posts_with_paths = Post.query.filter(
-        Post.processed_audio_path.isnot(None),
-        Post.processed_audio_path != ""
+        Post.processed_audio_path.isnot(None), Post.processed_audio_path != ""
     ).all()
-    
+
     for post in posts_with_paths:
         path = Path(post.processed_audio_path)
         if path.exists():
             continue  # Path is valid, skip
-        
+
         # Path doesn't exist - try to find a similar file in the same directory
         parent_dir = path.parent
         if not parent_dir.exists():
@@ -1609,215 +1749,242 @@ def api_admin_fix_invalid_paths() -> ResponseReturnValue:
             cleared_count += 1
             details.append(f"Cleared (no dir): {post.title[:40]}...")
             continue
-        
+
         # Look for similar filename in the directory
         expected_name = path.name
         best_match = None
         best_ratio = 0.0
-        
+
         for audio_file in parent_dir.glob("*.mp3"):
             # Calculate similarity ratio
-            ratio = SequenceMatcher(None, expected_name.lower(), audio_file.name.lower()).ratio()
+            ratio = SequenceMatcher(
+                None, expected_name.lower(), audio_file.name.lower()
+            ).ratio()
             if ratio > best_ratio and ratio > 0.7:  # At least 70% similar
                 best_ratio = ratio
                 best_match = audio_file
-        
+
         if best_match:
             post.processed_audio_path = str(best_match)
             db.session.commit()
             fixed_count += 1
-            details.append(f"Fixed ({best_ratio:.0%}): {post.title[:30]}... -> {best_match.name[:30]}")
+            details.append(
+                f"Fixed ({best_ratio:.0%}): {post.title[:30]}... -> {best_match.name[:30]}"
+            )
         else:
             # No similar file found - clear the invalid path
             post.processed_audio_path = None
             db.session.commit()
             cleared_count += 1
             details.append(f"Cleared (no match): {post.title[:40]}...")
-    
-    return jsonify({
-        "fixed": fixed_count,
-        "cleared": cleared_count,
-        "details": details,
-    })
+
+    return jsonify(
+        {
+            "fixed": fixed_count,
+            "cleared": cleared_count,
+            "details": details,
+        }
+    )
 
 
 @feed_bp.route("/api/admin/repair-processed-paths", methods=["POST"])
 def api_admin_repair_processed_paths() -> ResponseReturnValue:
     """Admin endpoint: Scan for existing processed audio files and update database records.
-    
+
     This fixes issues where the database doesn't have processed_audio_path set but the files exist on disk.
     Uses multiple matching strategies: unprocessed_audio_path filename, download_url filename, guid-based matching.
     """
     import re
     import urllib.parse
     from pathlib import Path
+
     from shared.processing_paths import get_srv_root
-    
+
     settings = current_app.config.get("AUTH_SETTINGS")
     if not settings or not settings.require_auth:
         return jsonify({"error": "Authentication is disabled."}), 404
-    
+
     current = getattr(g, "current_user", None)
     if current is None:
         return jsonify({"error": "Authentication required."}), 401
-    
+
     user = User.query.get(current.id)
     if not user or user.role != "admin":
         return jsonify({"error": "Admin privileges required."}), 403
-    
+
     srv_root = get_srv_root()
     repaired_count = 0
     checked_count = 0
     errors = []
     details = []
-    
+
     # Get all posts that don't have processed_audio_path set
     posts_without_path = Post.query.filter(
         (Post.processed_audio_path.is_(None)) | (Post.processed_audio_path == "")
     ).all()
-    
+
     # Build a map of feed_id -> sanitized_feed_title for efficiency
     feed_title_map: dict = {}
-    
+
     for post in posts_without_path:
         checked_count += 1
         try:
             feed = Feed.query.get(post.feed_id)
             if not feed:
                 continue
-            
+
             # Get or calculate sanitized feed title
             if feed.id not in feed_title_map:
-                sanitized_feed_title = re.sub(r"[^a-zA-Z0-9\s_.-]", "", feed.title).strip()
+                sanitized_feed_title = re.sub(
+                    r"[^a-zA-Z0-9\s_.-]", "", feed.title
+                ).strip()
                 sanitized_feed_title = sanitized_feed_title.rstrip(".")
                 sanitized_feed_title = re.sub(r"\s+", "_", sanitized_feed_title)
                 feed_title_map[feed.id] = sanitized_feed_title
-            
+
             sanitized_feed_title = feed_title_map[feed.id]
             feed_dir = srv_root / sanitized_feed_title
-            
+
             if not feed_dir.exists():
                 continue
-            
+
             # Collect possible filenames to match
             possible_filenames = set()
-            
+
             # Strategy 1: From unprocessed_audio_path
             if post.unprocessed_audio_path:
                 possible_filenames.add(Path(post.unprocessed_audio_path).name)
-            
+
             # Strategy 2: From download_url (extract filename from URL)
             if post.download_url:
                 try:
                     parsed_url = urllib.parse.urlparse(post.download_url)
                     url_filename = Path(parsed_url.path).name
-                    if url_filename and url_filename.endswith('.mp3'):
+                    if url_filename and url_filename.endswith(".mp3"):
                         possible_filenames.add(url_filename)
                 except Exception:
                     pass
-            
+
             # Strategy 3: Check if any file in the directory contains the post guid
             # (some systems name files based on guid)
-            
+
             # Try to match files
             matched = False
             for audio_file in feed_dir.glob("*.mp3"):
                 filename = audio_file.name
-                
+
                 # Check against possible filenames
                 if filename in possible_filenames:
                     post.processed_audio_path = str(audio_file)
                     db.session.commit()
                     repaired_count += 1
                     details.append(f"Matched by filename: {post.title[:30]}...")
-                    logger.info(f"Repaired processed_audio_path for post {post.id}: {audio_file}")
+                    logger.info(
+                        f"Repaired processed_audio_path for post {post.id}: {audio_file}"
+                    )
                     matched = True
                     break
-                
+
                 # Check if guid is in filename (fallback)
                 if post.guid and post.guid in filename:
                     post.processed_audio_path = str(audio_file)
                     db.session.commit()
                     repaired_count += 1
                     details.append(f"Matched by guid: {post.title[:30]}...")
-                    logger.info(f"Repaired processed_audio_path for post {post.id} by guid: {audio_file}")
+                    logger.info(
+                        f"Repaired processed_audio_path for post {post.id} by guid: {audio_file}"
+                    )
                     matched = True
                     break
-            
+
         except Exception as e:
             errors.append(f"Error processing post {post.id}: {str(e)}")
             logger.error(f"Error repairing post {post.id}: {e}")
-    
-    return jsonify({
-        "checked": checked_count,
-        "repaired": repaired_count,
-        "details": details[:20] if details else [],
-        "errors": errors[:10] if errors else [],
-        "total_errors": len(errors),
-    })
+
+    return jsonify(
+        {
+            "checked": checked_count,
+            "repaired": repaired_count,
+            "details": details[:20] if details else [],
+            "errors": errors[:10] if errors else [],
+            "total_errors": len(errors),
+        }
+    )
 
 
 @feed_bp.route("/api/admin/feeds/<int:feed_id>/unsubscribe-all", methods=["POST"])
 def admin_unsubscribe_all(feed_id: int) -> ResponseReturnValue:
     """Admin-only: Unsubscribe all users from a feed."""
-    from app.models import UserFeedSubscription  # pylint: disable=import-outside-toplevel
-    
+    from app.models import (
+        UserFeedSubscription,  # pylint: disable=import-outside-toplevel
+    )
+
     settings = current_app.config.get("AUTH_SETTINGS")
     current = getattr(g, "current_user", None)
-    
+
     if not settings or not settings.require_auth:
         return jsonify({"error": "Authentication is disabled."}), 400
-    
+
     if current is None:
         return jsonify({"error": "Authentication required."}), 401
-    
+
     user = User.query.get(current.id)
     if not user or user.role != "admin":
         return jsonify({"error": "Admin access required."}), 403
-    
+
     feed = Feed.query.get_or_404(feed_id)
-    
+
     # Count and delete all subscriptions
     count = UserFeedSubscription.query.filter_by(feed_id=feed_id).count()
     UserFeedSubscription.query.filter_by(feed_id=feed_id).delete()
     db.session.commit()
-    
-    logger.info(f"Admin {user.username} unsubscribed all {count} users from feed {feed.title}")
-    
-    return jsonify({
-        "message": f"Unsubscribed {count} user(s) from {feed.title}",
-        "unsubscribed_count": count,
-    })
+
+    logger.info(
+        f"Admin {user.username} unsubscribed all {count} users from feed {feed.title}"
+    )
+
+    return jsonify(
+        {
+            "message": f"Unsubscribed {count} user(s) from {feed.title}",
+            "unsubscribed_count": count,
+        }
+    )
 
 
 @feed_bp.route("/api/admin/feeds/<int:feed_id>/delete", methods=["DELETE"])
 def admin_delete_feed(feed_id: int) -> ResponseReturnValue:
     """Admin-only: Force delete a feed and all its episodes, regardless of subscribers."""
-    from app.models import UserFeedSubscription, FeedAccessToken  # pylint: disable=import-outside-toplevel
     from sqlalchemy import text  # pylint: disable=import-outside-toplevel
-    
+
+    from app.models import (  # pylint: disable=import-outside-toplevel
+        FeedAccessToken,
+        UserFeedSubscription,
+    )
+
     settings = current_app.config.get("AUTH_SETTINGS")
     current = getattr(g, "current_user", None)
-    
+
     if not settings or not settings.require_auth:
         return jsonify({"error": "Authentication is disabled."}), 400
-    
+
     if current is None:
         return jsonify({"error": "Authentication required."}), 401
-    
+
     user = User.query.get(current.id)
     if not user or user.role != "admin":
         return jsonify({"error": "Admin access required."}), 403
-    
+
     feed = Feed.query.get_or_404(feed_id)
     feed_title = feed.title
-    
+
     # Get post info for file cleanup
-    posts_info = [(post.id, post.guid, post.unprocessed_audio_path, post.processed_audio_path) 
-                  for post in feed.posts]
+    posts_info = [
+        (post.id, post.guid, post.unprocessed_audio_path, post.processed_audio_path)
+        for post in feed.posts
+    ]
     post_ids = [p[0] for p in posts_info]
     post_guids = [p[1] for p in posts_info]
-    
+
     # Delete audio files
     for _, _, unprocessed_path, processed_path in posts_info:
         if unprocessed_path and Path(unprocessed_path).exists():
@@ -1825,26 +1992,32 @@ def admin_delete_feed(feed_id: int) -> ResponseReturnValue:
                 Path(unprocessed_path).unlink()
                 logger.info(f"Deleted unprocessed audio: {unprocessed_path}")
             except Exception as e:
-                logger.error(f"Error deleting unprocessed audio {unprocessed_path}: {e}")
-        
+                logger.error(
+                    f"Error deleting unprocessed audio {unprocessed_path}: {e}"
+                )
+
         if processed_path and Path(processed_path).exists():
             try:
                 Path(processed_path).unlink()
                 logger.info(f"Deleted processed audio: {processed_path}")
             except Exception as e:
                 logger.error(f"Error deleting processed audio {processed_path}: {e}")
-    
+
     # Clean up directory structures
     _cleanup_feed_directories(feed)
-    
+
     # Rollback any pending changes and use parameterized SQL to avoid ORM cascade issues
     db.session.rollback()
     _delete_feed_records(feed_id, post_ids, post_guids)
     db.session.commit()
-    
-    logger.info(f"Admin {user.username} deleted feed: {feed_title} (ID: {feed_id}) with {len(post_ids)} posts")
-    
-    return jsonify({
-        "message": f"Deleted feed '{feed_title}' and {len(post_ids)} episodes",
-        "deleted_episodes": len(post_ids),
-    })
+
+    logger.info(
+        f"Admin {user.username} deleted feed: {feed_title} (ID: {feed_id}) with {len(post_ids)} posts"
+    )
+
+    return jsonify(
+        {
+            "message": f"Deleted feed '{feed_title}' and {len(post_ids)} episodes",
+            "deleted_episodes": len(post_ids),
+        }
+    )
