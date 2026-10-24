@@ -1,27 +1,16 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Generate lock file for the regular Pipfile
 echo "Locking Pipfile..."
-pipenv lock
+PIPENV_PIPFILE="${REPOSITORY_ROOT}/Pipfile" pipenv lock
 
-# Temporarily move Pipfiles to lock Pipfile.lite
-echo "Preparing to lock Pipfile.lite..."
-mv Pipfile Pipfile.tmp
-mv Pipfile.lite Pipfile
-
-# Generate lock file for Pipfile.lite
+# Pipenv names each lock after its manifest; keep the full lock and both
+# manifests in place even if the lite resolution fails.
 echo "Locking Pipfile.lite..."
-pipenv lock
-
-# Rename the new lock file to Pipfile.lite.lock
-echo "Renaming lockfile for lite version..."
-mv Pipfile.lock Pipfile.lite.lock
-
-# Restore original Pipfile names
-echo "Restoring original Pipfile names..."
-mv Pipfile Pipfile.lite
-mv Pipfile.tmp Pipfile
+PIPENV_PIPFILE="${REPOSITORY_ROOT}/Pipfile.lite" pipenv lock
 
 echo "Lockfiles generated successfully!"
 echo "- Pipfile.lock"

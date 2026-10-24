@@ -433,7 +433,7 @@ Tokens are hashed with SHA-256, expire after 1 hour, and are marked as used afte
 | **H2** GET State Change | **FIXED** | Changed `/set_whitelist` from GET to POST in `main_routes.py`, added session auth guard |
 | **H3** Unchecked Int Parsing | **FIXED** | Added try/except with safe defaults and non-negative clamping in `feed_routes.py` |
 | **H4** User Enumeration | **FIXED** | Removed distinct pending-account error branch from login in `auth_routes.py`; all failures return generic message |
-| **M1** SSRF | Open | Requires allowlist/blocklist for resolved IPs — moderate effort, deferred |
+| **M1** SSRF | **FIXED (2026-10-24)** | RSS and enclosure HTTP transport validates every DNS answer at socket creation, connects directly to approved addresses, and rechecks redirects. |
 | **M2/M3** Session Hardening | **FIXED** | `SESSION_COOKIE_SECURE` now defaults to `true` when `REQUIRE_AUTH=true` in `__init__.py` |
 | **M4** Rate Limiter | Accepted | In-memory limiter is acceptable for single-process SQLite deployment model |
 | **M5** Redundant os.path.exists | **FIXED** | `catch_all` now relies solely on `send_from_directory` with try/except in `main_routes.py` |
@@ -525,3 +525,144 @@ packages are removed after the Python dependency and PyTorch layers complete.
 The container continues to start as root only for bind-mount ownership repair
 and optional PUID/PGID remapping; the entrypoint then executes the application
 as the unprivileged `appuser`.
+
+
+---
+
+## 2026-10-24 Dependency and Outbound HTTP Remediation
+
+The July reviews above are historical. This section records the current
+maintenance changes and supersedes their dependency versions and the deferred
+SSRF status.
+
+### Dependency changes
+
+Both Python locks were regenerated with Pipenv 2026.10.2 for Python 3.12. The
+patched application versions include certifi 2026.10.23, urllib3 2.8.0,
+aiohttp 3.14.5, multidict 6.9.1, Werkzeug 3.1.9, cryptography 50.0.2,
+LiteLLM 1.106.3, and setuptools 84.2.1. Development dependencies include
+Black 26.10.1 and Pillow 13.0.0. Pillow is used only by the icon-generation
+script and is no longer installed in runtime images.
+
+LiteLLM still requires `filelock<4`. Podly pins filelock 3.20.3, which includes
+the earlier symlink fix and predates the affected range starting at 3.20.4 in
+[the upstream ReadWriteLock advisory](https://github.com/tox-dev/filelock/security/advisories/GHSA-v4x8-3wr5-3wq8).
+This is a compatibility pin, not an assertion that the newest 3.x release is
+safe. Revisit it when LiteLLM supports the patched 4.x series.
+
+PyTorch is now 2.14.1 with Triton 3.8.0. The full lock uses the official CPU
+index, avoiding unnecessary CUDA libraries in CPU images; its hashes cover the
+Python 3.12 Linux AMD64/ARM64 and macOS ARM64 wheels. NVIDIA builds retain
+CUDA 12.6. AMD builds now default to ROCm 7.2 because the 7.0 wheel index has no
+newer Torch release. The corresponding ROCm development-base tag and wheel
+availability were checked; GPU execution still requires hardware validation.
+
+The current lock advisory checks report no Torch findings. This does not
+establish an upstream fix for every possible model-loading API: the proposed
+[CVE-2026-4538 pt2 fix](https://github.com/pytorch/pytorch/pull/176791) was closed
+unmerged, and its advisory does not publish a fixed release. Podly does not call
+`torch.export.load` or accept uploaded model archives; only administrator-selected
+Whisper models are loaded. Keep those models and their cache trusted. No advisory
+ignore or scanner exception was added.
+
+Frontend dependencies and transitive locks were refreshed, including Axios
+1.20.0, Vite 8.3.5, and Vitest 4.1.12. TypeScript remains on its compatible
+6.0 series.
+
+### Network and lockfile fixes
+
+`src/shared/http_client.py` now owns RSS and enclosure HTTP requests. It rejects
+non-public IPv4/IPv6 destinations, mapped/private/shared/reserved addresses,
+embedded credentials, ambiguous numeric hosts, and unsupported URL schemes.
+Every DNS answer is checked at actual connection creation, and the socket
+connects that numeric address without a second DNS lookup. HTTPS retains the
+original hostname for SNI and certificate verification.
+
+Redirects use the same policy, are bounded, and close discarded responses.
+Malformed redirect encodings and authorities return a safe HTTP 400 when adding
+a feed. Environmental proxies and `.netrc` credentials are disabled for these
+untrusted podcast requests. Streaming, timeouts, and transient downloader retries
+remain covered by tests. The transport has 82 focused security/socket tests.
+
+`scripts/generate_lockfiles.sh` now selects each manifest using its explicit
+`PIPENV_PIPFILE` path instead of moving files. It preserves the full lock and
+both manifests when lite resolution fails, and works outside the repository.
+
+### Container and audit controls
+
+The canonical Chainguard multi-architecture base is updated to the October 23
+index digest `sha256:c179c7d8e23caed59a51ff74d4742f8f8d3f16af4c33c40acaf8d3ee07234592`.
+Its Python 3.15 packages, including the separate runtime package, are replaced
+with Python 3.12. CPU launcher, Compose, publication workflow, and manual-build
+pins all use the same digest.
+
+Pinned pip 26.2.2 and Pipenv 2026.10.2 run in a separate build environment, and
+application dependencies live in `/opt/venv`. This prevents Pipenv's newer
+virtualenv/filelock requirements from conflicting with LiteLLM. The build
+verifies dependencies before removing both installers and their seed wheels:
+even their latest releases bundle vulnerable urllib3/msgpack versions. Removing
+them prevents shipping those unused copies. Distribution-managed pip is never
+force-reinstalled, and Debian/Ubuntu package-manager cleanup handles its legacy
+installer packages explicitly.
+
+`scripts/audit_dependencies.py` runs strict pip-audit against every runtime and
+development pin in both locks, including entries for other platforms. Scanner
+errors and signal termination fail the check. Python audits and frontend audits
+at the `low` threshold gate release acceptance. The separate dependency-audit
+workflow also runs on pull requests, main pushes, manual dispatch, and weekly
+without publishing containers.
+
+### Verification recorded during this change
+
+- Python 3.12 full backend suite: 467 passed, one skipped, including the
+  scanner-signal regression. Independent final review also reran the HTTP
+  security, audit failure, lock generation, and container contract tests:
+  108 passed.
+- Both full and lite environments pass `pip check`; both committed locks pass
+  `pipenv verify`.
+- Strict Python lock audits: zero known findings across 159 full and 150 lite
+  runtime/development pins, with no audit skips or suppressions.
+- Frontend: 71 tests passed, strict ESLint and production build passed, and
+  npm audit reported zero vulnerabilities after a clean install.
+- Actual Whisper 20250625 encoder/decoder inference with synthetic weights/audio
+  passed on macOS ARM64 with PyTorch 2.14.1 and in both Linux CPU containers
+  with PyTorch 2.14.1+cpu. The brand-asset verification script also passed.
+
+All four container builds below passed startup rehearsals: health returned 200,
+private feed submission returned 400, a public HTTPS request passed certificate
+verification, and the disposable database reached migration head
+`s5t6u7v8w9x0`. Each application ran as UID 999 with pip/Pipenv absent from the
+runtime. No production data or deployment was touched; schedulers were disabled
+and all test containers were removed afterward.
+
+| Built variant | Platform | Startup checks | Trivy findings |
+|---------------|----------|----------------|----------------|
+| Canonical lite | Linux ARM64 | Passed | 0 |
+| Canonical full CPU | Linux ARM64 | Passed | 0 |
+| Canonical full CPU | Linux AMD64 (emulated) | Passed | 0 |
+| Ubuntu 24.04 lite compatibility build | Linux ARM64 | Passed | Not scanned |
+
+Trivy 0.76.1 scanned both operating-system and Python packages in the three
+canonical images, with all severities included and no ignores or exceptions.
+These are current scanner results, subject to the unresolved upstream pt2
+advisory described above. The Ubuntu build validates the Debian/Ubuntu installer
+path used by optional GPU bases; it is not a GPU execution or security scan.
+CUDA/ROCm wheel availability was checked, but GPU execution and Linux AMD64
+lite-image execution were not tested on this machine.
+
+### Follow-up verification
+
+The requested second review repeated the full backend suite (467 passed, one
+existing skipped local-transcription test), a clean frontend install plus all
+71 tests/lint/build, both strict lock audits, lock freshness, dependency
+consistency, and exact installed-version comparisons against both locks. All
+passed. A fresh independent network review passed 139 focused tests and checked
+cross-host HTTPS redirects, cookie scoping, `.netrc` exclusion, and TLS-failure
+cleanup without finding an actionable issue.
+
+The three canonical container startup rehearsals and Trivy scans were repeated
+successfully using the October 24 advisory database. IPv6 transition-address
+rejection was also checked in the Ubuntu compatibility image. No additional
+application changes were required. The backend test process exits successfully
+but LiteLLM emits debug-logger errors during interpreter shutdown after pytest
+has closed its captured stream; this does not change the test results.

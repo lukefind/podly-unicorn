@@ -179,13 +179,13 @@ def mock_feed():
     return MockFeed()
 
 
-@mock.patch("app.feeds.requests.get")
+@mock.patch("app.feeds.public_get")
 @mock.patch("app.feeds.feedparser.parse")
 def test_fetch_feed_uses_bounded_http_request(mock_parse, mock_get, mock_feed_data):
     response = mock.MagicMock()
     response.content = b"<rss><channel /></rss>"
     response.url = "https://cdn.example.com/final.xml"
-    mock_get.return_value = response
+    mock_get.return_value.__enter__.return_value = response
     mock_parse.return_value = mock_feed_data
 
     result = fetch_feed("https://example.com/feed.xml")
@@ -201,12 +201,12 @@ def test_fetch_feed_uses_bounded_http_request(mock_parse, mock_get, mock_feed_da
     assert result.href == response.url
 
 
-@mock.patch("app.feeds.requests.get")
+@mock.patch("app.feeds.public_get")
 @mock.patch("app.feeds.feedparser.parse")
 def test_fetch_feed_propagates_http_errors_without_parsing(mock_parse, mock_get):
     response = mock.MagicMock()
     response.raise_for_status.side_effect = requests.HTTPError("upstream failed")
-    mock_get.return_value = response
+    mock_get.return_value.__enter__.return_value = response
 
     with pytest.raises(requests.HTTPError, match="upstream failed"):
         fetch_feed("https://example.com/feed.xml")

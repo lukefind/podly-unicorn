@@ -111,6 +111,14 @@ When you trigger an episode from your podcast app:
 
 If logs show `reason=not_whitelisted`, that episode is disabled for processing. Enable it in the Podcasts page first.
 
+### Podcast URL access
+
+RSS feeds and episode audio must use public HTTP(S) destinations. Podly checks
+every resolved address and redirect, and rejects local/private networks, reserved
+addresses, and embedded username/password credentials. Public tokenized RSS URLs
+for paid podcasts remain supported. Podcast requests ignore environment proxy
+settings and `.netrc` credentials.
+
 ---
 
 ## Quick Start (Docker)

@@ -163,7 +163,8 @@ def test_publication_requires_full_release_acceptance():
     assert "npm test" in commands
     assert "npm run lint -- --max-warnings=0" in commands
     assert "npm run build" in commands
-    assert "npm audit --audit-level=high" in commands
+    assert "npm audit --audit-level=low" in commands
+    assert "pipenv run python scripts/audit_dependencies.py" in commands
 
     publication_commands = _workflow_commands(publish)
     assert "manifest unknown" in publication_commands
@@ -309,14 +310,16 @@ def test_debian_family_build_installs_python_alias_before_version_assertions():
     )
 
 
-def test_container_pip_replaces_newer_distribution_package_before_downgrade():
+def test_container_bootstraps_installers_without_replacing_distribution_pip():
     dockerfile = (REPOSITORY_ROOT / "Dockerfile").read_text()
 
     override = dockerfile.index("ENV PIP_BREAK_SYSTEM_PACKAGES=1")
     pip_bootstrap = dockerfile.index(
-        "python3 -m pip install --no-cache-dir --upgrade --force-reinstall"
+        "python3 -m pip --python /opt/pipenv/bin/python install"
     )
-    first_install = dockerfile.index("python3 -m pip install")
+    first_install = dockerfile.index("python3 -m pip")
     assert override < first_install
     assert pip_bootstrap == first_install
-    assert "--ignore-installed \"pip==${PINNED_PIP_VERSION}\"" not in dockerfile
+    assert "python3 -m venv --without-pip /opt/pipenv" in dockerfile
+    assert "--force-reinstall" not in dockerfile
+    assert "--ignore-installed" not in dockerfile

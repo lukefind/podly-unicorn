@@ -49,7 +49,7 @@ pipenv run python scripts/verify_brand_assets.py
   npm test
   npm run lint -- --max-warnings=0
   npm run build
-  npm audit --audit-level=high
+  npm audit --audit-level=low
 )
 
 pipenv run python - <<'PY'
@@ -121,13 +121,14 @@ The workflow uses Python 3.12 and a deployed `Pipfile.lock`, installs the pinned
 CPU Triton and PyTorch replacements, checks backend dependency consistency,
 then runs:
 
-1. the complete backend test suite;
-2. committed branding verification;
-3. frontend dependency installation with `npm ci`;
-4. frontend unit tests;
-5. strict frontend lint with zero warnings;
-6. the frontend production build;
-7. the frontend audit at `high` severity.
+1. strict audits of every runtime and development pin in both Python locks;
+2. the complete backend test suite;
+3. committed branding verification;
+4. frontend dependency installation with `npm ci`;
+5. frontend unit tests;
+6. strict frontend lint with zero warnings;
+7. the frontend production build;
+8. the frontend audit at `low` severity.
 
 Publication cannot start unless this job succeeds.
 

@@ -9,13 +9,13 @@ from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 
 import feedparser  # type: ignore[import-untyped]
 import PyRSS2Gen  # type: ignore[import-untyped]
-import requests
 from flask import current_app, g, request
 
 from app.extensions import db
 from app.models import Feed, Post, User, UserFeedSubscription
 from app.runtime_config import config
 from podcast_processor.podcast_downloader import find_audio_link
+from shared.http_client import public_get
 
 # Markers for idempotent CTA injection - never append blindly, always replace by marker
 PODLY_CTA_START = "<!-- PODLY_TRIGGER_START -->"
@@ -305,15 +305,15 @@ def _get_base_url() -> str:
 
 
 def fetch_feed(url: str) -> feedparser.FeedParserDict:
-    logger.info(f"Fetching feed from URL: {url}")
-    response = requests.get(
+    logger.info("Fetching podcast RSS feed")
+    with public_get(
         url,
         headers={"User-Agent": feedparser.USER_AGENT},
         timeout=(10, 30),
-    )
-    response.raise_for_status()
-    feed_data = feedparser.parse(response.content)
-    feed_data.href = response.url
+    ) as response:
+        response.raise_for_status()
+        feed_data = feedparser.parse(response.content)
+        feed_data.href = response.url
     for entry in feed_data.entries:
         entry.id = get_guid(entry)
     return feed_data

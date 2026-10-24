@@ -8,8 +8,8 @@ NC='\033[0m' # No Color
 
 # Central configuration defaults
 CUDA_VERSION="12.6.3"
-ROCM_VERSION="7.0"
-CPU_BASE_IMAGE="cgr.dev/chainguard/python:latest-dev@sha256:14acabef9a759e7d07bf647afec92bc28cbe0f89c978fe426411c85035121c14"
+ROCM_VERSION="7.2"
+CPU_BASE_IMAGE="cgr.dev/chainguard/python:latest-dev@sha256:c179c7d8e23caed59a51ff74d4742f8f8d3f16af4c33c40acaf8d3ee07234592"
 GPU_NVIDIA_BASE_IMAGE="nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu24.04"
 GPU_ROCM_BASE_IMAGE="rocm/dev-ubuntu-24.04:${ROCM_VERSION}-complete"
 

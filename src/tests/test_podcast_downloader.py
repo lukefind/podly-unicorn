@@ -91,7 +91,7 @@ def test_find_audio_link_without_audio_link():
     assert find_audio_link(entry) == "https://example.com/episode-id"
 
 
-@mock.patch("podcast_processor.podcast_downloader.requests.get")
+@mock.patch("podcast_processor.podcast_downloader.public_get")
 def test_download_episode_already_exists(mock_get, test_post, downloader, app):
     with app.app_context():
         # Create the directory and file
@@ -109,7 +109,7 @@ def test_download_episode_already_exists(mock_get, test_post, downloader, app):
         assert result == str(episode_file)
 
 
-@mock.patch("podcast_processor.podcast_downloader.requests.get")
+@mock.patch("podcast_processor.podcast_downloader.public_get")
 def test_download_episode_new_file(mock_get, test_post, downloader, app):
     with app.app_context():
         # Setup mock response
@@ -140,7 +140,7 @@ def test_download_episode_new_file(mock_get, test_post, downloader, app):
         assert result == str(expected_path)
 
 
-@mock.patch("podcast_processor.podcast_downloader.requests.get")
+@mock.patch("podcast_processor.podcast_downloader.public_get")
 def test_download_episode_download_failed(mock_get, test_post, downloader, app):
     with app.app_context():
         # Setup mock response
@@ -186,7 +186,7 @@ def test_download_episode_invalid_url(
         mock_abort.assert_called_once_with(404)
 
 
-@mock.patch("podcast_processor.podcast_downloader.requests.get")
+@mock.patch("podcast_processor.podcast_downloader.public_get")
 def test_download_episode_invalid_post_title(mock_get, test_post, downloader, app):
     with app.app_context():
         # Test with a post that has an invalid title that results in empty sanitized title
@@ -215,7 +215,7 @@ def _successful_response(*chunks):
 
 
 @mock.patch("podcast_processor.podcast_downloader.time.sleep")
-@mock.patch("podcast_processor.podcast_downloader.requests.get")
+@mock.patch("podcast_processor.podcast_downloader.public_get")
 def test_download_episode_retries_timeout_then_succeeds(
     mock_get, mock_sleep, test_post, downloader, app
 ):
@@ -235,7 +235,7 @@ def test_download_episode_retries_timeout_then_succeeds(
 
 
 @mock.patch("podcast_processor.podcast_downloader.time.sleep")
-@mock.patch("podcast_processor.podcast_downloader.requests.get")
+@mock.patch("podcast_processor.podcast_downloader.public_get")
 def test_download_episode_exhausts_transient_failures_without_partial_file(
     mock_get, mock_sleep, test_post, downloader, app
 ):
@@ -253,7 +253,7 @@ def test_download_episode_exhausts_transient_failures_without_partial_file(
 
 
 @mock.patch("podcast_processor.podcast_downloader.time.sleep")
-@mock.patch("podcast_processor.podcast_downloader.requests.get")
+@mock.patch("podcast_processor.podcast_downloader.public_get")
 def test_download_episode_removes_zero_byte_destination_before_retrying(
     mock_get, _mock_sleep, test_post, downloader, app
 ):
@@ -271,7 +271,7 @@ def test_download_episode_removes_zero_byte_destination_before_retrying(
 
 @pytest.mark.parametrize("status_code, expected_calls", [(503, 3), (404, 1)])
 @mock.patch("podcast_processor.podcast_downloader.time.sleep")
-@mock.patch("podcast_processor.podcast_downloader.requests.get")
+@mock.patch("podcast_processor.podcast_downloader.public_get")
 def test_download_episode_retries_only_transient_http_errors(
     mock_get,
     mock_sleep,
@@ -296,7 +296,7 @@ def test_download_episode_retries_only_transient_http_errors(
     assert mock_sleep.call_count == max(0, expected_calls - 1)
 
 
-@mock.patch("podcast_processor.podcast_downloader.requests.get")
+@mock.patch("podcast_processor.podcast_downloader.public_get")
 def test_download_episode_removes_partial_file_when_stream_fails(
     mock_get, test_post, downloader, app
 ):
@@ -314,7 +314,7 @@ def test_download_episode_removes_partial_file_when_stream_fails(
     assert not destination.with_name(destination.name + ".part").exists()
 
 
-@mock.patch("podcast_processor.podcast_downloader.requests.get")
+@mock.patch("podcast_processor.podcast_downloader.public_get")
 def test_download_episode_atomically_replaces_destination(
     mock_get, test_post, downloader, app
 ):
