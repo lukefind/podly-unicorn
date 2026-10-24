@@ -1,3 +1,10 @@
+## [1.3.3](https://github.com/lukefind/podly-unicorn/compare/v1.3.2...v1.3.3) (2026-10-24)
+
+
+### Bug Fixes
+
+* patch dependencies and secure podcast downloads ([#4](https://github.com/lukefind/podly-unicorn/issues/4)) ([db68503](https://github.com/lukefind/podly-unicorn/commit/db68503ac6d5f1662771732e6385cb18776ec080))
+
 ## [1.3.2](https://github.com/lukefind/podly-unicorn/compare/v1.3.1...v1.3.2) (2026-08-27)
 
 
