@@ -1,3 +1,10 @@
+## [1.3.4](https://github.com/lukefind/podly-unicorn/compare/v1.3.3...v1.3.4) (2026-10-25)
+
+
+### Bug Fixes
+
+* allow long podcast tracking redirect chains ([a150151](https://github.com/lukefind/podly-unicorn/commit/a15015130e8a2c9420e712ed737951c232e03716))
+
 ## [1.3.3](https://github.com/lukefind/podly-unicorn/compare/v1.3.2...v1.3.3) (2026-10-24)
 
 
