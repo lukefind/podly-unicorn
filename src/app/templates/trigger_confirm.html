@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>Process episode - Podly Unicorn</title>
+    <link rel="icon" type="image/svg+xml" href="/images/logos/favicon.svg">
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: linear-gradient(135deg, #667eea, #764ba2); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        .card { width: 100%; max-width: 480px; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px #0004; }
+        header { padding: 24px; text-align: center; background: linear-gradient(135deg, #9333ea, #7c3aed); color: white; }
+        h1 { font-size: 1.5rem; margin: 0 0 6px; }
+        header p { margin: 0; color: #ede9fe; }
+        main { padding: 24px; }
+        h2 { font-size: 1.2rem; color: #1f2937; overflow-wrap: anywhere; }
+        p { color: #4b5563; line-height: 1.5; }
+        .show { color: #6b7280; overflow-wrap: anywhere; }
+        button { width: 100%; padding: 14px 24px; border: 0; border-radius: 10px; background: linear-gradient(135deg, #9333ea, #7c3aed); color: white; font: inherit; font-weight: 600; cursor: pointer; }
+        button:focus-visible { outline: 3px solid #4c1d95; outline-offset: 3px; }
+        footer { padding: 0 24px 24px; text-align: center; font-size: .85rem; color: #6b7280; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <header><h1>Podly Unicorn</h1><p>Ad-free podcast processing</p></header>
+        <main>
+            <h2>{{ post.title }}</h2>
+            <p class="show">{{ feed_title }}</p>
+            <p>Press Process episode to start removing ads. You can follow progress here, then return to your podcast app.</p>
+            <form method="post" action="{{ action }}">
+                <input type="hidden" name="confirmation_token" value="{{ confirmation_token }}">
+                <button type="submit">Process episode</button>
+            </form>
+        </main>
+        <footer>Opening this page does not start processing.</footer>
+    </div>
+</body>
+</html>

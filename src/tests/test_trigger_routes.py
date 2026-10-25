@@ -10,6 +10,9 @@ These tests verify:
 
 import hashlib
 import secrets
+from datetime import datetime, timezone
+from html.parser import HTMLParser
+from unittest.mock import MagicMock
 
 import pytest
 from flask import Flask
@@ -122,6 +125,386 @@ class TestTriggerRouteOrder:
             b"Missing Parameters" in response.data
             or b"missing" in response.data.lower()
         )
+
+
+class _ConfirmationForm(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.action = None
+        self.method = None
+        self.token = None
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        values = dict(attrs)
+        if tag == "form":
+            self.action = values.get("action")
+            self.method = values.get("method")
+        if tag == "input" and values.get("name") == "confirmation_token":
+            self.token = values.get("value")
+
+
+@pytest.fixture
+def trigger_worker(monkeypatch):
+    """Keep route tests offline while exercising real auth, HTML and DB state."""
+    worker = MagicMock()
+    worker.start_post_processing.return_value = {"status": "started", "job_id": None}
+    monkeypatch.setattr("app.routes.post_routes.get_jobs_manager", lambda: worker)
+    return worker
+
+
+class TestExplicitTriggerConfirmation:
+    @staticmethod
+    def query(post, token):
+        return {
+            "guid": post.guid,
+            "feed_token": token["token_id"],
+            "feed_secret": token["secret"],
+        }
+
+    @pytest.mark.parametrize(
+        "method,headers",
+        [
+            ("GET", {}),
+            ("HEAD", {}),
+            ("GET", {"Purpose": "prefetch"}),
+            ("GET", {"Sec-Purpose": "prefetch;prerender", "User-Agent": "Googlebot"}),
+        ],
+    )
+    def test_passive_fetch_never_starts_processing(
+        self, app_with_routes, test_post, test_token, trigger_worker, method, headers
+    ):
+        response = app_with_routes.test_client().open(
+            "/trigger",
+            method=method,
+            query_string=self.query(test_post, test_token),
+            headers=headers,
+        )
+        assert response.status_code == 200
+        trigger_worker.start_post_processing.assert_not_called()
+        if method == "GET":
+            form = _ConfirmationForm(response.get_data(as_text=True))
+            assert form.method == "post"
+            assert form.token
+            assert "Process episode" in response.get_data(as_text=True)
+
+    def test_confirmation_is_served_even_with_frontend_bundle(
+        self, app_with_routes, test_post, test_token, trigger_worker, tmp_path
+    ):
+        (tmp_path / "index.html").write_text("<html>SPA shell</html>")
+        app_with_routes.static_folder = str(tmp_path)
+        response = app_with_routes.test_client().get(
+            "/trigger", query_string=self.query(test_post, test_token)
+        )
+        assert _ConfirmationForm(response.get_data(as_text=True)).token
+        trigger_worker.start_post_processing.assert_not_called()
+
+    def test_explicit_submission_starts_once_and_redirects_to_safe_get(
+        self, app_with_routes, test_post, test_token, test_user, trigger_worker
+    ):
+        client = app_with_routes.test_client()
+        response = client.get(
+            "/trigger", query_string=self.query(test_post, test_token)
+        )
+        form = _ConfirmationForm(response.get_data(as_text=True))
+        assert form.action and form.token
+        response = client.post(form.action, data={"confirmation_token": form.token})
+        assert response.status_code == 303
+        trigger_worker.start_post_processing.assert_called_once_with(
+            test_post.guid,
+            priority="interactive",
+            triggered_by_user_id=test_user.id,
+            trigger_source="trigger_link",
+        )
+        assert client.get(response.headers["Location"]).status_code == 200
+        assert trigger_worker.start_post_processing.call_count == 1
+
+    @pytest.mark.parametrize("token", [None, "forged-confirmation"])
+    def test_post_without_valid_confirmation_is_rejected(
+        self, app_with_routes, test_post, test_token, trigger_worker, token
+    ):
+        data = {} if token is None else {"confirmation_token": token}
+        response = app_with_routes.test_client().post(
+            "/trigger", query_string=self.query(test_post, test_token), data=data
+        )
+        assert response.status_code == 403
+        trigger_worker.start_post_processing.assert_not_called()
+
+    def test_confirmation_in_query_cannot_start_processing(
+        self, app_with_routes, test_post, test_token, trigger_worker
+    ):
+        client = app_with_routes.test_client()
+        query = self.query(test_post, test_token)
+        form = _ConfirmationForm(
+            client.get("/trigger", query_string=query).get_data(as_text=True)
+        )
+        assert form.token
+        query["confirmation_token"] = form.token
+        assert client.get("/trigger", query_string=query).status_code == 200
+        assert client.post("/trigger", query_string=query).status_code == 403
+        trigger_worker.start_post_processing.assert_not_called()
+
+    def test_expired_confirmation_is_rejected(
+        self, app_with_routes, test_post, test_token, trigger_worker, monkeypatch
+    ):
+        client = app_with_routes.test_client()
+        with monkeypatch.context() as clock:
+            clock.setattr("itsdangerous.TimestampSigner.get_timestamp", lambda self: 1)
+            form = _ConfirmationForm(
+                client.get(
+                    "/trigger", query_string=self.query(test_post, test_token)
+                ).get_data(as_text=True)
+            )
+        assert form.token
+        response = client.post(form.action, data={"confirmation_token": form.token})
+        assert response.status_code == 403
+        trigger_worker.start_post_processing.assert_not_called()
+
+    def test_confirmation_cannot_be_used_for_another_episode(
+        self, app_with_routes, test_post, test_token, trigger_worker
+    ):
+        client = app_with_routes.test_client()
+        form = _ConfirmationForm(
+            client.get(
+                "/trigger", query_string=self.query(test_post, test_token)
+            ).get_data(as_text=True)
+        )
+        assert form.token
+        other = Post(
+            feed_id=test_post.feed_id,
+            guid="another-episode",
+            title="Another",
+            download_url="https://example.com/other.mp3",
+            whitelisted=True,
+        )
+        db.session.add(other)
+        db.session.commit()
+        response = client.post(
+            "/trigger",
+            query_string=self.query(other, test_token),
+            data={"confirmation_token": form.token},
+        )
+        assert response.status_code == 403
+        trigger_worker.start_post_processing.assert_not_called()
+
+    def test_ambiguous_guid_is_rejected_before_worker_dispatch(
+        self, app_with_routes, test_post, test_token, trigger_worker
+    ):
+        client = app_with_routes.test_client()
+        query = self.query(test_post, test_token)
+        form = _ConfirmationForm(
+            client.get("/trigger", query_string=query).get_data(as_text=True)
+        )
+        assert form.token
+        other_feed = Feed(title="Other show", rss_url="https://example.com/other-rss")
+        db.session.add(other_feed)
+        db.session.flush()
+        db.session.add(
+            Post(
+                feed_id=other_feed.id,
+                guid=test_post.guid,
+                title="Colliding episode",
+                download_url="https://example.com/collision.mp3",
+                whitelisted=True,
+            )
+        )
+        db.session.commit()
+        assert client.get("/trigger", query_string=query).status_code == 409
+        assert (
+            client.post(
+                form.action, data={"confirmation_token": form.token}
+            ).status_code
+            == 409
+        )
+        trigger_worker.start_post_processing.assert_not_called()
+
+    def test_middleware_auth_errors_have_trigger_headers(
+        self, app_with_routes, monkeypatch
+    ):
+        from app.auth import AuthSettings
+        from app.auth.middleware import init_auth_middleware
+        from app.auth.state import failure_rate_limiter
+
+        app_with_routes.config["AUTH_SETTINGS"] = AuthSettings(
+            require_auth=True, admin_username="admin", admin_password=None
+        )
+        init_auth_middleware(app_with_routes)
+        monkeypatch.setattr(failure_rate_limiter, "retry_after", lambda client: 30)
+        response = app_with_routes.test_client().get("/trigger")
+        assert response.status_code == 429
+        assert response.headers.get("Cache-Control") == "no-store"
+        assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
+
+    def test_confirmation_is_bound_to_feed_token(
+        self, app_with_routes, test_post, test_token, test_user, trigger_worker
+    ):
+        client = app_with_routes.test_client()
+        form = _ConfirmationForm(
+            client.get(
+                "/trigger", query_string=self.query(test_post, test_token)
+            ).get_data(as_text=True)
+        )
+        other_secret = "second-token-secret"
+        db.session.add(
+            FeedAccessToken(
+                token_id="second-token",
+                token_hash=_hash_token(other_secret),
+                token_secret=other_secret,
+                feed_id=test_post.feed_id,
+                user_id=test_user.id,
+            )
+        )
+        db.session.commit()
+        query = self.query(
+            test_post, {"token_id": "second-token", "secret": other_secret}
+        )
+        assert (
+            client.post(
+                "/trigger", query_string=query, data={"confirmation_token": form.token}
+            ).status_code
+            == 403
+        )
+        trigger_worker.start_post_processing.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "change,expected", [("revoked", 403), ("combined", 403), ("disabled", 409)]
+    )
+    def test_post_rechecks_authorization_and_eligibility(
+        self, app_with_routes, test_post, test_token, trigger_worker, change, expected
+    ):
+        client = app_with_routes.test_client()
+        form = _ConfirmationForm(
+            client.get(
+                "/trigger", query_string=self.query(test_post, test_token)
+            ).get_data(as_text=True)
+        )
+        if change == "disabled":
+            db.session.merge(test_post).whitelisted = False
+        else:
+            token = FeedAccessToken.query.filter_by(
+                token_id=test_token["token_id"]
+            ).one()
+            if change == "revoked":
+                token.revoked = True
+            else:
+                token.feed_id = None
+        db.session.commit()
+        assert (
+            client.post(
+                form.action, data={"confirmation_token": form.token}
+            ).status_code
+            == expected
+        )
+        trigger_worker.start_post_processing.assert_not_called()
+
+    def test_duplicate_submit_and_page_refresh_reuse_active_job(
+        self, app_with_routes, test_post, test_token, trigger_worker
+    ):
+        client = app_with_routes.test_client()
+        form = _ConfirmationForm(
+            client.get(
+                "/trigger", query_string=self.query(test_post, test_token)
+            ).get_data(as_text=True)
+        )
+
+        def enqueue(guid, **kwargs):
+            db.session.add(
+                ProcessingJob(id="confirmed-job", post_guid=guid, status="pending")
+            )
+            db.session.commit()
+            return {"status": "started", "job_id": "confirmed-job"}
+
+        trigger_worker.start_post_processing.side_effect = enqueue
+        for _ in range(2):
+            response = client.post(form.action, data={"confirmation_token": form.token})
+            assert response.status_code == 303
+            assert client.get(response.headers["Location"]).status_code == 200
+        assert trigger_worker.start_post_processing.call_count == 1
+        assert ProcessingJob.query.count() == 1
+
+    def test_recent_failed_job_retains_cooldown(
+        self, app_with_routes, test_post, test_token, trigger_worker
+    ):
+        client = app_with_routes.test_client()
+        query = self.query(test_post, test_token)
+        form = _ConfirmationForm(
+            client.get("/trigger", query_string=query).get_data(as_text=True)
+        )
+        db.session.add(
+            ProcessingJob(
+                id="recent-failure",
+                post_guid=test_post.guid,
+                status="failed",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        db.session.commit()
+        assert b"Please Wait" in client.get("/trigger", query_string=query).data
+        assert (
+            client.post(
+                form.action, data={"confirmation_token": form.token}
+            ).status_code
+            == 303
+        )
+        trigger_worker.start_post_processing.assert_not_called()
+
+    def test_ready_episode_remains_read_only(
+        self, app_with_routes, test_post, test_token, trigger_worker, tmp_path
+    ):
+        audio = tmp_path / "ready.mp3"
+        audio.write_bytes(b"test audio")
+        db.session.merge(test_post).processed_audio_path = str(audio)
+        db.session.commit()
+        response = app_with_routes.test_client().get(
+            "/trigger", query_string=self.query(test_post, test_token)
+        )
+        assert response.status_code == 200
+        assert b"Episode Ready" in response.data
+        assert not _ConfirmationForm(response.get_data(as_text=True)).token
+        trigger_worker.start_post_processing.assert_not_called()
+
+    def test_confirmation_escapes_metadata_and_round_trips_guid(
+        self, app_with_routes, test_post, test_token, trigger_worker
+    ):
+        from urllib.parse import parse_qs, urlsplit
+
+        post = db.session.merge(test_post)
+        post.title = '<script>alert("episode")</script>'
+        post.guid = 'https://example.com/episode?one=1&two="<tag>"'
+        db.session.commit()
+        response = app_with_routes.test_client().get(
+            "/trigger", query_string=self.query(post, test_token)
+        )
+        html = response.get_data(as_text=True)
+        assert "<script>" not in html
+        assert "&lt;script&gt;" in html
+        form = _ConfirmationForm(html)
+        assert parse_qs(urlsplit(form.action).query)["guid"] == [post.guid]
+        response = app_with_routes.test_client().post(
+            form.action, data={"confirmation_token": form.token}
+        )
+        assert response.status_code == 303
+        trigger_worker.start_post_processing.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "path,query",
+        [
+            ("/trigger", {}),
+            (
+                "/trigger",
+                {"guid": "missing", "feed_token": "invalid", "feed_secret": "invalid"},
+            ),
+            ("/api/trigger/status", {}),
+        ],
+    )
+    def test_trigger_responses_are_private_and_not_indexable(
+        self, app_with_routes, path, query
+    ):
+        response = app_with_routes.test_client().get(path, query_string=query)
+        assert response.headers.get("Cache-Control") == "no-store"
+        assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
+        assert response.headers.get("Referrer-Policy") == "no-referrer"
+        assert response.headers.get("X-Frame-Options") == "DENY"
 
 
 class TestTriggerStatusEndpoint:

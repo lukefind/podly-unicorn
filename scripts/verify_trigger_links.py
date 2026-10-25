@@ -10,7 +10,7 @@ This script verifies:
 2. Trigger links use https and correct domain
 3. Enclosure URLs use feed-scoped tokens
 4. Download endpoint does NOT create jobs (returns 503 for unprocessed)
-5. Trigger endpoint DOES create jobs
+5. Trigger GET/HEAD display confirmation/status without submitting paid work
 6. Status endpoint returns correct state
 """
 
@@ -19,7 +19,7 @@ import html
 import re
 import sys
 import time
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
 
@@ -44,7 +44,7 @@ def main():
     parser = argparse.ArgumentParser(description="Verify RSS trigger links and behavior")
     parser.add_argument("--combined-url", required=True, help="Combined feed URL with tokens")
     parser.add_argument("--expected-domain", default="localhost", help="Expected domain in URLs")
-    parser.add_argument("--skip-trigger-test", action="store_true", help="Skip the trigger job creation test")
+    parser.add_argument("--skip-trigger-test", action="store_true", help="Skip the passive trigger/download tests")
     parser.add_argument("--poll-timeout", type=int, default=180, help="Timeout for polling status (seconds)")
     args = parser.parse_args()
 
@@ -173,15 +173,30 @@ def main():
     else:
         print("    SKIP: No enclosure URL available")
 
-    # 7. Test trigger endpoint DOES create jobs
-    print("\n[7] Testing trigger endpoint (should create job)...")
+    # 7. Passive probes must never submit the processing form.
+    print("\n[7] Testing read-only trigger page (no form submission)...")
+    has_confirmation = False
+    has_cooldown = False
     if trigger_url:
         try:
+            probe = requests.head(trigger_url, timeout=30)
+            if probe.status_code != 200 or probe.headers.get("Cache-Control") != "no-store":
+                print(f"    FAIL: HEAD trigger probe returned {probe.status_code} or lacks no-store")
+                sys.exit(1)
             resp = requests.get(trigger_url, timeout=30)
             print(f"    Status: {resp.status_code}")
             if resp.status_code == 200:
-                if "Processing Started" in resp.text:
-                    print("    OK: Job created - 'Processing Started'")
+                if resp.headers.get("Cache-Control") != "no-store":
+                    print("    FAIL: Trigger page is missing no-store protection")
+                    sys.exit(1)
+                has_confirmation = ('<form method="post"' in resp.text and
+                                    'name="confirmation_token"' in resp.text)
+                has_cooldown = "Please Wait" in resp.text
+                if has_confirmation:
+                    print("    OK: Explicit Process episode confirmation displayed")
+                elif "Processing Started" in resp.text:
+                    print("    FAIL: GET unexpectedly started processing")
+                    sys.exit(1)
                 elif "Processing In Progress" in resp.text:
                     print("    OK: Job exists - 'Processing In Progress'")
                 elif "Episode Ready" in resp.text:
@@ -205,12 +220,15 @@ def main():
         # Extract status URL from trigger URL
         parsed = urlparse(trigger_url)
         params = parse_qs(parsed.query)
-        status_url = f"https://{parsed.netloc}/api/trigger/status?guid={params['guid'][0]}&feed_token={params['feed_token'][0]}&feed_secret={params['feed_secret'][0]}"
+        status_url = f"{parsed.scheme}://{parsed.netloc}/api/trigger/status?" + urlencode({key: params[key][0] for key in ("guid", "feed_token", "feed_secret")})
         
         try:
             resp = requests.get(status_url, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
+                if data.get("state") == "not_started" and not (has_confirmation or has_cooldown):
+                    print("    FAIL: Unprocessed episode has no explicit confirmation form")
+                    sys.exit(1)
                 print(f"    State: {data.get('state')}")
                 print(f"    Message: {data.get('message', 'N/A')[:50]}")
                 if data.get('job'):
