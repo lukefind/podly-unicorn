@@ -301,6 +301,47 @@ def test_relative_redirect_and_redirect_limit(public_get, network):
     assert all(sock.closed for sock in network.sockets)
 
 
+def test_default_limit_allows_long_public_podcast_tracking_chains(public_get, network):
+    redirect = b"HTTP/1.1 302 Found\r\nContent-Length: 0\r\nConnection: close\r\nLocation: /next\r\n\r\n"
+    final_response = network.responses[0]
+    network.responses = [redirect] * 6 + [final_response]
+
+    with public_get("http://podcast.example/audio", stream=True) as response:
+        assert response.status_code == 200
+        assert response.content.startswith(b"<rss>")
+
+    assert len(network.connected) == 7
+    assert all(sock.closed for sock in network.sockets)
+
+
+def test_long_tracking_chain_still_rejects_private_redirects(public_get, network):
+    redirect = b"HTTP/1.1 302 Found\r\nContent-Length: 0\r\nConnection: close\r\nLocation: /next\r\n\r\n"
+    private_redirect = b"HTTP/1.1 302 Found\r\nContent-Length: 0\r\nConnection: close\r\nLocation: http://127.0.0.1/private\r\n\r\n"
+    network.responses = [redirect] * 6 + [private_redirect]
+
+    with pytest.raises(requests.RequestException, match="public HTTP"):
+        with public_get("http://podcast.example/audio"):
+            pytest.fail("private destination after tracking chain accepted")
+
+    assert len(network.connected) == 7
+    assert all(address[0] == "93.184.216.34" for address in network.connected)
+    assert all(sock.closed for sock in network.sockets)
+
+
+def test_default_redirect_limit_matches_requests_and_remains_bounded(
+    public_get, network
+):
+    redirect = b"HTTP/1.1 302 Found\r\nContent-Length: 0\r\nConnection: close\r\nLocation: /next\r\n\r\n"
+    network.responses = [redirect] * 31
+
+    with pytest.raises(requests.TooManyRedirects):
+        with public_get("http://podcast.example/audio"):
+            pytest.fail("default redirect limit ignored")
+
+    assert len(network.connected) == 31
+    assert all(sock.closed for sock in network.sockets)
+
+
 def test_environment_proxy_is_ignored(public_get, network, monkeypatch):
     monkeypatch.setenv("HTTP_PROXY", "http://user:secret@127.0.0.1:8080")
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:8080")

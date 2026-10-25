@@ -18,6 +18,7 @@ from urllib.parse import urljoin, urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
+from requests.models import DEFAULT_REDIRECT_LIMIT
 from urllib3.connection import HTTPConnection, HTTPSConnection
 from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 from urllib3.exceptions import (
@@ -199,12 +200,13 @@ def public_get(
     headers: dict[str, str | None] | None = None,
     timeout: tuple[int, int] | int = (10, 30),
     stream: bool = False,
-    max_redirects: int = 5,
+    max_redirects: int = DEFAULT_REDIRECT_LIMIT,
 ) -> Iterator[requests.Response]:
     """GET an untrusted URL with bounded, validated redirects and owned lifetime.
 
     Use the response inside the context, especially when streaming audio. Proxy
     environment variables and .netrc credentials are deliberately disabled.
+    Requests' standard redirect bound accommodates podcast tracking chains.
     """
     validate_public_url(url)
     with _PublicSession() as session:
