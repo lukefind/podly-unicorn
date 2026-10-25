@@ -11,6 +11,7 @@ from urllib.parse import quote
 import flask
 from flask import Blueprint, current_app, g, jsonify, request, send_file
 from flask.typing import ResponseReturnValue
+from itsdangerous import BadData, URLSafeTimedSerializer
 
 from app.extensions import db
 from app.jobs_manager import get_jobs_manager
@@ -29,7 +30,21 @@ from app.posts import clear_post_processing_data
 logger = logging.getLogger("global_logger")
 
 
-post_bp = Blueprint("post", __name__)
+post_bp = Blueprint("post", __name__, template_folder="../templates")
+
+
+@post_bp.after_app_request
+def _protect_trigger_responses(response: flask.Response) -> flask.Response:
+    """Protect capability pages, including early authentication failures."""
+    if request.path == "/trigger" or request.path.startswith("/api/trigger/"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = (
+            "frame-ancestors 'none'; form-action 'self'; base-uri 'none'"
+        )
+    return response
 
 
 def _find_post_for_audio_request(guid: str) -> Optional[Post]:
@@ -1222,12 +1237,13 @@ def get_trigger_link(guid: str) -> flask.Response:
     )
 
 
-@post_bp.route("/trigger", methods=["GET"])
+@post_bp.route("/trigger", methods=["GET", "POST"])
 def trigger_processing() -> flask.Response:
-    """Trigger processing for an episode via a capability URL.
+    """Display an episode or explicitly confirm processing via a capability URL.
 
     This endpoint is linked from RSS <item><link> elements. When a user clicks
-    the link in their podcast app, it queues the episode for processing.
+    the link in their podcast app, it displays a confirmation form or status.
+    GET/HEAD never queue work. POST requires the form's signed confirmation.
 
     Required query params:
     - guid: The episode GUID
@@ -1245,7 +1261,19 @@ def trigger_processing() -> flask.Response:
     - Never returns 500 - all exceptions are caught
     """
     try:
-        return _handle_trigger_processing()
+        response = _handle_trigger_processing()
+        if request.method == "POST" and response.status_code == 200:
+            # Refresh and back navigation must only revisit a read-only GET.
+            return flask.redirect(
+                flask.url_for(
+                    "post.trigger_processing",
+                    guid=request.args.get("guid"),
+                    feed_token=request.args.get("feed_token"),
+                    feed_secret=request.args.get("feed_secret"),
+                ),
+                code=303,
+            )
+        return response
     except Exception as e:
         # Catch-all for any unexpected exceptions
         db.session.rollback()
@@ -1338,7 +1366,7 @@ def _handle_trigger_processing() -> flask.Response:
         )
 
     # Look up the post
-    post = Post.query.filter_by(guid=guid).first()
+    post = Post.query.filter_by(guid=guid, feed_id=auth_result.feed_id).first()
     if not post:
         print(
             f"[TRIGGER_RETURN] status=404 reason=post_not_found",
@@ -1364,6 +1392,15 @@ def _handle_trigger_processing() -> flask.Response:
             status_code=403,
         )
 
+    # The current queue and worker identify episodes by GUID alone. Refuse an
+    # ambiguous identifier rather than dispatching work for a different feed.
+    if Post.query.filter(Post.guid == guid, Post.id != post.id).first() is not None:
+        return _render_trigger_error_page(
+            title="Ambiguous Episode",
+            message="This episode's identifier is shared by multiple shows, so it cannot be processed safely.",
+            status_code=409,
+        )
+
     # Check if episode is eligible (whitelisted)
     if not post.whitelisted:
         print(
@@ -1376,6 +1413,24 @@ def _handle_trigger_processing() -> flask.Response:
             message="This episode is not enabled for processing. Enable it in the Podly web interface first.",
             status_code=409,
         )
+
+    confirmation_signer = URLSafeTimedSerializer(
+        current_app.secret_key, salt="podly-trigger-confirmation"
+    )
+    confirmation_scope = {"post_id": post.id, "token_id": token_id}
+    if request.method == "POST":
+        try:
+            confirmation = confirmation_signer.loads(
+                request.form.get("confirmation_token", ""), max_age=15 * 60
+            )
+            if confirmation != confirmation_scope:
+                raise BadData("Confirmation does not match this episode and token")
+        except BadData:
+            return _render_trigger_error_page(
+                title="Confirmation Required",
+                message="Please reopen the episode link and press Process episode to start ad removal.",
+                status_code=403,
+            )
 
     # Get feed info for display
     feed = Feed.query.get(post.feed_id)
@@ -1462,7 +1517,25 @@ def _handle_trigger_processing() -> flask.Response:
                 cooldown_remaining=remaining,
             )
 
-    # Trigger processing
+    if request.method != "POST":
+        # RSS scanners, previews and HEAD probes may follow this URL. A normal
+        # HTML form works in podcast webviews without JavaScript or cookies.
+        return flask.make_response(
+            flask.render_template(
+                "trigger_confirm.html",
+                post=post,
+                feed_title=feed_title,
+                action=flask.url_for(
+                    "post.trigger_processing",
+                    guid=post.guid,
+                    feed_token=token_id,
+                    feed_secret=secret,
+                ),
+                confirmation_token=confirmation_signer.dumps(confirmation_scope),
+            )
+        )
+
+    # Only a validated form POST may reach the paid processing boundary.
     try:
         user_id = auth_result.user.id
         print(

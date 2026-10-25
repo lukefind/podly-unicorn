@@ -18,7 +18,7 @@ Podly separates four distinct concerns:
 | Layer | Responsibility | Mutates State? |
 |-------|----------------|----------------|
 | **Discovery** | RSS feeds expose episodes to podcast apps | No |
-| **User Intent** | `/trigger` page lets users explicitly request processing | Yes (creates jobs) |
+| **User Intent** | `/trigger` displays a confirmation; its form POST requests processing | POST only (creates jobs) |
 | **Processing** | Jobs system transcribes audio and detects ads | Yes (creates files) |
 | **Delivery** | `/api/posts/<guid>/download` serves processed audio | No |
 
@@ -28,7 +28,14 @@ This separation ensures that passive operations (RSS fetching, download probes) 
 
 ## The Core Invariant
 
-> **Jobs are created only from a page a human intentionally visits.**
+> **Visiting an RSS link never creates a job. Processing requires an explicit confirmation POST.**
+
+Podcast apps, previews and crawlers can fetch episode links without a human
+opening them. GET and HEAD `/trigger` therefore only display confirmation or
+existing status. The confirmation form submits a signed token bound to the
+episode record and feed token; it expires after 15 minutes. A successful POST
+redirects with HTTP 303 to the safe GET URL. This flow needs no session cookies
+or JavaScript, including inside podcast-app webviews.
 
 This single rule eliminates:
 
@@ -59,7 +66,7 @@ Processing jobs are created *only* via the `/trigger` page. This prevents uninte
 | Episode not processed, job running | `503 Service Unavailable` + `Retry-After: 120` |
 | Episode not processed, no job | `503 Service Unavailable` + `Retry-After: 300` |
 
-The download endpoint **never** creates jobs. Users must visit `/trigger` to start processing.
+The download endpoint **never** creates jobs. Users must press **Process episode** on `/trigger` to start processing.
 
 ---
 
@@ -76,6 +83,7 @@ The `/trigger` endpoint serves as the explicit user intent boundary:
 
 | State | Description |
 |-------|-------------|
+| `confirmation` | Unprocessed episode, explicit Process episode form; no job created |
 | `ready` | Episode already processed, shows download button |
 | `processing` | Job running, shows progress bar with polling |
 | `queued` | Job pending, shows progress bar |
@@ -86,9 +94,18 @@ The `/trigger` endpoint serves as the explicit user intent boundary:
 
 1. User clicks episode link in podcast app (RSS `<link>` element)
 2. Browser opens `/trigger?guid=...&feed_token=...&feed_secret=...`
-3. Page validates token, creates job if needed, shows progress
-4. User waits for processing to complete
-5. Download button appears when ready
+3. Page validates the feed token and displays **Process episode**, or existing status
+4. User presses **Process episode**; a validated form POST queues the job and redirects to progress
+5. User waits for processing to complete, then returns to their podcast app
+
+Missing, forged, expired, episode-mismatched or token-mismatched confirmations
+are rejected. Eligibility, revocation, active jobs and the existing cooldown
+are checked again on submission. Identifiers shared by multiple feeds return
+409 before dispatch because the current queue and worker identify posts by GUID.
+Trigger responses, including auth errors, use `Cache-Control: no-store`,
+`X-Robots-Tag: noindex, nofollow`, `Referrer-Policy: no-referrer` and framing
+protection. These headers supplement the method boundary; crawler cooperation
+is not required to prevent passive GET/HEAD requests from starting work.
 
 ---
 
@@ -132,7 +149,8 @@ This prevents a single compromised combined token from triggering processing sto
 
 | Endpoint | Method | Auth | Creates Jobs? |
 |----------|--------|------|---------------|
-| `/trigger` | GET | Feed token | Yes (feed-scoped only) |
+| `/trigger` | GET, HEAD | Feed token | No (confirmation or status) |
+| `/trigger` | POST | Feed token + signed form confirmation | Yes (feed-scoped only) |
 | `/api/trigger/status` | GET | Feed token | No |
 | `/api/posts/<guid>/download` | GET | Feed token | No |
 | `/feed/combined` | GET | Combined token | No |
@@ -175,15 +193,20 @@ curl -I "http://localhost:5001/api/posts/$GUID/download?feed_token=...&feed_secr
 sqlite3 src/instance/sqlite3.db "SELECT COUNT(*) FROM processing_job WHERE post_guid='$GUID'"
 ```
 
-### 3. Verify Trigger Creates Jobs
+### 3. Verify Trigger Requires Confirmation
 
 ```bash
-# Hit trigger endpoint
+# GET and HEAD must leave the processing_job count unchanged.
 curl "http://localhost:5001/trigger?guid=$GUID&feed_token=...&feed_secret=..."
+curl -I "http://localhost:5001/trigger?guid=$GUID&feed_token=...&feed_secret=..."
 
-# Check job was created
-sqlite3 src/instance/sqlite3.db "SELECT id, status FROM processing_job WHERE post_guid='$GUID' ORDER BY created_at DESC LIMIT 1"
+# A POST without the form's confirmation_token must return 403 and create no job.
+curl -X POST "http://localhost:5001/trigger?guid=$GUID&feed_token=...&feed_secret=..."
 ```
+
+Open the URL in a browser and press **Process episode** to test a deliberate
+submission. Use disposable local data and mocked providers for automated tests;
+the verification script deliberately does not submit the paid-processing form.
 
 ### 4. Use Verification Script
 
@@ -201,7 +224,7 @@ python scripts/verify_trigger_links.py \
 
 **Scenario**: User subscribes to combined feed, app prefetches all enclosures, triggers 100 jobs.
 
-**Prevention**: Download endpoint never creates jobs. User must explicitly visit `/trigger`.
+**Prevention**: Download and trigger GET/HEAD requests never create jobs. The user must submit the confirmation form.
 
 ### Pitfall 2: Combined Token Used to Trigger Jobs
 
@@ -213,10 +236,11 @@ python scripts/verify_trigger_links.py \
 
 **Scenario**: Search engine bot follows `<link>` elements in RSS, triggers jobs.
 
-**Prevention**: 
-- Trigger requires valid feed token
-- 10-minute cooldown between attempts
-- Jobs are idempotent (existing job = no new job)
+**Prevention**:
+- Trigger GET/HEAD only display confirmation or status, even with a valid token
+- Only POST with a valid signed confirmation can queue work
+- Noindex/nofollow headers discourage indexing; they are not the job-creation guard
+- Existing cooldown and active-job checks prevent duplicate submissions
 
 ### Pitfall 4: User Accidentally Reprocesses
 
@@ -268,7 +292,7 @@ Example log flow for successful trigger:
                                  ▼                       │
                     ┌─────────────────┐                  │
                     │   /trigger      │◄─────────────────┘
-                    │   (creates job) │   "Process now" button
+                    │ POST creates job│   "Process episode" button
                     └────────┬────────┘
                              │
                              ▼
@@ -292,7 +316,7 @@ The trigger-based architecture ensures:
 
 1. **RSS is passive** - No mutations on feed fetch
 2. **Downloads are passive** - No mutations on audio fetch
-3. **Processing requires intent** - Only `/trigger` creates jobs
+3. **Processing requires confirmation** - Only the validated `/trigger` form POST creates RSS-triggered jobs
 4. **Combined feed is safe** - Read-only, cannot trigger
 5. **System is observable** - All actions logged with clear markers
 

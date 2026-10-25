@@ -285,7 +285,7 @@ Resolution logic lives in `src/app/llm_key_profiles.py` → `resolve_llm_api_key
 
 **On-Demand**: Episodes are NOT auto-processed when enabled. Processing only triggers when:
 1. User clicks "Process" button in web UI
-2. User taps trigger link in podcast app (RSS `<item><link>` and episode description link to `/trigger` page)
+2. User opens the trigger link in their podcast app, then presses **Process episode** on the confirmation page
 
 ### Trigger Page Architecture
 
@@ -296,12 +296,13 @@ The RSS feed includes a trigger URL in each episode's `<item><link>` and descrip
 
 **User flow:**
 1. User taps "Process this episode (remove ads)" link in episode description
-2. Browser opens trigger page showing processing progress
-3. When complete, page shows "Episode Ready" with instruction to close tab
-4. User closes tab and returns to podcast app
-5. User refreshes feed and plays ad-free episode
+2. Browser opens a read-only confirmation page; GET and HEAD never queue work
+3. User presses **Process episode**, submitting a signed confirmation via POST; the page redirects to processing progress
+4. When complete, page shows "Episode Ready" with instruction to close tab
+5. User closes the tab, returns to their podcast app, refreshes the feed and plays the ad-free episode
 
 **Trigger page states:**
+- `confirmation` - Explicit Process episode form; no job has been started
 - `processing` - Job running, shows progress bar with step indicators
 - `ready` - Episode processed, shows "Episode Ready" + "Close this tab now"
 - `failed` - Processing failed, shows error message
@@ -312,6 +313,13 @@ The RSS feed includes a trigger URL in each episode's `<item><link>` and descrip
 **RSS description CTA**: Each episode description includes a canonical CTA block wrapped in `<!-- PODLY_TRIGGER_START -->` / `<!-- PODLY_TRIGGER_END -->` markers. The `inject_trigger_cta()` function in `src/app/feeds.py` handles idempotent injection.
 
 See `docs/TRIGGER_ARCHITECTURE.md` for full technical details.
+
+The form confirmation expires after 15 minutes and is bound to the episode and
+feed token. Never restore processing as a GET/HEAD side effect: podcast clients
+and crawlers fetch these URLs automatically. Preserve no-store, noindex,
+no-referrer and framing-protection headers, including on authentication errors.
+Ambiguous GUIDs shared by multiple feeds fail closed before queueing because
+the current worker identifies posts by GUID alone.
 
 ### Episode States
 - **Enabled** (blue badge) - Eligible for processing, but not yet processed

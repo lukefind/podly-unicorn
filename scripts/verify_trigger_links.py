@@ -10,7 +10,7 @@ This script verifies:
 2. Trigger links use https and correct domain
 3. Enclosure URLs use feed-scoped tokens
 4. Download endpoint does NOT create jobs (returns 503 for unprocessed)
-5. Trigger endpoint DOES create jobs
+5. Trigger GET/HEAD display confirmation/status without submitting paid work
 6. Status endpoint returns correct state
 """
 
@@ -19,12 +19,14 @@ import html
 import re
 import sys
 import time
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
 
 
-def find_unprocessed_episode(items: list, enclosure_urls: list, trigger_links: list) -> tuple:
+def find_unprocessed_episode(
+    items: list, enclosure_urls: list, trigger_links: list
+) -> tuple:
     """Find an unprocessed episode by testing enclosure URLs."""
     for guid, enc_url in enclosure_urls:
         try:
@@ -41,11 +43,26 @@ def find_unprocessed_episode(items: list, enclosure_urls: list, trigger_links: l
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Verify RSS trigger links and behavior")
-    parser.add_argument("--combined-url", required=True, help="Combined feed URL with tokens")
-    parser.add_argument("--expected-domain", default="localhost", help="Expected domain in URLs")
-    parser.add_argument("--skip-trigger-test", action="store_true", help="Skip the trigger job creation test")
-    parser.add_argument("--poll-timeout", type=int, default=180, help="Timeout for polling status (seconds)")
+    parser = argparse.ArgumentParser(
+        description="Verify RSS trigger links and behavior"
+    )
+    parser.add_argument(
+        "--combined-url", required=True, help="Combined feed URL with tokens"
+    )
+    parser.add_argument(
+        "--expected-domain", default="localhost", help="Expected domain in URLs"
+    )
+    parser.add_argument(
+        "--skip-trigger-test",
+        action="store_true",
+        help="Skip the passive trigger/download tests",
+    )
+    parser.add_argument(
+        "--poll-timeout",
+        type=int,
+        default=180,
+        help="Timeout for polling status (seconds)",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -65,27 +82,27 @@ def main():
 
     # 2. Parse items and extract links
     print("\n[2] Parsing RSS items...")
-    
+
     item_pattern = r"<item>.*?</item>"
     items = re.findall(item_pattern, xml, re.DOTALL)
     print(f"    Found {len(items)} items")
-    
+
     if not items:
         print("    FAIL: No items found in feed")
         sys.exit(1)
 
     trigger_links = []
     enclosure_urls = []
-    
+
     for item in items:
         guid_match = re.search(r"<guid[^>]*>([^<]+)</guid>", item)
         guid = guid_match.group(1) if guid_match else None
-        
+
         link_match = re.search(r"<link>([^<]+)</link>", item)
         if link_match:
             link = html.unescape(link_match.group(1))
             trigger_links.append((guid, link))
-        
+
         enc_match = re.search(r'<enclosure[^>]+url="([^"]+)"', item)
         if enc_match:
             enc_url = html.unescape(enc_match.group(1))
@@ -96,18 +113,22 @@ def main():
 
     # 3. Validate trigger link format
     print("\n[3] Validating trigger link format...")
-    
+
     errors = []
     for guid, link in trigger_links:
         parsed = urlparse(link)
         params = parse_qs(parsed.query)
-        
+
         if parsed.scheme != "https":
             errors.append(f"GUID {guid[:16]}: Expected https, got {parsed.scheme}")
         if parsed.netloc != args.expected_domain:
-            errors.append(f"GUID {guid[:16]}: Expected domain {args.expected_domain}, got {parsed.netloc}")
+            errors.append(
+                f"GUID {guid[:16]}: Expected domain {args.expected_domain}, got {parsed.netloc}"
+            )
         if parsed.path != "/trigger":
-            errors.append(f"GUID {guid[:16]}: Expected path /trigger, got {parsed.path}")
+            errors.append(
+                f"GUID {guid[:16]}: Expected path /trigger, got {parsed.path}"
+            )
         if "guid" not in params:
             errors.append(f"GUID {guid[:16]}: Missing guid param")
         if "feed_token" not in params:
@@ -143,8 +164,10 @@ def main():
 
     # 5. Find an unprocessed episode
     print("\n[5] Finding unprocessed episode...")
-    guid, enc_url, trigger_url = find_unprocessed_episode(items, enclosure_urls, trigger_links)
-    
+    guid, enc_url, trigger_url = find_unprocessed_episode(
+        items, enclosure_urls, trigger_links
+    )
+
     if not guid:
         print("    INFO: No unprocessed episodes found (all processed or errors)")
         print("    Using first episode for basic tests...")
@@ -161,7 +184,9 @@ def main():
             if resp.status_code == 503:
                 print(f"    OK: Download returned 503 (not processed, no job created)")
                 if "Retry-After" in resp.headers:
-                    print(f"    OK: Retry-After header present: {resp.headers['Retry-After']}")
+                    print(
+                        f"    OK: Retry-After header present: {resp.headers['Retry-After']}"
+                    )
             elif resp.status_code == 200:
                 print(f"    OK: Download returned 200 (already processed)")
             elif resp.status_code == 204:
@@ -173,15 +198,37 @@ def main():
     else:
         print("    SKIP: No enclosure URL available")
 
-    # 7. Test trigger endpoint DOES create jobs
-    print("\n[7] Testing trigger endpoint (should create job)...")
+    # 7. Passive probes must never submit the processing form.
+    print("\n[7] Testing read-only trigger page (no form submission)...")
+    has_confirmation = False
+    has_cooldown = False
     if trigger_url:
         try:
+            probe = requests.head(trigger_url, timeout=30)
+            if (
+                probe.status_code != 200
+                or probe.headers.get("Cache-Control") != "no-store"
+            ):
+                print(
+                    f"    FAIL: HEAD trigger probe returned {probe.status_code} or lacks no-store"
+                )
+                sys.exit(1)
             resp = requests.get(trigger_url, timeout=30)
             print(f"    Status: {resp.status_code}")
             if resp.status_code == 200:
-                if "Processing Started" in resp.text:
-                    print("    OK: Job created - 'Processing Started'")
+                if resp.headers.get("Cache-Control") != "no-store":
+                    print("    FAIL: Trigger page is missing no-store protection")
+                    sys.exit(1)
+                has_confirmation = (
+                    '<form method="post"' in resp.text
+                    and 'name="confirmation_token"' in resp.text
+                )
+                has_cooldown = "Please Wait" in resp.text
+                if has_confirmation:
+                    print("    OK: Explicit Process episode confirmation displayed")
+                elif "Processing Started" in resp.text:
+                    print("    FAIL: GET unexpectedly started processing")
+                    sys.exit(1)
                 elif "Processing In Progress" in resp.text:
                     print("    OK: Job exists - 'Processing In Progress'")
                 elif "Episode Ready" in resp.text:
@@ -189,7 +236,9 @@ def main():
                 elif "Please Wait" in resp.text:
                     print("    OK: Cooldown active - 'Please Wait'")
                 elif "Cannot Trigger" in resp.text:
-                    print("    FAIL: Combined token rejected (expected for combined feed)")
+                    print(
+                        "    FAIL: Combined token rejected (expected for combined feed)"
+                    )
                 else:
                     print("    WARN: Unexpected page content")
             else:
@@ -205,15 +254,27 @@ def main():
         # Extract status URL from trigger URL
         parsed = urlparse(trigger_url)
         params = parse_qs(parsed.query)
-        status_url = f"https://{parsed.netloc}/api/trigger/status?guid={params['guid'][0]}&feed_token={params['feed_token'][0]}&feed_secret={params['feed_secret'][0]}"
-        
+        status_url = (
+            f"{parsed.scheme}://{parsed.netloc}/api/trigger/status?"
+            + urlencode(
+                {key: params[key][0] for key in ("guid", "feed_token", "feed_secret")}
+            )
+        )
+
         try:
             resp = requests.get(status_url, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
+                if data.get("state") == "not_started" and not (
+                    has_confirmation or has_cooldown
+                ):
+                    print(
+                        "    FAIL: Unprocessed episode has no explicit confirmation form"
+                    )
+                    sys.exit(1)
                 print(f"    State: {data.get('state')}")
                 print(f"    Message: {data.get('message', 'N/A')[:50]}")
-                if data.get('job'):
+                if data.get("job"):
                     print(f"    Job ID: {data['job'].get('id', 'N/A')[:16]}")
                 print("    OK: Status endpoint working")
             else:
