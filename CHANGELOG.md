@@ -1,3 +1,10 @@
+## [1.3.5](https://github.com/lukefind/podly-unicorn/compare/v1.3.4...v1.3.5) (2026-10-25)
+
+
+### Bug Fixes
+
+* require explicit confirmation for RSS processing ([#6](https://github.com/lukefind/podly-unicorn/issues/6)) ([0e1c179](https://github.com/lukefind/podly-unicorn/commit/0e1c179a49922323aaed8f071466a8905aba1eca))
+
 ## [1.3.4](https://github.com/lukefind/podly-unicorn/compare/v1.3.3...v1.3.4) (2026-10-25)
 
 
