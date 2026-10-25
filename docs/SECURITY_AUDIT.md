@@ -666,3 +666,13 @@ rejection was also checked in the Ubuntu compatibility image. No additional
 application changes were required. The backend test process exits successfully
 but LiteLLM emits debug-logger errors during interpreter shutdown after pytest
 has closed its captured stream; this does not change the test results.
+
+### Production tracking-chain compatibility
+
+During October 25 deployment acceptance, an actual public enclosure followed
+six redirects through podcast tracking services before reaching its audio CDN.
+The initial five-redirect bound rejected it with `TooManyRedirects`; the same
+transport reached HTTP 200 with a higher bound. The follow-up patch restores
+Requests' standard 30-redirect bound while retaining destination validation at
+every hop. Regression tests cover a six-redirect success, rejection of a private
+target after a long public chain, and termination at the default bound.
